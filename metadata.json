@@ -1,0 +1,6 @@
+{
+  "name": "EduMix 2025 - Hệ Thống Trộn Đề Trắc Nghiệm Chuẩn Cấu Trúc",
+  "description": "Ứng dụng web tự động phân tích, sửa lỗi trực tiếp, trộn đề trắc nghiệm 3 phần chuẩn cấu trúc tốt nghiệp THPT 2025, dàn trang chống xô lệch và sinh mã QR chấm thi đa nền tảng.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
