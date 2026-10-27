@@ -73,10 +73,16 @@ export interface ShuffleConfig {
   shuffleSubItemsPart2: boolean;
   qrFormat: QRAppFormat;
   embedQrInWord: boolean;
-  schoolName: string;
-  examTitle: string;
-  subjectName: string;
-  durationMinutes: number;
+  // Thông tin tiêu đề đề thi & Quốc hiệu Tiêu ngữ
+  departmentName: string; // VD: SỞ GD&ĐT VĨNH LONG
+  schoolName: string;     // VD: TRƯỜNG THPT MANG THÍT
+  nationalHeader: string; // VD: CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+  nationalMotto: string;  // VD: Độc lập - Tự do - Hạnh phúc
+  examTitle: string;      // VD: KỲ THI TỐT NGHIỆP THPT NĂM 2025
+  examSubtitle: string;   // VD: ĐỀ THI CHÍNH THỨC (Đề thi có ... trang)
+  subjectName: string;    // VD: TOÁN HỌC
+  schoolYear: string;     // VD: Năm học 2024 - 2025
+  durationMinutes: number; // VD: 90
 }
 
 export interface ShuffledVariant {
