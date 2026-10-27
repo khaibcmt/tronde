@@ -4,6 +4,18 @@ export type LayoutMode = 'AUTO' | '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL';
 
 export type QRAppFormat = 'STANDARD_2025' | 'QM2025' | 'TNMAKER' | 'AZOTA';
 
+export type GeminiModelTier =
+  | '3.5-flash-lite'
+  | '3.8-flash'
+  | '3.1-pro'
+  | '4-argon';
+
+export type BloomLevel =
+  | 'NHAN_BIET'
+  | 'THONG_HIEU'
+  | 'VAN_DUNG'
+  | 'VAN_DUNG_CAO';
+
 export interface OptionPart1 {
   id: string;
   originalLabel: 'A' | 'B' | 'C' | 'D';
@@ -35,6 +47,11 @@ export interface ExamQuestion {
   stemRichHtml?: string;
   hasFormula?: boolean;
   hasImage?: boolean;
+  // Siêu dữ liệu Sư phạm & AI (Lời giải chi tiết, Mức độ nhận thức, Yêu cầu cần đạt)
+  explanation?: string;
+  bloomLevel?: BloomLevel;
+  learningOutcome?: string;
+  isAiCloned?: boolean;
   // Phần I: Trắc nghiệm 4 lựa chọn
   options?: OptionPart1[];
   computedLayout?: '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL';
@@ -73,13 +90,14 @@ export interface ShuffleConfig {
   shuffleSubItemsPart2: boolean;
   qrFormat: QRAppFormat;
   embedQrInWord: boolean;
+  includeSolutionsInExport: boolean; // Tùy chọn xuất kèm lời giải chi tiết trong Word
   // Thông tin tiêu đề đề thi & Quốc hiệu Tiêu ngữ
   departmentName: string; // VD: SỞ GD&ĐT VĨNH LONG
   schoolName: string;     // VD: TRƯỜNG THPT MANG THÍT
   nationalHeader: string; // VD: CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
   nationalMotto: string;  // VD: Độc lập - Tự do - Hạnh phúc
   examTitle: string;      // VD: KỲ THI TỐT NGHIỆP THPT NĂM 2025
-  examSubtitle: string;   // VD: ĐỀ THI CHÍNH THỨC (Đề thi có ... trang)
+  examSubtitle: string;   // VD: ĐỀ THI CHÍNH THỨC
   subjectName: string;    // VD: TOÁN HỌC
   schoolYear: string;     // VD: Năm học 2024 - 2025
   durationMinutes: number; // VD: 90
@@ -103,7 +121,7 @@ export interface FeatureReleaseItem {
   version: string;
   releaseDate: string;
   title: string;
-  category: 'CORE_PARSER' | 'LIVE_EDITOR' | 'AUTO_LAYOUT' | 'QR_ENGINE' | 'WORD_EXPORT';
+  category: 'CORE_PARSER' | 'LIVE_EDITOR' | 'AUTO_LAYOUT' | 'QR_ENGINE' | 'WORD_EXPORT' | 'AI_ENGINE';
   description: string;
   technicalSpec: string;
   autoDetected: boolean;

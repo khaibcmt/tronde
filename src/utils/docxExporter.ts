@@ -724,6 +724,18 @@ function buildQuestionsBodyXml(
           )
         );
       }
+      if (config.includeSolutionsInExport && q.explanation) {
+        blocks.push(
+          buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
+            italicBody: true,
+            prefixColorHex: '1D4ED8',
+            align: 'left',
+            spaceBeforeTwips: 40,
+            spaceAfterTwips: 100,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
     }
   }
 
@@ -756,6 +768,18 @@ function buildQuestionsBodyXml(
           })
         );
       }
+      if (config.includeSolutionsInExport && q.explanation) {
+        blocks.push(
+          buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
+            italicBody: true,
+            prefixColorHex: '047857',
+            align: 'left',
+            spaceBeforeTwips: 40,
+            spaceAfterTwips: 100,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
     }
   }
 
@@ -781,6 +805,18 @@ function buildQuestionsBodyXml(
             underlineBody: true,
             redBody: true,
             align: 'left',
+            spaceAfterTwips: 100,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
+      if (config.includeSolutionsInExport && q.explanation) {
+        blocks.push(
+          buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
+            italicBody: true,
+            prefixColorHex: 'B45309',
+            align: 'left',
+            spaceBeforeTwips: 40,
             spaceAfterTwips: 100,
             fontSizeHalfPt: 24,
           })

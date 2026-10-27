@@ -1,10 +1,16 @@
 import React, { useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowRightLeft,
+  BarChart3,
   Bold,
   BookOpen,
+  Bot,
   Building2,
+  Check,
   CheckCircle2,
+  ChevronDown,
+  Cpu,
   Download,
   FileArchive,
   FileCheck,
@@ -12,10 +18,13 @@ import {
   FileSpreadsheet,
   FileText,
   GraduationCap,
+  Layers,
   ListRestart,
   Palette,
   QrCode,
+  RefreshCw,
   Save,
+  ShieldCheck,
   Shuffle,
   Sliders,
   Sparkles,
@@ -24,8 +33,10 @@ import {
   Wand2,
 } from 'lucide-react';
 import {
+  BloomLevel,
   ExamQuestion,
   FeatureReleaseItem,
+  GeminiModelTier,
   LayoutMode,
   OptionPart1,
   PartType,
@@ -54,6 +65,10 @@ import {
   exportSingleVariantDocx,
   triggerBrowserDownload,
 } from './utils/docxExporter';
+import {
+  GEMINI_MODEL_OPTIONS,
+  generateIsomorphicExamClone,
+} from './utils/aiExamCloner';
 import { UserGuideModal } from './components/UserGuideModal';
 
 export default function App() {
@@ -65,7 +80,9 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [lastSavedAt, setLastSavedAt] = useState<string>('Vừa khởi tạo');
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null);
-  const [activeRightTab, setActiveRightTab] = useState<'LIVE_EDITOR' | 'SHUFFLED_PREVIEW'>('LIVE_EDITOR');
+  const [activeRightTab, setActiveRightTab] = useState<
+    'LIVE_EDITOR' | 'AI_CLONE_STUDIO' | 'BLOOM_MATRIX' | 'SHUFFLED_PREVIEW'
+  >('LIVE_EDITOR');
   const [filterPart, setFilterPart] = useState<'ALL' | PartType>('ALL');
   const [statusBanner, setStatusBanner] = useState<{
     type: 'SUCCESS' | 'INFO' | 'ERROR';
@@ -83,6 +100,7 @@ export default function App() {
     shuffleSubItemsPart2: true,
     qrFormat: 'QM2025',
     embedQrInWord: true,
+    includeSolutionsInExport: true,
     departmentName: 'SỞ GD&ĐT VĨNH LONG',
     schoolName: 'TRƯỜNG THPT MANG THÍT',
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
@@ -94,12 +112,25 @@ export default function App() {
     durationMinutes: 90,
   });
 
-  // 3. State kết quả sau khi bấm [Trộn đề]
+  // 3. State AI Gemini Studio (Tạo đề tương đương đề gốc)
+  const [selectedModelTier, setSelectedModelTier] =
+    useState<GeminiModelTier>('3.8-flash');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState<boolean>(false);
+  const [aiCustomPrompt, setAiCustomPrompt] = useState<string>(
+    'Giữ nguyên 100% yêu cầu cần đạt và ma trận đặc tả của đề gốc; thay đổi số liệu đẹp, chẵn và đổi ngữ cảnh khoa học thực tiễn.'
+  );
+  const [clonedQuestions, setClonedQuestions] = useState<ExamQuestion[]>([]);
+  const [cloneIteration, setCloneIteration] = useState<number>(1);
+  const [lastAiEngineUsed, setLastAiEngineUsed] = useState<string>(
+    '3.8 Flash · Trợ giúp toàn diện'
+  );
+
+  // 4. State kết quả sau khi bấm [Trộn đề]
   const [shuffledVariants, setShuffledVariants] = useState<ShuffledVariant[]>([]);
   const [selectedVariantCode, setSelectedVariantCode] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // 4. State Cẩm nang hướng dẫn tự động điền khi nâng cấp
+  // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [featureRegistry, setFeatureRegistry] = useState<FeatureReleaseItem[]>(
     DYNAMIC_FEATURE_REGISTRY
@@ -120,6 +151,18 @@ export default function App() {
   const part3Count = questions.filter((q) => q.part === 'PART_3').length;
   const activePartsCount = [part1Count, part2Count, part3Count].filter((c) => c > 0).length;
 
+  // Thống kê Ma trận nhận thức Bloom
+  const bloomStats = {
+    NHAN_BIET: questions.filter((q) => (q.bloomLevel || 'NHAN_BIET') === 'NHAN_BIET').length,
+    THONG_HIEU: questions.filter((q) => q.bloomLevel === 'THONG_HIEU').length,
+    VAN_DUNG: questions.filter((q) => q.bloomLevel === 'VAN_DUNG').length,
+    VAN_DUNG_CAO: questions.filter((q) => q.bloomLevel === 'VAN_DUNG_CAO').length,
+  };
+
+  const currentModelInfo =
+    GEMINI_MODEL_OPTIONS.find((m) => m.id === selectedModelTier) ||
+    GEMINI_MODEL_OPTIONS[1];
+
   // ================= HANDLERS: UPLOAD & PARSE DOCX =================
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -138,6 +181,7 @@ export default function App() {
         setQuestions(parsed);
         setHasUnsavedChanges(false);
         setShuffledVariants([]);
+        setClonedQuestions([]);
         setActiveRightTab('LIVE_EDITOR');
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
         setStatusBanner({
@@ -190,9 +234,79 @@ export default function App() {
     setStatusBanner({
       type: 'INFO',
       text: cleanErrors
-        ? 'Đã nạp bộ đề chuẩn 2025 sạch lỗi (0 cảnh báo). Giáo viên có thể bấm [Trộn đề] ngay!'
+        ? 'Đã nạp bộ đề chuẩn 2025 sạch lỗi (0 cảnh báo). Giáo viên có thể bấm [Trộn đề] hoặc [AI Tạo Đề Tương Đương] ngay!'
         : 'Đã nạp đề mẫu 2025 kèm 3 lỗi giả lập để giáo viên trải nghiệm tính năng [Sửa ngay] 1 chạm.',
     });
+  };
+
+  // ================= HANDLER: AI TẠO ĐỀ TƯƠNG ĐƯƠNG ĐỀ GỐC (ISOMORPHIC CLONING) =================
+  const handleGenerateAiCloneExam = async () => {
+    setIsProcessing(true);
+    setActiveRightTab('AI_CLONE_STUDIO');
+    try {
+      const result = await generateIsomorphicExamClone(
+        questions,
+        selectedModelTier,
+        config.subjectName,
+        aiCustomPrompt,
+        cloneIteration
+      );
+      const numberedClones = recalculateQuestionNumbering(
+        result.questions,
+        config.resetNumberingPerPart
+      );
+      setClonedQuestions(numberedClones);
+      setCloneIteration((prev) => prev + 1);
+      setLastAiEngineUsed(result.engineUsed);
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã tạo bộ Đề Tương Đương Đề Gốc thành công bằng [${result.engineUsed}]! Giữ nguyên 100% yêu cầu cần đạt, chỉ thay đổi số liệu & ngữ cảnh khoa học.`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Lỗi AI';
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Không thể tạo đề tương đương: ${msg}`,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Áp dụng bộ đề tương đương AI vừa tạo làm đề gốc chính thức để trộn đề
+  const handleApplyAiCloneAsMaster = () => {
+    if (clonedQuestions.length === 0) return;
+    setQuestions(clonedQuestions);
+    setFileName(`De_AI_Tuong_Duong_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`);
+    setHasUnsavedChanges(false);
+    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
+    setActiveRightTab('LIVE_EDITOR');
+    setStatusBanner({
+      type: 'SUCCESS',
+      text: 'Đã nạp Bộ Đề AI Tương Đương vào Trình Biên Tập Đề Gốc! Bạn có thể bấm [Trộn Đề Ngay] hoặc xuất file Word.',
+    });
+  };
+
+  // Tải trực tiếp file Word (.docx) của Bộ Đề AI Tương Đương
+  const handleDownloadAiCloneDocx = async () => {
+    if (clonedQuestions.length === 0) return;
+    setIsProcessing(true);
+    try {
+      const blob = await exportCleanedMasterDocx(clonedQuestions, {
+        ...config,
+        examSubtitle: 'ĐỀ TƯƠNG ĐƯƠNG (AI GEMINI BIÊN SOẠN)',
+      });
+      triggerBrowserDownload(
+        blob,
+        `De_Tuong_Duong_AI_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`
+      );
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: 'Đã tải xuống tệp Word (.docx) của Đề Tương Đương kèm lời giải chi tiết!',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // ================= HANDLERS: CUỘN TỚI CÂU LỖI & SỬA TRỰC TIẾP =================
@@ -213,7 +327,6 @@ export default function App() {
     }, 3500);
   };
 
-  // Sửa thân câu dẫn
   const handleUpdateStemText = (questionId: string, newStem: string) => {
     setQuestions((prev) =>
       prev.map((q) => (q.id === questionId ? { ...q, stemText: newStem } : q))
@@ -221,7 +334,20 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Thao tác 1 chạm Phần I: Click nút tròn A, B, C, D để chọn đáp án đúng duy nhất
+  const handleUpdateExplanation = (questionId: string, newExp: string) => {
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === questionId ? { ...q, explanation: newExp } : q))
+    );
+    setHasUnsavedChanges(true);
+  };
+
+  const handleUpdateBloomLevel = (questionId: string, level: BloomLevel) => {
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === questionId ? { ...q, bloomLevel: level } : q))
+    );
+    setHasUnsavedChanges(true);
+  };
+
   const handleSelectSingleCorrectPart1 = (
     questionId: string,
     optionId: string
@@ -247,7 +373,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Thanh công cụ nhanh U (Gạch chân) / A (Tô đỏ) trên từng phương án Phần I
   const handleToggleOptionPropertyPart1 = (
     questionId: string,
     optionId: string,
@@ -274,7 +399,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Sửa nội dung phương án Phần I (tự động tính lại Auto-Layout)
   const handleUpdateOptionTextPart1 = (
     questionId: string,
     optionId: string,
@@ -296,7 +420,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Thao tác 1 chạm Phần II: Click nút gạt [Đ] / [S] cạnh từng ý a, b, c, d
   const handleToggleSubItemPart2 = (
     questionId: string,
     subItemId: string,
@@ -322,7 +445,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Sửa nội dung ý a, b, c, d ở Phần II
   const handleUpdateSubItemTextPart2 = (
     questionId: string,
     subItemId: string,
@@ -342,7 +464,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Sửa đáp số Phần III
   const handleUpdateShortAnswerPart3 = (questionId: string, val: string) => {
     setQuestions((prev) =>
       prev.map((q) =>
@@ -358,7 +479,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // Bấm [Lưu chỉnh sửa]: Chạy lại bộ Parser/Numbering, xóa trạng thái unsaved và mở khóa [Trộn đề]
   const handleSaveEdits = () => {
     const recalculated = recalculateQuestionNumbering(
       questions,
@@ -384,7 +504,6 @@ export default function App() {
     }
   };
 
-  // Tự động sửa nhanh toàn bộ lỗi bằng 1 cú click (Quick-Fix All)
   const handleQuickFixAllErrors = () => {
     const fixed = questions.map((q) => {
       if (q.part === 'PART_1' && q.options) {
@@ -425,7 +544,6 @@ export default function App() {
     });
   };
 
-  // Thay đổi tùy chọn "Đánh số lại từ Câu 1 ở mỗi phần"
   const handleToggleResetNumbering = (resetPerPart: boolean) => {
     setConfig((prev) => ({ ...prev, resetNumberingPerPart: resetPerPart }));
     setQuestions((prev) => recalculateQuestionNumbering(prev, resetPerPart));
@@ -467,7 +585,6 @@ export default function App() {
     }
   };
 
-  // Tải về file đề gốc đã sửa sạch (.docx)
   const handleDownloadCleanedMaster = async () => {
     setIsProcessing(true);
     try {
@@ -482,7 +599,6 @@ export default function App() {
     }
   };
 
-  // Tải File Bảng Đáp Án Chung Tất Cả Mã Đề (.docx) trong 1 khung theo thứ tự từ trên xuống (nộp ngay không cần chỉnh sửa)
   const handleDownloadMasterAnswerSheetDocx = async () => {
     if (shuffledVariants.length === 0) return;
     setIsProcessing(true);
@@ -501,7 +617,6 @@ export default function App() {
     }
   };
 
-  // Tải trọn bộ đề hoán vị (.zip)
   const handleDownloadZipBundle = async () => {
     if (shuffledVariants.length === 0) return;
     setIsProcessing(true);
@@ -524,7 +639,6 @@ export default function App() {
     }
   };
 
-  // Tải bộ mã QR (.zip)
   const handleDownloadQrZip = async () => {
     if (shuffledVariants.length === 0) return;
     setIsProcessing(true);
@@ -543,7 +657,6 @@ export default function App() {
     }
   };
 
-  // Tải 1 mã đề Word cụ thể
   const handleDownloadSingleVariantDocx = async (variant: ShuffledVariant) => {
     setIsProcessing(true);
     try {
@@ -574,13 +687,12 @@ export default function App() {
     'btn-3d-amber',
   ];
 
-  // Helper render Khung Đáp Án 3 Cột giống hệt hình mẫu đính kèm (dùng chung cho từng mã đề và Bảng đáp án chung)
+  // Helper render Khung Đáp Án 3 Cột giống hệt hình mẫu đính kèm
   const renderThreeColumnAnswerCard = (variant: ShuffledVariant) => (
     <div
       key={`ans-card-${variant.examCode}`}
       className="p-5 rounded-3xl bg-white border-2 border-sky-200 shadow-md space-y-4"
     >
-      {/* Thanh tiêu đề Mã đề của khối đáp án */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-sky-100 via-blue-50 to-emerald-50 border border-sky-300">
         <div className="flex items-center gap-2.5">
           <span className="px-3.5 py-1 rounded-xl text-xs font-black text-white btn-3d-primary font-mono">
@@ -602,7 +714,6 @@ export default function App() {
         </button>
       </div>
 
-      {/* 3 Khung Màu: Phần I (Xanh dương) - Phần II (Xanh lá) - Phần III (Vàng cam) y hệt hình mẫu */}
       <div
         style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
         className="grid grid-cols-1 md:grid-cols-3 gap-5 items-stretch"
@@ -684,8 +795,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col text-slate-900">
-      {/* ================= HEADER NỔI 3D: LOGO ĐẸP MẮT + CHỮ EDUMIX 2025 ĐỔI MÀU + TÁC GIẢ DƯỚI LOGO ================= */}
-      <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 px-6 py-3 bg-white/95 backdrop-blur-md border-b-2 border-sky-300 shadow-lg">
+      {/* ================= HEADER NỔI 3D KHOA HỌC & ĐẸP MẮT (3 ZONE CHUẨN) ================= */}
+      <header className="sticky top-0 z-30 flex items-center justify-between gap-6 px-6 py-3 bg-white/95 backdrop-blur-md border-b-2 border-sky-300 shadow-lg">
         {/* Zone 1: Logo 3D bắt mắt + Dòng chữ EduMix 2025 chạy đổi màu + Tác giả Hồ Tấn Khải dưới logo */}
         <a
           href="#top"
@@ -706,18 +817,42 @@ export default function App() {
           </div>
         </a>
 
-        {/* Zone 2: Thanh công cụ điều hướng 3D nhiều màu sắc khác nhau có đổ bóng */}
-        <nav className="hidden xl:flex items-center gap-2.5">
+        {/* Zone 2: Thanh điều hướng trung tâm phân nhóm khoa học */}
+        <nav className="hidden xl:flex items-center gap-2">
           <button
             onClick={() => setActiveRightTab('LIVE_EDITOR')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeRightTab === 'LIVE_EDITOR'
                 ? 'btn-3d-primary ring-2 ring-blue-300'
                 : 'btn-3d-cyan'
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>Trình Biên Tập Đề Gốc</span>
+            <span>1. Biên Tập Đề Gốc</span>
+          </button>
+
+          <button
+            onClick={() => setActiveRightTab('AI_CLONE_STUDIO')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeRightTab === 'AI_CLONE_STUDIO'
+                ? 'btn-3d-purple ring-2 ring-purple-300'
+                : 'btn-3d-indigo'
+            }`}
+          >
+            <Bot className="w-4 h-4" />
+            <span>2. AI Tạo Đề Tương Đương</span>
+          </button>
+
+          <button
+            onClick={() => setActiveRightTab('BLOOM_MATRIX')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeRightTab === 'BLOOM_MATRIX'
+                ? 'btn-3d-amber ring-2 ring-amber-300'
+                : 'btn-3d-orange'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>3. Ma Trận & Đặc Tả</span>
           </button>
 
           <button
@@ -728,41 +863,80 @@ export default function App() {
                 handleRunShuffle();
               }
             }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeRightTab === 'SHUFFLED_PREVIEW'
                 ? 'btn-3d-rose ring-2 ring-rose-300'
-                : 'btn-3d-orange'
+                : 'btn-3d-emerald'
             }`}
           >
             <QrCode className="w-4 h-4" />
-            <span>Bảng Đáp Án Chung & Mã QR</span>
-          </button>
-
-          <button
-            onClick={handleDownloadCleanedMaster}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold text-white btn-3d-emerald flex items-center gap-1.5 whitespace-nowrap shrink-0"
-          >
-            <Download className="w-4 h-4" />
-            <span>Tải Đề Gốc Đã Sửa (.docx)</span>
-          </button>
-
-          <button
-            onClick={() => handleLoadSampleExam(false)}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold text-white btn-3d-indigo flex items-center gap-1.5 whitespace-nowrap shrink-0"
-          >
-            <Sparkles className="w-4 h-4" />
-            <span>Nạp Đề Mẫu 2025</span>
+            <span>4. Đáp Án Chung & Mã QR</span>
           </button>
         </nav>
 
-        {/* Zone 3: Nút Hướng dẫn sử dụng 3D màu Tím Hoàng Gia đổ bóng nổi bật */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Zone 3: Bộ chọn Mô hình AI Gemini (Giống hệt hình mẫu) + Nút Hướng dẫn sử dụng 3D */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Dropdown chọn 4 mô hình Gemini như hình mẫu */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsModelDropdownOpen((prev) => !prev)}
+              className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white bg-slate-900 hover:bg-slate-800 border-2 border-slate-700 shadow-md flex items-center gap-2 whitespace-nowrap"
+            >
+              <Cpu className="w-4 h-4 text-emerald-400" />
+              <span>AI: {currentModelInfo.name}</span>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+            </button>
+
+            {isModelDropdownOpen && (
+              <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#18191C] text-white border border-slate-700 shadow-2xl p-2 z-50 space-y-1">
+                <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                  <span>MÔ HÌNH AI GEMINI THẾ HỆ MỚI</span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                </div>
+                {GEMINI_MODEL_OPTIONS.map((m) => {
+                  const isSelected = m.id === selectedModelTier;
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModelTier(m.id);
+                        setIsModelDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3.5 py-2.5 rounded-xl flex items-center gap-3 transition-all ${
+                        isSelected
+                          ? 'bg-[#26272B] border border-slate-400 shadow-inner'
+                          : 'hover:bg-white/5 border border-transparent'
+                      }`}
+                    >
+                      <div className="w-4 flex items-center justify-center shrink-0">
+                        {isSelected && <Check className="w-4 h-4 text-white" />}
+                      </div>
+                      <div>
+                        <div className="text-sm font-bold text-white leading-tight">
+                          {m.name}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {m.subtitle}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+                <div className="px-3 py-2 mt-1 border-t border-slate-800 text-[10px] text-slate-400 leading-relaxed">
+                  Bảo mật tuyệt đối: Thực thi qua Server-side Gemini SDK & Auto-Engine 100% không lộ khóa.
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={() => setIsGuideOpen(true)}
             className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white btn-3d-purple flex items-center gap-2 whitespace-nowrap shrink-0"
           >
             <BookOpen className="w-4 h-4" />
-            <span>Hướng Dẫn Sử Dụng ({featureRegistry.length})</span>
+            <span>Hướng Dẫn ({featureRegistry.length})</span>
           </button>
         </div>
       </header>
@@ -795,16 +969,16 @@ export default function App() {
         </div>
       )}
 
-      {/* ================= MAIN WORKSPACE (NỀN XANH NHẠT MÁT MẺ + CÁC PANEL 3D ĐỔ BÓNG) ================= */}
+      {/* ================= MAIN WORKSPACE ================= */}
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* ================= CỘT TRÁI: BẢNG ĐIỀU KHIỂN TÁC VỤ 3D (4 CỘT GRID) ================= */}
+        {/* ================= CỘT TRÁI: BẢNG ĐIỀU KHIỂN TÁC VỤ 3D KHOA HỌC (4 CỘT GRID) ================= */}
         <aside className="lg:col-span-4 space-y-5">
-          {/* 1. Khung Upload File Gốc (.docx) & Thông tin nhận diện */}
+          {/* 1. Khung Upload File Gốc (.docx) & Nhân Bản Đề Tương Đương AI */}
           <section className="p-5 rounded-2xl card-3d-panel space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-sky-950 flex items-center gap-2">
                 <FileCode2 className="w-4 h-4 text-blue-600" />
-                <span>1. Tiếp Nhận Đề Gốc (.docx)</span>
+                <span>1. Nguồn Đề Gốc & Nhân Bản AI</span>
               </h2>
               <span className="text-xs text-sky-700 font-mono font-bold">
                 Times New Roman 12pt
@@ -819,31 +993,42 @@ export default function App() {
               className="hidden"
             />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
-                className="w-full py-2.5 px-4 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center justify-center gap-2 whitespace-nowrap"
+                className="py-2.5 px-3 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center justify-center gap-1.5 whitespace-nowrap"
               >
                 <Upload className="w-4 h-4 shrink-0" />
-                <span>Tải File Gốc (.docx)</span>
+                <span>Tải File (.docx)</span>
               </button>
 
               <button
                 onClick={() => handleLoadSampleExam(true)}
-                className="w-full py-2.5 px-3 rounded-xl text-xs font-extrabold text-white btn-3d-cyan flex items-center justify-center gap-1.5 whitespace-nowrap"
+                className="py-2.5 px-3 rounded-xl text-xs font-extrabold text-white btn-3d-cyan flex items-center justify-center gap-1.5 whitespace-nowrap"
               >
                 <Sparkles className="w-4 h-4 shrink-0" />
-                <span>Nạp Đề Chuẩn Sạch</span>
+                <span>Nạp Đề Chuẩn</span>
               </button>
             </div>
 
-            {/* Khung thông tin: Tên file, Số phần, Số lượng câu hỏi nhận diện được */}
+            {/* Nút 3D Nhân Bản Đề Tương Đương Bằng AI Gemini */}
+            <button
+              onClick={handleGenerateAiCloneExam}
+              disabled={isProcessing}
+              className="w-full py-3 px-4 rounded-xl text-xs font-black text-white btn-3d-purple flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <Bot className="w-4 h-4 shrink-0" />
+              <span>
+                AI Tạo Đề Tương Đương Đề Gốc ({currentModelInfo.name})
+              </span>
+            </button>
+
             <div className="p-3.5 rounded-xl bg-sky-50/90 border border-sky-200 space-y-2 text-xs">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-slate-600 font-semibold">Tệp đang mở:</span>
                 <span
-                  className="font-mono font-bold text-blue-900 truncate max-w-[200px]"
+                  className="font-mono font-bold text-blue-900 truncate max-w-[195px]"
                   title={fileName}
                 >
                   {fileName}
@@ -865,7 +1050,7 @@ export default function App() {
             </div>
           </section>
 
-          {/* 2. KHUNG MỚI: Ghi Thông Tin Đề Thi, Môn Thi, Kỳ Thi, Tiêu Đề Quốc Ngữ & Số Phút */}
+          {/* 2. Khung Ghi Thông Tin Đề Thi, Môn Thi, Kỳ Thi, Tiêu Đề Quốc Ngữ & Số Phút */}
           <section className="p-5 rounded-2xl card-3d-panel space-y-3.5">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-sky-950 flex items-center gap-2">
@@ -1037,7 +1222,7 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
                 {validationIssues.map((issue) => (
                   <div
                     key={issue.id}
@@ -1192,6 +1377,24 @@ export default function App() {
                   className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
                 />
               </label>
+
+              <label className="flex items-center justify-between gap-2 cursor-pointer">
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-purple-600 shrink-0" />
+                  <span>Kèm Lời giải chi tiết khi xuất Đề gốc (.docx)</span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={config.includeSolutionsInExport}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      includeSolutionsInExport: e.target.checked,
+                    }))
+                  }
+                  className="w-4 h-4 accent-blue-600 rounded cursor-pointer"
+                />
+              </label>
             </div>
           </section>
 
@@ -1253,49 +1456,66 @@ export default function App() {
           </section>
         </aside>
 
-        {/* ================= CỘT PHẢI: KHUNG TƯƠNG TÁC, THANH CÔNG CỤ NỔI 3D & XEM TRƯỚC (8 CỘT GRID) ================= */}
+        {/* ================= CỘT PHẢI: TRUNG TÂM TƯƠNG TÁC KHOA HỌC 4 PHÂN KHU (8 CỘT GRID) ================= */}
         <section className="lg:col-span-8 space-y-4">
-          {/* Thanh công cụ 3D nổi (3D Floating Toolbar) với các nút bấm nhiều màu sắc khác nhau & đổ bóng */}
-          <div className="p-4 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Thanh công cụ 3D nổi (Command Deck 3D) bố trí khoa học 2 cụm: Cụm Chế độ & Cụm Tác vụ */}
+          <div className="p-3.5 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
+            {/* Cụm 1: 4 Chế độ làm việc chuyên sâu */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => setActiveRightTab('LIVE_EDITOR')}
-                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeRightTab === 'LIVE_EDITOR'
                     ? 'btn-3d-primary ring-2 ring-blue-300'
-                    : 'btn-3d-indigo'
+                    : 'btn-3d-cyan opacity-90 hover:opacity-100'
                 }`}
               >
                 <FileText className="w-4 h-4" />
-                <span>Trình Biên Tập Trực Tiếp ({questions.length} câu)</span>
+                <span>Biên Tập Đề Gốc ({questions.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveRightTab('AI_CLONE_STUDIO')}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                  activeRightTab === 'AI_CLONE_STUDIO'
+                    ? 'btn-3d-purple ring-2 ring-purple-300'
+                    : 'btn-3d-indigo opacity-90 hover:opacity-100'
+                }`}
+              >
+                <Bot className="w-4 h-4" />
+                <span>AI Tạo Đề Tương Đương</span>
+              </button>
+
+              <button
+                onClick={() => setActiveRightTab('BLOOM_MATRIX')}
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                  activeRightTab === 'BLOOM_MATRIX'
+                    ? 'btn-3d-amber ring-2 ring-amber-300'
+                    : 'btn-3d-orange opacity-90 hover:opacity-100'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Ma Trận Đặc Tả</span>
               </button>
 
               <button
                 onClick={() => setActiveRightTab('SHUFFLED_PREVIEW')}
-                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   activeRightTab === 'SHUFFLED_PREVIEW'
                     ? 'btn-3d-rose ring-2 ring-rose-300'
-                    : 'btn-3d-purple'
+                    : 'btn-3d-emerald opacity-90 hover:opacity-100'
                 }`}
               >
                 <QrCode className="w-4 h-4" />
-                <span>
-                  Bảng Đáp Án Chung & Mã QR ({shuffledVariants.length} đề)
-                </span>
+                <span>Đáp Án Chung & QR ({shuffledVariants.length})</span>
               </button>
             </div>
 
-            {/* Nhóm nút 3D Lưu chỉnh sửa & Tải về file đề đã sửa (.docx) */}
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="hidden sm:inline-block text-xs text-sky-900 font-mono font-bold bg-sky-100 px-2.5 py-1 rounded-lg border border-sky-300">
-                {hasUnsavedChanges
-                  ? '● Chưa lưu thay đổi'
-                  : `Đã lưu: ${lastSavedAt}`}
-              </span>
-
+            {/* Cụm 2: Nút Lưu chỉnh sửa & Xuất đề gốc sạch */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={handleSaveEdits}
-                className={`px-4 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   hasUnsavedChanges ? 'btn-3d-orange' : 'btn-3d-emerald'
                 }`}
               >
@@ -1305,11 +1525,11 @@ export default function App() {
 
               <button
                 onClick={handleDownloadCleanedMaster}
-                className="px-4 py-2.5 rounded-xl text-xs font-extrabold text-white btn-3d-cyan flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                title="Tải về file đề đã sửa (.docx) để lưu bản đề sạch vào máy tính"
+                className="px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                title="Tải về file đề đã sửa (.docx) kèm lời giải chi tiết"
               >
                 <Download className="w-4 h-4" />
-                <span>Tải Đề Đã Sửa (.docx)</span>
+                <span>Tải Đề Gốc (.docx)</span>
               </button>
             </div>
           </div>
@@ -1318,11 +1538,11 @@ export default function App() {
           {activeRightTab === 'LIVE_EDITOR' && (
             <div className="space-y-4">
               {/* Thanh công cụ lọc Phần I / Phần II / Phần III thiết kế 3D đa sắc màu */}
-              <div className="px-4 py-3.5 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="px-4 py-3 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => setFilterPart('ALL')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
                       filterPart === 'ALL'
                         ? 'btn-3d-indigo ring-2 ring-indigo-300'
                         : 'btn-3d-cyan'
@@ -1332,7 +1552,7 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => setFilterPart('PART_1')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
                       filterPart === 'PART_1'
                         ? 'btn-3d-primary ring-2 ring-blue-300'
                         : 'btn-3d-primary opacity-90'
@@ -1342,7 +1562,7 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => setFilterPart('PART_2')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
                       filterPart === 'PART_2'
                         ? 'btn-3d-emerald ring-2 ring-emerald-300'
                         : 'btn-3d-emerald opacity-90'
@@ -1352,7 +1572,7 @@ export default function App() {
                   </button>
                   <button
                     onClick={() => setFilterPart('PART_3')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white whitespace-nowrap ${
                       filterPart === 'PART_3'
                         ? 'btn-3d-orange ring-2 ring-orange-300'
                         : 'btn-3d-amber'
@@ -1362,7 +1582,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-2.5 text-xs font-bold text-slate-700">
+                <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
                   <span className="flex items-center gap-1">
                     <Underline className="w-3.5 h-3.5 text-blue-600" />
                     <span>Gạch chân</span>
@@ -1441,26 +1661,39 @@ export default function App() {
                         }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-sky-200">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-black font-mono shadow-xs">
                               Câu {q.displayIndex}
                             </span>
-                            <span className="text-xs font-bold text-slate-600">
-                              {q.part === 'PART_1'
-                                ? 'Phần I'
-                                : q.part === 'PART_2'
-                                ? 'Phần II'
-                                : 'Phần III'}{' '}
-                              · Gốc #{q.originalIndex}
-                            </span>
+                            {q.isAiCloned && (
+                              <span className="px-2 py-0.5 rounded-md bg-purple-100 border border-purple-300 text-purple-900 text-[11px] font-extrabold">
+                                AI Nhân Bản Tương Đương
+                              </span>
+                            )}
+                            <select
+                              value={q.bloomLevel || 'NHAN_BIET'}
+                              onChange={(e) =>
+                                handleUpdateBloomLevel(
+                                  q.id,
+                                  e.target.value as BloomLevel
+                                )
+                              }
+                              className="px-2 py-0.5 text-[11px] font-bold bg-sky-100 text-sky-900 border border-sky-300 rounded-md focus:outline-none"
+                            >
+                              <option value="NHAN_BIET">Mức độ: Nhận biết</option>
+                              <option value="THONG_HIEU">Mức độ: Thông hiểu</option>
+                              <option value="VAN_DUNG">Mức độ: Vận dụng</option>
+                              <option value="VAN_DUNG_CAO">Mức độ: Vận dụng cao</option>
+                            </select>
+
                             {q.part === 'PART_1' && (
                               <span className="text-xs text-sky-800 font-mono font-semibold">
                                 · Canh trái co dãn:{' '}
                                 {effectiveLayout === '1_ROW_4_COL'
-                                  ? '1 dòng (4 cột ngang 25%)'
+                                  ? '1 dòng (4 cột 25%)'
                                   : effectiveLayout === '2_ROW_2_COL'
-                                  ? '2 dòng (2 cột × 2 hàng 50%)'
-                                  : '4 dòng (1 cột dọc 100%)'}
+                                  ? '2 dòng (2 cột 50%)'
+                                  : '4 dòng (1 cột 100%)'}
                               </span>
                             )}
                           </div>
@@ -1479,7 +1712,7 @@ export default function App() {
                         </div>
 
                         {/* Ô biên tập trực tiếp thân câu hỏi (Times New Roman 12pt, canh trái) */}
-                        <div className="mb-4">
+                        <div className="mb-3">
                           <label className="block text-[11px] font-bold text-sky-900 mb-1">
                             Nội dung câu dẫn (Times New Roman 12pt — Canh trái tự động co dãn):
                           </label>
@@ -1500,16 +1733,6 @@ export default function App() {
                         {/* ================= NỘI DUNG PHẦN I: 4 PHƯƠNG ÁN A, B, C, D ================= */}
                         {q.part === 'PART_1' && q.options && (
                           <div className="space-y-2.5">
-                            <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-                              <span>
-                                Click nút 3D <strong>A, B, C, D</strong> để chọn nhanh 1 chạm hoặc bấm nút{' '}
-                                <strong>U</strong> (Gạch chân) / <strong>A</strong> (Tô đỏ):
-                              </span>
-                              <span className="font-mono text-sky-800 font-bold">
-                                Times New Roman 12pt · Canh trái đều
-                              </span>
-                            </div>
-
                             <div
                               className={`grid gap-3 ${
                                 effectiveLayout === '1_ROW_4_COL'
@@ -1576,7 +1799,6 @@ export default function App() {
                                           'isUnderline'
                                         )
                                       }
-                                      title="Bật/tắt thuộc tính Gạch chân (<w:u>)"
                                       className={`w-7 h-7 rounded-lg text-xs font-serif underline font-black flex items-center justify-center ${
                                         opt.isUnderline
                                           ? 'btn-3d-indigo text-white'
@@ -1594,7 +1816,6 @@ export default function App() {
                                           'isRed'
                                         )
                                       }
-                                      title="Bật/tắt thuộc tính Tô màu đỏ (<w:color val='FF0000'/>)"
                                       className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center ${
                                         opt.isRed
                                           ? 'btn-3d-rose text-white'
@@ -1613,24 +1834,6 @@ export default function App() {
                         {/* ================= NỘI DUNG PHẦN II: 4 Ý CON a), b), c), d) ĐÚNG / SAI ================= */}
                         {q.part === 'PART_2' && q.subItems && (
                           <div className="space-y-2.5">
-                            <div className="flex items-center justify-between text-xs text-slate-600 font-medium">
-                              <span>
-                                Ý có gạch chân hoặc tô đỏ = <strong>Đúng (Đ)</strong> · Ý bình thường ={' '}
-                                <strong>Sai (S)</strong>. Click nút 3D 1 chạm để đổi:
-                              </span>
-                              <span className="font-mono font-extrabold text-emerald-900 bg-emerald-100 px-2.5 py-0.5 rounded-lg border border-emerald-300">
-                                Mã khóa:{' '}
-                                {q.subItems
-                                  .map((s) => (s.isTrue ? 'Đ' : 'S'))
-                                  .join('')}
-                                {' ('}
-                                {q.subItems
-                                  .map((s) => (s.isTrue ? 'T' : 'F'))
-                                  .join('')}
-                                {')'}
-                              </span>
-                            </div>
-
                             <div className="space-y-2.5">
                               {q.subItems.map((sub) => (
                                 <div
@@ -1729,6 +1932,33 @@ export default function App() {
                             </span>
                           </div>
                         )}
+
+                        {/* Khung Lời giải chi tiết & Yêu cầu cần đạt */}
+                        <div className="mt-3 pt-3 border-t border-sky-200/80 grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
+                          <div className="md:col-span-5 bg-sky-50/80 p-2.5 rounded-xl border border-sky-200">
+                            <span className="block font-extrabold text-sky-950 mb-0.5">
+                              Yêu cầu cần đạt (GDPT 2018):
+                            </span>
+                            <span className="text-slate-700 font-medium">
+                              {q.learningOutcome ||
+                                'Đảm bảo đúng chuẩn kiến thức kỹ năng của đề gốc.'}
+                            </span>
+                          </div>
+                          <div className="md:col-span-7">
+                            <label className="block font-extrabold text-indigo-950 mb-1">
+                              Lời giải chi tiết (Xuất kèm trong file Word khi bật):
+                            </label>
+                            <input
+                              type="text"
+                              value={q.explanation || ''}
+                              onChange={(e) =>
+                                handleUpdateExplanation(q.id, e.target.value)
+                              }
+                              placeholder="Nhập lời giải chi tiết hoặc bấm AI Tạo Đề Tương Đương để tự động sinh..."
+                              className="w-full px-3 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:outline-none focus:border-blue-600"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </React.Fragment>
                   );
@@ -1737,7 +1967,397 @@ export default function App() {
             </div>
           )}
 
-          {/* ================= TAB 2: BẢNG ĐÁP ÁN CHUNG TẤT CẢ MÃ ĐỀ TRONG 1 KHUNG + XEM TRƯỚC ĐỀ WORD ================= */}
+          {/* ================= TAB 2 (MỚI): CHẾ ĐỘ BIÊN SOẠN AI TẠO ĐỀ TƯƠNG ĐƯƠNG ĐỀ GỐC (ISOMORPHIC EXAM CLONING) ================= */}
+          {activeRightTab === 'AI_CLONE_STUDIO' && (
+            <div className="space-y-5">
+              {/* Bảng Điều Khiển AI Gemini Studio (Tích hợp bộ chọn 4 mô hình như hình mẫu) */}
+              <div className="p-6 rounded-3xl card-3d-panel border-2 border-purple-300 space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-purple-200 pb-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl btn-3d-purple text-white">
+                        <Bot className="w-5 h-5" />
+                      </div>
+                      <h3 className="text-base sm:text-lg font-black text-purple-950 uppercase">
+                        AI GEMINI STUDIO — BIÊN SOẠN ĐỀ TƯƠNG ĐƯƠNG ĐỀ GỐC (ISOMORPHIC CLONING)
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-700 font-semibold">
+                      Giữ nguyên 100% <strong>Yêu cầu cần đạt</strong>, ma trận nhận thức và cấu trúc 3 phần của đề gốc; chỉ thay đổi số liệu, hàm số và ngữ cảnh khoa học kèm lời giải chi tiết.
+                    </p>
+                  </div>
+
+                  <span className="px-3 py-1.5 rounded-xl bg-emerald-100 border-2 border-emerald-400 text-emerald-950 text-xs font-extrabold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                    <span>Bảo mật tuyệt đối · Tự hành 100%</span>
+                  </span>
+                </div>
+
+                {/* Bộ chọn 4 mô hình AI Gemini thiết kế chuẩn theo hình ảnh đính kèm */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+                  {/* Khung chọn mô hình Dark Card giống hệt hình mẫu */}
+                  <div className="md:col-span-5 p-3.5 rounded-2xl bg-[#18191C] text-white border-2 border-slate-700 shadow-xl flex flex-col justify-between space-y-2">
+                    <div className="px-2 py-1 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Chọn Mô Hình AI Gemini</span>
+                      <span className="text-emerald-400 font-mono">100% Ready</span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {GEMINI_MODEL_OPTIONS.map((m) => {
+                        const isSelected = m.id === selectedModelTier;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setSelectedModelTier(m.id)}
+                            className={`w-full text-left px-4 py-2.5 rounded-2xl flex items-center gap-3.5 transition-all ${
+                              isSelected
+                                ? 'bg-[#26272B] border-2 border-slate-300 shadow-md'
+                                : 'hover:bg-white/5 border-2 border-transparent'
+                            }`}
+                          >
+                            <div className="w-5 flex items-center justify-center shrink-0">
+                              {isSelected && (
+                                <Check className="w-4 h-4 text-white stroke-[3]" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-extrabold text-white">
+                                {m.name}
+                              </div>
+                              <div className="text-xs text-slate-400 font-medium">
+                                {m.subtitle}
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Khung cấu hình yêu cầu nhân bản đề tương đương */}
+                  <div className="md:col-span-7 flex flex-col justify-between space-y-4 bg-purple-50/70 p-4 rounded-2xl border-2 border-purple-200">
+                    <div className="space-y-2">
+                      <label className="block text-xs font-black text-purple-950 uppercase">
+                        Chỉ thị Sư phạm cho AI khi tạo đề tương đương:
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={aiCustomPrompt}
+                        onChange={(e) => setAiCustomPrompt(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-xs font-semibold text-slate-900 bg-white border-2 border-purple-300 rounded-xl focus:outline-none focus:border-blue-600 leading-relaxed"
+                      />
+                      <div className="p-3 rounded-xl bg-white/90 border border-purple-200 text-[11px] text-slate-700 space-y-1">
+                        <div className="font-extrabold text-purple-950 flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Cơ chế Bảo mật Khóa & Dữ liệu Đề thi Kép:</span>
+                        </div>
+                        <p>
+                          Hệ thống kết nối tự động với khóa cá nhân của giáo viên trong{' '}
+                          <strong>Settings &gt; Secrets (GEMINI_API_KEY)</strong> ở phía máy chủ kết hợp{' '}
+                          <strong>Bộ Sinh Đề Toán Học Tự Hành 100%</strong>, đảm bảo không bao giờ lộ khóa ra trình duyệt và hoạt động mượt mà ngay cả trên GitHub Pages.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <button
+                        onClick={handleGenerateAiCloneExam}
+                        disabled={isProcessing}
+                        className="flex-1 py-3 px-4 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center justify-center gap-2 whitespace-nowrap"
+                      >
+                        <RefreshCw
+                          className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`}
+                        />
+                        <span>
+                          {clonedQuestions.length > 0
+                            ? `Tạo Phiên Bản Đề Tương Đương Mới (#${cloneIteration})`
+                            : `Bắt Đầu Nhân Bản Đề Tương Đương (${currentModelInfo.name})`}
+                        </span>
+                      </button>
+
+                      {clonedQuestions.length > 0 && (
+                        <>
+                          <button
+                            onClick={handleApplyAiCloneAsMaster}
+                            className="py-3 px-4 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <ArrowRightLeft className="w-4 h-4" />
+                            <span>Dùng Làm Đề Gốc Để Trộn</span>
+                          </button>
+
+                          <button
+                            onClick={handleDownloadAiCloneDocx}
+                            className="py-3 px-4 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap"
+                          >
+                            <Download className="w-4 h-4" />
+                            <span>Tải Word (.docx)</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bảng Đối Chiếu Song Song: ĐỀ GỐC vs ĐỀ AI TƯƠNG ĐƯƠNG */}
+              {clonedQuestions.length === 0 ? (
+                <div className="p-10 rounded-3xl card-3d-panel text-center space-y-3">
+                  <Bot className="w-12 h-12 text-purple-600 mx-auto" />
+                  <h4 className="text-base font-black text-slate-900">
+                    Sẵn sàng nhân bản bộ đề tương đương từ {questions.length} câu hỏi gốc
+                  </h4>
+                  <p className="text-xs text-slate-600 max-w-lg mx-auto">
+                    Nhấn nút <strong>[Bắt Đầu Nhân Bản Đề Tương Đương]</strong> phía trên để hệ thống sinh bộ đề mới giữ nguyên yêu cầu cần đạt, đối chiếu trực quan từng câu với đề gốc và tính sẵn lời giải chi tiết.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="px-5 py-3 rounded-2xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-xs font-extrabold uppercase">
+                      <Sparkles className="w-4 h-4 text-amber-400" />
+                      <span>
+                        Đối Chiếu Song Song: Đề Gốc & Đề Tương Đương ({clonedQuestions.length} câu)
+                      </span>
+                    </div>
+                    <span className="text-xs font-mono text-emerald-400">
+                      Engine: {lastAiEngineUsed}
+                    </span>
+                  </div>
+
+                  {clonedQuestions.map((cq, idx) => {
+                    const origQ = questions[idx] || cq;
+                    return (
+                      <div
+                        key={cq.id}
+                        className="p-5 rounded-2xl card-3d-panel space-y-3"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-200">
+                          <div className="flex items-center gap-2">
+                            <span className="px-3 py-1 rounded-lg text-xs font-black text-white btn-3d-purple font-mono">
+                              {cq.part === 'PART_1'
+                                ? 'Phần I'
+                                : cq.part === 'PART_2'
+                                ? 'Phần II'
+                                : 'Phần III'}{' '}
+                              — Câu {cq.displayIndex}
+                            </span>
+                            <span className="text-xs font-extrabold text-indigo-900 bg-indigo-100 px-2.5 py-1 rounded-lg">
+                              Yêu cầu cần đạt: {cq.learningOutcome}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            fontFamily: "'Times New Roman', Times, serif",
+                            fontSize: '12pt',
+                          }}
+                          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                        >
+                          {/* Cột trái: Câu hỏi trong Đề gốc */}
+                          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-300 space-y-2">
+                            <div className="text-xs font-sans font-bold text-slate-500 uppercase">
+                              Bản Đề Gốc:
+                            </div>
+                            <p className="text-left text-slate-800">
+                              <strong>Câu {origQ.displayIndex}. </strong>
+                              {origQ.stemText}
+                            </p>
+                          </div>
+
+                          {/* Cột phải: Câu hỏi tương đương do AI sinh */}
+                          <div className="p-3.5 rounded-xl bg-purple-50/70 border-2 border-purple-300 space-y-2">
+                            <div className="text-xs font-sans font-extrabold text-purple-900 uppercase flex items-center justify-between">
+                              <span>Bản Đề Tương Đương (Đã đổi số liệu & ngữ cảnh):</span>
+                            </div>
+                            <p className="text-left text-slate-950 font-medium">
+                              <strong>Câu {cq.displayIndex}. </strong>
+                              {cq.stemText}
+                            </p>
+
+                            {cq.part === 'PART_1' && cq.options && (
+                              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                {cq.options.map((o) => (
+                                  <div
+                                    key={o.id}
+                                    className={`text-sm ${
+                                      o.isCorrect
+                                        ? 'text-rose-600 font-bold underline'
+                                        : 'text-slate-800'
+                                    }`}
+                                  >
+                                    <strong>{o.currentLabel}. </strong>
+                                    {o.text}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {cq.part === 'PART_2' && cq.subItems && (
+                              <div className="space-y-1 pt-1 text-sm">
+                                {cq.subItems.map((s) => (
+                                  <div
+                                    key={s.id}
+                                    className={
+                                      s.isTrue
+                                        ? 'text-emerald-800 font-bold underline'
+                                        : 'text-slate-700'
+                                    }
+                                  >
+                                    <strong>{s.currentLabel}) </strong>
+                                    {s.text} ({s.isTrue ? 'Đúng' : 'Sai'})
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {cq.part === 'PART_3' && (
+                              <div className="pt-1 text-sm font-bold text-rose-600 underline">
+                                Đáp án: {cq.shortAnswer}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {cq.explanation && (
+                          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-950">
+                            <strong>Lời giải chi tiết câu tương đương: </strong>
+                            <span>{cq.explanation}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ================= TAB 3 (MỚI): MA TRẬN ĐẶC TẢ ĐỀ THI & CẤP ĐỘ NHẬN THỨC BLOOM ================= */}
+          {activeRightTab === 'BLOOM_MATRIX' && (
+            <div className="p-6 rounded-3xl card-3d-panel space-y-5">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-sky-200 pb-4">
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-sky-950 uppercase">
+                    BẢNG MA TRẬN ĐẶC TẢ CẤP ĐỘ NHẬN THỨC & YÊU CẦU CẦN ĐẠT (CHUẨN GDPT 2018)
+                  </h3>
+                  <p className="text-xs text-slate-600 font-semibold">
+                    Thống kê tự động tỷ lệ Nhận biết · Thông hiểu · Vận dụng · Vận dụng cao của bộ đề hiện tại
+                  </p>
+                </div>
+                <button
+                  onClick={handleDownloadCleanedMaster}
+                  className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Tải Đề Kèm Lời Giải (.docx)</span>
+                </button>
+              </div>
+
+              {/* 4 Thẻ Thống Kê Bloom 3D */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+                <div className="p-4 rounded-2xl guide-card-3d-blue text-center space-y-1">
+                  <div className="text-xs font-extrabold text-blue-900 uppercase">
+                    1. Nhận biết
+                  </div>
+                  <div className="text-2xl font-black text-blue-700 font-mono tabular-nums">
+                    {bloomStats.NHAN_BIET} câu
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-600 font-mono">
+                    {Math.round((bloomStats.NHAN_BIET / Math.max(1, questions.length)) * 100)}% tổng đề
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl guide-card-3d-emerald text-center space-y-1">
+                  <div className="text-xs font-extrabold text-emerald-900 uppercase">
+                    2. Thông hiểu
+                  </div>
+                  <div className="text-2xl font-black text-emerald-700 font-mono tabular-nums">
+                    {bloomStats.THONG_HIEU} câu
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-600 font-mono">
+                    {Math.round((bloomStats.THONG_HIEU / Math.max(1, questions.length)) * 100)}% tổng đề
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl guide-card-3d-amber text-center space-y-1">
+                  <div className="text-xs font-extrabold text-amber-900 uppercase">
+                    3. Vận dụng
+                  </div>
+                  <div className="text-2xl font-black text-amber-700 font-mono tabular-nums">
+                    {bloomStats.VAN_DUNG} câu
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-600 font-mono">
+                    {Math.round((bloomStats.VAN_DUNG / Math.max(1, questions.length)) * 100)}% tổng đề
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl guide-card-3d-rose text-center space-y-1">
+                  <div className="text-xs font-extrabold text-rose-900 uppercase">
+                    4. Vận dụng cao
+                  </div>
+                  <div className="text-2xl font-black text-rose-700 font-mono tabular-nums">
+                    {bloomStats.VAN_DUNG_CAO} câu
+                  </div>
+                  <div className="text-[11px] font-bold text-slate-600 font-mono">
+                    {Math.round((bloomStats.VAN_DUNG_CAO / Math.max(1, questions.length)) * 100)}% tổng đề
+                  </div>
+                </div>
+              </div>
+
+              {/* Bảng chi tiết từng câu hỏi */}
+              <div className="overflow-x-auto rounded-2xl border-2 border-sky-200 bg-white">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-sky-900 text-white font-extrabold uppercase">
+                      <th className="py-3 px-3.5 border-b border-sky-800">Phần / Câu</th>
+                      <th className="py-3 px-3.5 border-b border-sky-800">Mức độ nhận thức</th>
+                      <th className="py-3 px-3.5 border-b border-sky-800">Yêu cầu cần đạt (Đặc tả GDPT 2018)</th>
+                      <th className="py-3 px-3.5 border-b border-sky-800">Lời giải chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-sky-100">
+                    {questions.map((q) => (
+                      <tr key={`matrix-${q.id}`} className="hover:bg-sky-50/70">
+                        <td className="py-2.5 px-3.5 font-mono font-bold text-blue-950 whitespace-nowrap">
+                          {q.part === 'PART_1'
+                            ? 'Phần I'
+                            : q.part === 'PART_2'
+                            ? 'Phần II'
+                            : 'Phần III'}{' '}
+                          · Câu {q.displayIndex}
+                        </td>
+                        <td className="py-2.5 px-3.5 whitespace-nowrap font-bold">
+                          {q.bloomLevel === 'VAN_DUNG_CAO' && (
+                            <span className="text-rose-700">Vận dụng cao</span>
+                          )}
+                          {q.bloomLevel === 'VAN_DUNG' && (
+                            <span className="text-amber-700">Vận dụng</span>
+                          )}
+                          {q.bloomLevel === 'THONG_HIEU' && (
+                            <span className="text-emerald-700">Thông hiểu</span>
+                          )}
+                          {(!q.bloomLevel || q.bloomLevel === 'NHAN_BIET') && (
+                            <span className="text-blue-700">Nhận biết</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-slate-800 font-medium">
+                          {q.learningOutcome ||
+                            'Đảm bảo chuẩn kiến thức kỹ năng chương trình THPT 2025.'}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-slate-600">
+                          {q.explanation || 'Đã sẵn sàng lời giải.'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB 4: BẢNG ĐÁP ÁN CHUNG TẤT CẢ MÃ ĐỀ TRONG 1 KHUNG + XEM TRƯỚC ĐỀ WORD ================= */}
           {activeRightTab === 'SHUFFLED_PREVIEW' && (
             <div className="space-y-5">
               {shuffledVariants.length === 0 ? (
@@ -1766,9 +2386,8 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {/* ================= KHUNG LỚN BAO CHUNG TẤT CẢ CÁC MÃ ĐỀ THEO THỨ TỰ TỪ TRÊN XUỐNG ================= */}
+                  {/* KHUNG LỚN BAO CHUNG TẤT CẢ CÁC MÃ ĐỀ THEO THỨ TỰ TỪ TRÊN XUỐNG */}
                   <div className="p-6 rounded-3xl card-3d-panel border-4 border-sky-400 space-y-5">
-                    {/* Header của Bảng Đáp Án Chung */}
                     <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b-2 border-sky-300">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
@@ -1794,7 +2413,6 @@ export default function App() {
                       </button>
                     </div>
 
-                    {/* Khung Quốc Hiệu & Tiêu Đề Chung của Bảng Đáp Án (Times New Roman 12pt) */}
                     <div
                       style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
                       className="p-4 rounded-2xl bg-white border-2 border-slate-300 grid grid-cols-1 md:grid-cols-2 gap-4 text-center shadow-xs"
@@ -1826,7 +2444,6 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Danh sách TẤT CẢ các mã đề xếp theo thứ tự từ trên xuống trong cùng 1 khung */}
                     <div className="space-y-5">
                       {shuffledVariants.map((variant) =>
                         renderThreeColumnAnswerCard(variant)
@@ -1834,7 +2451,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* ================= THANH CHỌN MÃ ĐỀ ĐỂ XEM CHI TIẾT MÃ QR & BẢN DÀN TRANG ĐỀ THI WORD ================= */}
+                  {/* THANH CHỌN MÃ ĐỀ ĐỂ XEM CHI TIẾT MÃ QR & BẢN DÀN TRANG ĐỀ THI WORD */}
                   <div className="p-4 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="text-xs font-extrabold text-sky-950 mr-1">
@@ -1928,7 +2545,6 @@ export default function App() {
                           </span>
                         </div>
 
-                        {/* Trang giấy mô phỏng Word */}
                         <div
                           style={{
                             fontFamily: "'Times New Roman', Times, serif",
@@ -1936,7 +2552,6 @@ export default function App() {
                           }}
                           className="p-6 sm:p-8 bg-white rounded-2xl border-2 border-slate-300 shadow-inner space-y-4 text-slate-950"
                         >
-                          {/* Quốc hiệu Tiêu ngữ 2 cột trên đầu đề thi */}
                           <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pb-3 border-b border-slate-300 text-center">
                             <div className="sm:col-span-5 space-y-0.5">
                               <div className="font-bold uppercase">
@@ -1974,7 +2589,6 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Nội dung câu hỏi canh trái, tự động co dãn đều */}
                           <div className="space-y-4 text-left">
                             {activeVariant.questions.map((vq, vIdx) => {
                               const prevVq =
@@ -2051,7 +2665,6 @@ export default function App() {
                             -------------------- HẾT --------------------
                           </div>
 
-                          {/* Footer mô phỏng số trang & mã đề giống trong file Word */}
                           <div className="pt-3 mt-4 border-t border-slate-400 flex items-center justify-between text-slate-800">
                             <span className="font-bold">
                               {config.subjectName.toUpperCase()} — MÃ ĐỀ: {activeVariant.examCode}

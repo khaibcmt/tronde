@@ -436,6 +436,7 @@ export const UserGuideModal: React.FC<UserGuideModalProps> = ({
                       }
                       className="flex-1 px-2 py-2 text-xs font-bold border-2 border-purple-300 rounded-xl bg-white"
                     >
+                      <option value="AI_ENGINE">AI_ENGINE</option>
                       <option value="CORE_PARSER">CORE_PARSER</option>
                       <option value="LIVE_EDITOR">LIVE_EDITOR</option>
                       <option value="AUTO_LAYOUT">AUTO_LAYOUT</option>
