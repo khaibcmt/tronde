@@ -682,12 +682,26 @@ function buildEmbeddedQrDrawingXml(relId: string, examCode: string): string {
 
 /**
  * Tạo nội dung body XML cho 1 bộ câu hỏi:
+/**
+ * Định dạng tên môn thi sang dạng chữ thường thanh lịch sư phạm (Ví dụ: SINH HỌC -> Sinh học)
+ */
+export function formatPedagogicalSubject(raw: string): string {
+  if (!raw) return 'Sinh học';
+  const clean = raw.trim();
+  const lower = clean.toLowerCase();
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+
+/**
+ * Tạo nội dung body XML cho 1 bộ câu hỏi:
  * - Bắt buộc dùng Times New Roman 12pt, canh trái (left), tự động co dãn đều đẹp mắt
+ * - Cho phép bật/tắt hiển thị Lời giải chi tiết độc lập
  */
 function buildQuestionsBodyXml(
   questions: ExamQuestion[],
   config: ShuffleConfig,
-  highlightCorrectAnswers: boolean
+  highlightCorrectAnswers: boolean,
+  includeSolutions: boolean = false
 ): string {
   const part1 = questions.filter((q) => q.part === 'PART_1');
   const part2 = questions.filter((q) => q.part === 'PART_2');
@@ -724,7 +738,7 @@ function buildQuestionsBodyXml(
           )
         );
       }
-      if (config.includeSolutionsInExport && q.explanation) {
+      if (includeSolutions && q.explanation) {
         blocks.push(
           buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
             italicBody: true,
@@ -768,7 +782,7 @@ function buildQuestionsBodyXml(
           })
         );
       }
-      if (config.includeSolutionsInExport && q.explanation) {
+      if (includeSolutions && q.explanation) {
         blocks.push(
           buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
             italicBody: true,
@@ -810,7 +824,7 @@ function buildQuestionsBodyXml(
           })
         );
       }
-      if (config.includeSolutionsInExport && q.explanation) {
+      if (includeSolutions && q.explanation) {
         blocks.push(
           buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
             italicBody: true,
@@ -830,12 +844,17 @@ function buildQuestionsBodyXml(
 
 /**
  * Tạo Footer Word (footer1.xml) có đánh Số Trang tự động (PAGE / NUMPAGES) và Số Mã Đề
+ * Chuyển sang định dạng chữ thường đẹp & sư phạm (VD: “Môn: Sinh học — Lớp: 12 — Mã đề: 101”)
  * Tất cả dùng Times New Roman 12pt
  */
 function buildFooterXml(
   config: ShuffleConfig,
   examCodeText: string
 ): string {
+  const subjectLabel = formatPedagogicalSubject(config.subjectName);
+  const cleanCode = examCodeText.replace(/^MÃ\s*ĐỀ[:\s]*/i, '').trim();
+  const leftFooterText = `Môn: ${subjectLabel} — Lớp: 12 — Mã đề: ${cleanCode || examCodeText}`;
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:p>
@@ -851,10 +870,11 @@ function buildFooterXml(
     <w:r>
       <w:rPr>
         <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-        <w:b/>
+        <w:i/>
+        <w:color w:val="334155"/>
         <w:sz w:val="24"/><w:szCs w:val="24"/>
       </w:rPr>
-      <w:t xml:space="preserve">${escapeXml(config.subjectName.toUpperCase())} — ${escapeXml(examCodeText)}</w:t>
+      <w:t xml:space="preserve">${escapeXml(leftFooterText)}</w:t>
     </w:r>
     <w:r>
       <w:rPr>
@@ -971,26 +991,62 @@ async function packOpenXmlDocx(
 }
 
 /**
- * Tiện ích 1: Xuất file đề gốc đã sửa sạch lỗi (.docx)
+ * Tiện ích 1: Xuất file đề gốc đã chuẩn hóa cấu trúc 2025 (không kèm lời giải cho học sinh làm thử)
  */
 export async function exportCleanedMasterDocx(
+  questions: ExamQuestion[],
+  config: ShuffleConfig,
+  includeSolutions: boolean = false
+): Promise<Blob> {
+  const headerXml = buildExamNationalHeaderTableXml(
+    config,
+    includeSolutions
+      ? 'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
+      : 'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025'
+  );
+  const bodyQuestionsXml = buildQuestionsBodyXml(
+    questions,
+    config,
+    true,
+    includeSolutions
+  );
+  return packOpenXmlDocx(
+    `${headerXml}\n${bodyQuestionsXml}`,
+    config,
+    'Đề gốc chuẩn 2025'
+  );
+}
+
+/**
+ * Tiện ích 2: Xuất riêng Đề Gốc CÓ LỜI GIẢI CHI TIẾT (.docx)
+ * Dành riêng cho giáo viên lưu trữ và ban chấm thi (Thỏa mãn yêu cầu 2)
+ */
+export async function exportMasterExamWithSolutionsDocx(
   questions: ExamQuestion[],
   config: ShuffleConfig
 ): Promise<Blob> {
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025'
+    'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
   );
-  const bodyQuestionsXml = buildQuestionsBodyXml(questions, config, true);
+  const bodyQuestionsXml = buildQuestionsBodyXml(
+    questions,
+    config,
+    true,  // gạch chân / đỏ đáp án đúng
+    true   // in toàn bộ lời giải chi tiết
+  );
   return packOpenXmlDocx(
     `${headerXml}\n${bodyQuestionsXml}`,
     config,
-    'ĐỀ GỐC CHUẨN 2025'
+    'Đề gốc có lời giải'
   );
 }
 
 /**
- * Tiện ích 2: Xuất 1 tệp Đề thi hoán vị (.docx) kèm Số trang, Số Mã đề & Khung Đáp Án 3 Cột Mầu ở trang cuối
+ * Tiện ích 3: Xuất 1 tệp Đề thi hoán vị (.docx) DÀNH RIÊNG CHO HỌC SINH LÀM BÀI:
+ * - BẮT BUỘC KHÔNG CÓ LỜI GIẢI & KHÔNG CÓ ĐÁP ÁN
+ * - KHÔNG XUẤT KHUNG ĐÁP ÁN Ở CUỐI ĐỀ THI (Thỏa mãn yêu cầu 4)
+ * - Footer sư phạm chữ thường: “Môn: Sinh học — Lớp: 12 — Mã đề: 101”
  */
 export async function exportSingleVariantDocx(
   variant: ShuffledVariant,
@@ -1001,7 +1057,13 @@ export async function exportSingleVariantDocx(
     `MÃ ĐỀ THI: ${variant.examCode}`
   );
 
-  const questionsXml = buildQuestionsBodyXml(variant.questions, config, false);
+  // Học sinh làm bài: highlightCorrectAnswers = false, includeSolutions = false
+  const questionsXml = buildQuestionsBodyXml(
+    variant.questions,
+    config,
+    false,
+    false
+  );
 
   const footerEndXml = [
     buildStandardParagraphXml(
@@ -1016,56 +1078,184 @@ export async function exportSingleVariantDocx(
     ),
   ].join('\n');
 
-  // Trang đáp án và mã QR ở cuối đề (Ngắt trang <w:br w:type="page"/>)
-  const pageBreakXml = `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
-
-  const answerCardXml = buildVariant3ColumnAnswerCardXml(variant);
-
-  const answerSheetBlocks: string[] = [
-    pageBreakXml,
-    buildStandardParagraphXml(
-      `PHIẾU ĐÁP ÁN & MÃ QR CHẤM THI — MÃ ĐỀ ${variant.examCode}`,
-      '',
-      { align: 'center', spaceAfterTwips: 120, fontSizeHalfPt: 24 }
-    ),
-    answerCardXml,
-    buildStandardParagraphXml('Chuỗi Payload QR: ', variant.qrPayload, {
-      align: 'left',
-      spaceBeforeTwips: 100,
-      spaceAfterTwips: 80,
-      fontSizeHalfPt: 24,
-    }),
-  ];
-
-  if (config.embedQrInWord && variant.qrDataUrl) {
-    answerSheetBlocks.push(buildEmbeddedQrDrawingXml('rIdQr1', variant.examCode));
-    answerSheetBlocks.push(
-      buildStandardParagraphXml(
-        `Quét mã QR bằng ứng dụng ${config.qrFormat} để nạp tự động đáp án Mã đề ${variant.examCode}`,
-        '',
-        { align: 'center', italicBody: true, spaceAfterTwips: 80, fontSizeHalfPt: 24 }
-      )
-    );
-  }
-
-  const fullInnerXml = [
-    headerXml,
-    questionsXml,
-    footerEndXml,
-    ...answerSheetBlocks,
-  ].join('\n');
+  // KHÔNG CÒN xuất khung đáp án ở cuối đề thi học sinh (Theo yêu cầu 4)
+  const fullInnerXml = [headerXml, questionsXml, footerEndXml].join('\n');
 
   return packOpenXmlDocx(
     fullInnerXml,
     config,
-    `MÃ ĐỀ: ${variant.examCode}`,
-    config.embedQrInWord ? variant.qrDataUrl : undefined
+    variant.examCode
   );
 }
 
 /**
- * Tiện ích 3 (MỚI): Xuất File Bảng Đáp Án Tổng Hợp (.docx) gồm TẤT CẢ các mã đề chung 1 khung lớn theo thứ tự từ trên xuống,
- * mỗi mã đề trình bày đúng chuẩn 3 khung màu Phần I, Phần II, Phần III như hình mẫu, Times New Roman 12pt để in ấn / nộp ngay không cần chỉnh sửa!
+ * Tạo hàng XML cho 1 mã đề trong Bảng Khảo Thí A4:
+ * - Khung bên trái: MÃ ĐỀ (Nền xanh nhạt, chữ đậm to rõ ràng)
+ * - Khung bên phải: Đáp án từng câu và từng phần theo thứ tự từ trên xuống:
+ *   + PHẦN I (18 câu 4 lựa chọn)
+ *   + PHẦN II (4 câu Đúng / Sai)
+ *   + PHẦN III (6 câu Trả lời ngắn)
+ * Dùng font Times New Roman, canh trái tự động co dãn, vừa vặn trên 1 trang A4 nộp khảo thí!
+ */
+function buildKhaoThiVariantRowXml(variant: ShuffledVariant): string {
+  // 1. Chuỗi đáp án Phần I
+  const p1Items = variant.answerKey.part1;
+  const p1Text = p1Items.map((item) => `${item.questionNumber}.${item.answer}`).join('   ');
+
+  // 2. Chuỗi đáp án Phần II
+  const p2Items = variant.answerKey.part2;
+  const p2Text = p2Items
+    .map((item) => `Câu ${item.questionNumber}: ${item.dsString} (${item.tfString})`)
+    .join('    |    ');
+
+  // 3. Chuỗi đáp án Phần III
+  const p3Items = variant.answerKey.part3;
+  const p3Text = p3Items
+    .map((item) => `Câu ${item.questionNumber}: ${item.answer}`)
+    .join('    |    ');
+
+  return `<w:tr>
+    <!-- Cột bên trái: Mã đề -->
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="1200" w:type="pct"/>
+        <w:tcBorders>
+          <w:top w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
+          <w:left w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
+          <w:bottom w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
+          <w:right w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
+        </w:tcBorders>
+        <w:shd w:val="clear" w:color="auto" w:fill="E0F2FE"/>
+      </w:tcPr>
+      <w:p>
+        <w:pPr>
+          <w:spacing w:before="60" w:after="20"/>
+          <w:jc w:val="center"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="0369A1"/>
+            <w:sz w:val="20"/><w:szCs w:val="20"/>
+          </w:rPr>
+          <w:t>MÃ ĐỀ</w:t>
+        </w:r>
+      </w:p>
+      <w:p>
+        <w:pPr>
+          <w:spacing w:before="0" w:after="40"/>
+          <w:jc w:val="center"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="1E3A8A"/>
+            <w:sz w:val="32"/><w:szCs w:val="32"/>
+          </w:rPr>
+          <w:t>${escapeXml(variant.examCode)}</w:t>
+        </w:r>
+      </w:p>
+    </w:tc>
+
+    <!-- Cột bên phải: Đáp án từng phần từ trên xuống -->
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="3800" w:type="pct"/>
+        <w:tcBorders>
+          <w:top w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
+          <w:left w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
+          <w:bottom w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
+          <w:right w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
+        </w:tcBorders>
+        <w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+      </w:tcPr>
+      <!-- PHẦN I -->
+      <w:p>
+        <w:pPr>
+          <w:spacing w:before="60" w:after="30" w:line="240" w:lineRule="auto"/>
+          <w:jc w:val="left"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="1E40AF"/>
+            <w:sz w:val="23"/><w:szCs w:val="23"/>
+          </w:rPr>
+          <w:t>PHẦN I (18 câu 4 lựa chọn): </w:t>
+        </w:r>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="DC2626"/>
+            <w:sz w:val="23"/><w:szCs w:val="23"/>
+          </w:rPr>
+          <w:t xml:space="preserve">${escapeXml(p1Text)}</w:t>
+        </w:r>
+      </w:p>
+      <!-- PHẦN II -->
+      <w:p>
+        <w:pPr>
+          <w:spacing w:before="30" w:after="30" w:line="240" w:lineRule="auto"/>
+          <w:jc w:val="left"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="065F46"/>
+            <w:sz w:val="23"/><w:szCs w:val="23"/>
+          </w:rPr>
+          <w:t>PHẦN II (4 câu Đúng / Sai): </w:t>
+        </w:r>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:color w:val="0F172A"/>
+            <w:sz w:val="23"/><w:szCs w:val="23"/>
+          </w:rPr>
+          <w:t xml:space="preserve">${escapeXml(p2Text)}</w:t>
+        </w:r>
+      </w:p>
+      <!-- PHẦN III -->
+      <w:p>
+        <w:pPr>
+          <w:spacing w:before="30" w:after="60" w:line="240" w:lineRule="auto"/>
+          <w:jc w:val="left"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="92400E"/>
+            <w:sz w:val="23"/><w:szCs w:val="23"/>
+          </w:rPr>
+          <w:t>PHẦN III (6 câu Trả lời ngắn): </w:t>
+        </w:r>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="DC2626"/>
+            <w:sz w:val="23"/><w:szCs w:val="23"/>
+          </w:rPr>
+          <w:t xml:space="preserve">${escapeXml(p3Text)}</w:t>
+        </w:r>
+      </w:p>
+    </w:tc>
+  </w:tr>`;
+}
+
+/**
+ * Tiện ích 4: Xuất File BẢNG ĐÁP ÁN TỔNG HỢP NỘP KHẢO THÍ CHUẨN TRÊN 1 TRANG A4:
+ * - Có tiêu đề Quốc ngữ giống như đề (Sở/Trường/Kỳ thi/Môn thi/Thời gian)
+ * - Gom chung tất cả các mã đề vào 1 khung A4 chuẩn
+ * - Khung bên trái: Các mã đề
+ * - Khung bên phải: Đáp án từng câu và từng phần theo thứ tự từ trên xuống: Phần I, Phần II, Phần III
+ * - Có sẵn khung chữ ký khảo thí & cán bộ coi thi, in nộp ngay không cần chỉnh sửa!
  */
 export async function exportMasterAnswerSheetDocx(
   variants: ShuffledVariant[],
@@ -1073,65 +1263,142 @@ export async function exportMasterAnswerSheetDocx(
 ): Promise<Blob> {
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    `BẢNG ĐÁP ÁN TỔNG HỢP (${variants.length} MÃ ĐỀ: ${variants.map((v) => v.examCode).join(', ')})`
+    `BẢNG ĐÁP ÁN CHÍNH THỨC NỘP KHẢO THÍ (${variants.length} MÃ ĐỀ: ${variants.map((v) => v.examCode).join(', ')})`
   );
 
-  // Đặt tất cả các mã đề vào chung 1 Khung Bao Tổng Hợp (Master Frame) xếp theo thứ tự từ trên xuống
-  const allVariantRowsXml = variants
-    .map(
-      (v, idx) => `<w:tr>
-        <w:tc>
-          <w:tcPr>
-            <w:tcW w:w="5000" w:type="pct"/>
-            <w:tcBorders>
-              <w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-              <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-              <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-              <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-            </w:tcBorders>
-          </w:tcPr>
-          ${buildVariant3ColumnAnswerCardXml(v)}
-          ${
-            idx < variants.length - 1
-              ? '<w:p><w:pPr><w:spacing w:before="80" w:after="80"/></w:pPr></w:p>'
-              : ''
-          }
-        </w:tc>
-      </w:tr>`
-    )
-    .join('\n');
+  const subHeadingXml = `<w:p>
+    <w:pPr>
+      <w:spacing w:before="100" w:after="80"/>
+      <w:jc w:val="center"/>
+    </w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:b/>
+        <w:color w:val="1E3A8A"/>
+        <w:sz w:val="26"/><w:szCs w:val="26"/>
+      </w:rPr>
+      <w:t>BẢNG TỔNG HỢP ĐÁP ÁN CHẤM THI CÁC MÃ ĐỀ</w:t>
+    </w:r>
+  </w:p>`;
+
+  // Các dòng trong bảng Khảo Thí (Mỗi dòng: bên trái là Mã đề, bên phải là Phần I, II, III từ trên xuống)
+  const rowsXml = variants.map((v) => buildKhaoThiVariantRowXml(v)).join('\n');
 
   const unifiedMasterFrameXml = `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblLayout w:type="autofit"/>
       <w:tblBorders>
-        <w:top w:val="single" w:sz="12" w:space="0" w:color="1D4ED8"/>
-        <w:left w:val="single" w:sz="12" w:space="0" w:color="1D4ED8"/>
-        <w:bottom w:val="single" w:sz="12" w:space="0" w:color="1D4ED8"/>
-        <w:right w:val="single" w:sz="12" w:space="0" w:color="1D4ED8"/>
+        <w:top w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
+        <w:left w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
+        <w:bottom w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
+        <w:right w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
+        <w:insideH w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+        <w:insideV w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
       </w:tblBorders>
-      <w:shd w:val="clear" w:color="auto" w:fill="F8FAFC"/>
       <w:tblCellMar>
-        <w:top w:w="140" w:type="dxa"/>
-        <w:left w:w="140" w:type="dxa"/>
-        <w:bottom w:w="140" w:type="dxa"/>
-        <w:right w:w="140" w:type="dxa"/>
+        <w:top w:w="80" w:type="dxa"/>
+        <w:left w:w="100" w:type="dxa"/>
+        <w:bottom w:w="80" w:type="dxa"/>
+        <w:right w:w="100" w:type="dxa"/>
       </w:tblCellMar>
     </w:tblPr>
-    ${allVariantRowsXml}
+    ${rowsXml}
   </w:tbl>`;
 
-  const fullInnerXml = `${headerXml}\n${unifiedMasterFrameXml}`;
+  // Bảng chữ ký Khảo thí & Cán bộ chấm thi
+  const signatureTableXml = `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:top w:w="160" w:type="dxa"/>
+        <w:left w:w="60" w:type="dxa"/>
+        <w:bottom w:w="100" w:type="dxa"/>
+        <w:right w:w="60" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+    <w:tr>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>
+        <w:p>
+          <w:pPr><w:jc w:val="center"/></w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+              <w:b/>
+              <w:sz w:val="24"/><w:szCs w:val="24"/>
+            </w:rPr>
+            <w:t>CÁN BỘ CHẤM THI 1</w:t>
+          </w:r>
+        </w:p>
+        <w:p>
+          <w:pPr><w:jc w:val="center"/></w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+              <w:i/>
+              <w:color w:val="64748B"/>
+              <w:sz w:val="20"/><w:szCs w:val="20"/>
+            </w:rPr>
+            <w:t>(Ký và ghi rõ họ tên)</w:t>
+          </w:r>
+        </w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>
+        <w:p>
+          <w:pPr><w:jc w:val="center"/></w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+              <w:b/>
+              <w:sz w:val="24"/><w:szCs w:val="24"/>
+            </w:rPr>
+            <w:t>CÁN BỘ CHẤM THI 2 / KHẢO THÍ</w:t>
+          </w:r>
+        </w:p>
+        <w:p>
+          <w:pPr><w:jc w:val="center"/></w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+              <w:i/>
+              <w:color w:val="64748B"/>
+              <w:sz w:val="20"/><w:szCs w:val="20"/>
+            </w:rPr>
+            <w:t>(Ký và ghi rõ họ tên)</w:t>
+          </w:r>
+        </w:p>
+      </w:tc>
+    </w:tr>
+  </w:tbl>`;
+
+  const fullInnerXml = `${headerXml}\n${subHeadingXml}\n${unifiedMasterFrameXml}\n${signatureTableXml}`;
 
   return packOpenXmlDocx(
     fullInnerXml,
     config,
-    `BẢNG ĐÁP ÁN CHUNG (${variants.length} MÃ ĐỀ)`
+    `Bảng đáp án khảo thí (${variants.length} mã đề)`
   );
 }
 
 /**
- * Tiện ích 4: Đóng gói toàn bộ bộ đề (.docx) + File Bảng đáp án tổng hợp (.docx & .csv) + Thư mục ảnh QR (.png) thành 1 file .ZIP
+ * Tiện ích 5: Đóng gói toàn bộ bộ đề (.docx) + Đề gốc có lời giải + Bảng đáp án khảo thí + QR (.png) thành 1 file .ZIP:
+ * - 00_De_Goc_Co_Loi_Giai_Chi_Tiet_2025.docx (Cho giáo viên)
+ * - 00_De_Goc_Chuan_Khong_Loi_Giai_2025.docx (Cho học sinh)
+ * - 01_Bang_Dap_An_Chung_Khao_Thi_2025.docx (1 trang A4 chuẩn nộp khảo thí)
+ * - Thư mục Bo_De_Thi_Hoc_Sinh_Docx/: Tất cả các mã đề hoán vị BẮT BUỘC KHÔNG CÓ LỜI GIẢI / ĐÁP ÁN
+ * - Thư mục Ma_QR_Cham_Thi_PNG/: Mã QR từng mã đề
+ * - Bang_Dap_An_Tong_Hop_2025.csv
  */
 export async function exportAllVariantsZipBundle(
   variants: ShuffledVariant[],
@@ -1140,16 +1407,20 @@ export async function exportAllVariantsZipBundle(
 ): Promise<Blob> {
   const bundleZip = new JSZip();
 
-  // 1. Lưu file đề gốc đã sửa sạch lỗi
-  const masterBlob = await exportCleanedMasterDocx(masterQuestions, config);
-  bundleZip.file('00_De_Goc_Da_Chuan_Hoa_2025.docx', masterBlob);
+  // 1. Lưu file đề gốc CÓ LỜI GIẢI CHI TIẾT
+  const masterSolutionsBlob = await exportMasterExamWithSolutionsDocx(masterQuestions, config);
+  bundleZip.file('00_De_Goc_Co_Loi_Giai_Chi_Tiet_2025.docx', masterSolutionsBlob);
 
-  // 2. Lưu file Bảng đáp án tổng hợp tất cả các mã đề chung 1 khung (.docx) chuẩn đẹp mắt nộp ngay
+  // 2. Lưu file đề gốc chuẩn KHÔNG LỜI GIẢI (Học sinh làm thử)
+  const masterCleanBlob = await exportCleanedMasterDocx(masterQuestions, config, false);
+  bundleZip.file('00_De_Goc_Chuan_Khong_Loi_Giai_2025.docx', masterCleanBlob);
+
+  // 3. Lưu file Bảng đáp án tổng hợp nộp khảo thí (1 trang A4)
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
-  bundleZip.file('01_Bang_Dap_An_Chung_Tat_Ca_Ma_De_2025.docx', masterAnswerDocxBlob);
+  bundleZip.file('01_Bang_Dap_An_Chung_Khao_Thi_2025.docx', masterAnswerDocxBlob);
 
-  // 3. Lưu từng file đề hoán vị (.docx) và ảnh QR (.png)
-  const deThiFolder = bundleZip.folder('Bo_De_Hoan_Vi_Docx');
+  // 4. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
+  const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
   const qrFolder = bundleZip.folder('Ma_QR_Cham_Thi_PNG');
 
   for (const v of variants) {
@@ -1162,7 +1433,7 @@ export async function exportAllVariantsZipBundle(
     }
   }
 
-  // 4. Tạo file CSV tổng hợp key chấm thi
+  // 5. Tạo file CSV tổng hợp key chấm thi
   const csvLines: string[] = [
     'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload',
   ];

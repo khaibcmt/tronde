@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Cpu,
   Download,
+  Edit3,
   FileArchive,
   FileCheck,
   FileCode2,
@@ -61,8 +62,10 @@ import {
   exportAllVariantsZipBundle,
   exportCleanedMasterDocx,
   exportMasterAnswerSheetDocx,
+  exportMasterExamWithSolutionsDocx,
   exportQrCodesZip,
   exportSingleVariantDocx,
+  formatPedagogicalSubject,
   triggerBrowserDownload,
 } from './utils/docxExporter';
 import {
@@ -91,6 +94,9 @@ export default function App() {
     'LIVE_EDITOR' | 'AI_CLONE_STUDIO' | 'BLOOM_MATRIX' | 'SHUFFLED_PREVIEW'
   >('LIVE_EDITOR');
   const [filterPart, setFilterPart] = useState<'ALL' | PartType>('ALL');
+  const [answerSheetViewMode, setAnswerSheetViewMode] = useState<
+    'KHAO_THI_A4' | 'THREE_COLUMN_CARDS'
+  >('KHAO_THI_A4');
   const [statusBanner, setStatusBanner] = useState<{
     type: 'SUCCESS' | 'INFO' | 'ERROR';
     text: string;
@@ -100,6 +106,7 @@ export default function App() {
   const [config, setConfig] = useState<ShuffleConfig>({
     numVariants: 4,
     examCodeDigits: 3,
+    customCodes: ['101', '102', '103', '104'],
     layoutOverride: 'AUTO',
     resetNumberingPerPart: true,
     shuffleQuestions: true,
@@ -646,12 +653,47 @@ export default function App() {
     }
   };
 
+  const handleUpdateCustomCode = (index: number, newCode: string) => {
+    setConfig((prev) => {
+      const base = prev.examCodeDigits === 3 ? 101 : 1001;
+      const codes =
+        prev.customCodes && prev.customCodes.length >= prev.numVariants
+          ? [...prev.customCodes]
+          : Array.from({ length: prev.numVariants }, (_, i) => String(base + i));
+      codes[index] = newCode;
+      return { ...prev, customCodes: codes };
+    });
+  };
+
+  const handleResetDefaultCodes = () => {
+    setConfig((prev) => ({
+      ...prev,
+      customCodes: Array.from({ length: prev.numVariants }, (_, i) =>
+        String(prev.examCodeDigits === 3 ? 101 + i : 1001 + i)
+      ),
+    }));
+  };
+
+  const handleDownloadMasterWithSolutions = async () => {
+    setIsProcessing(true);
+    try {
+      const blob = await exportMasterExamWithSolutionsDocx(questions, config);
+      triggerBrowserDownload(
+        blob,
+        `De_Goc_Co_Loi_Giai_Chi_Tiet_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`
+      );
+      await executePostDownloadZeroTracePurge('Đề Gốc Kèm Lời Giải Chi Tiết (.docx)');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadCleanedMaster = async () => {
     setIsProcessing(true);
     try {
-      const blob = await exportCleanedMasterDocx(questions, config);
-      triggerBrowserDownload(blob, `De_Goc_Da_Sua_Chuan_2025_${Date.now()}.docx`);
-      await executePostDownloadZeroTracePurge('Đề Gốc Chuẩn 2025 (.docx)');
+      const blob = await exportCleanedMasterDocx(questions, config, false);
+      triggerBrowserDownload(blob, `De_Goc_Khong_Loi_Giai_Chuan_2025_${Date.now()}.docx`);
+      await executePostDownloadZeroTracePurge('Đề Gốc Chuẩn Không Lời Giải (.docx)');
     } finally {
       setIsProcessing(false);
     }
@@ -1406,12 +1448,21 @@ export default function App() {
                 </label>
                 <select
                   value={config.numVariants}
-                  onChange={(e) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      numVariants: Number(e.target.value),
-                    }))
-                  }
+                  onChange={(e) => {
+                    const newCount = Number(e.target.value);
+                    setConfig((prev) => {
+                      const base = prev.examCodeDigits === 3 ? 101 : 1001;
+                      const existing = prev.customCodes || [];
+                      const updatedCodes = Array.from({ length: newCount }, (_, i) =>
+                        existing[i]?.trim() ? existing[i] : String(base + i)
+                      );
+                      return {
+                        ...prev,
+                        numVariants: newCount,
+                        customCodes: updatedCodes,
+                      };
+                    });
+                  }}
                   className="w-full px-3 py-2 text-xs font-bold font-mono bg-sky-50/80 border-2 border-sky-300 rounded-xl focus:outline-none focus:border-blue-600"
                 >
                   <option value={4}>4 mã đề</option>
@@ -1427,17 +1478,71 @@ export default function App() {
                 </label>
                 <select
                   value={config.examCodeDigits}
-                  onChange={(e) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      examCodeDigits: Number(e.target.value) as 3 | 4,
-                    }))
-                  }
+                  onChange={(e) => {
+                    const newDigits = Number(e.target.value) as 3 | 4;
+                    setConfig((prev) => {
+                      const base = newDigits === 3 ? 101 : 1001;
+                      const updatedCodes = Array.from({ length: prev.numVariants }, (_, i) =>
+                        String(base + i)
+                      );
+                      return {
+                        ...prev,
+                        examCodeDigits: newDigits,
+                        customCodes: updatedCodes,
+                      };
+                    });
+                  }}
                   className="w-full px-3 py-2 text-xs font-bold font-mono bg-sky-50/80 border-2 border-sky-300 rounded-xl focus:outline-none focus:border-blue-600"
                 >
                   <option value={3}>3 chữ số (101, 102...)</option>
                   <option value={4}>4 chữ số (1001, 1002...)</option>
                 </select>
+              </div>
+            </div>
+
+            {/* KHUNG ĐIỀU CHỈNH MÃ ĐỀ DÀNH CHO GIÁO VIÊN (Yêu cầu 1) */}
+            <div className="space-y-2 p-3 rounded-2xl bg-sky-50 border-2 border-sky-300 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-sky-950 flex items-center gap-1.5">
+                  <Edit3 className="w-3.5 h-3.5 text-blue-700" />
+                  <span>Điều chỉnh mã đề theo ý muốn ({config.numVariants} mã):</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleResetDefaultCodes}
+                  className="text-[11px] font-bold text-blue-700 hover:underline cursor-pointer"
+                  title="Đặt lại các mã số mặc định 101, 102..."
+                >
+                  Đặt lại mặc định
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-600 font-medium leading-tight">
+                Giáo viên có thể nhập đổi trực tiếp từng số mã đề vào ô bên dưới:
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {Array.from({ length: config.numVariants }, (_, idx) => {
+                  const val =
+                    config.customCodes?.[idx] ??
+                    String(config.examCodeDigits === 3 ? 101 + idx : 1001 + idx);
+                  return (
+                    <div
+                      key={`code-input-${idx}`}
+                      className="flex items-center gap-1 bg-white px-2 py-1.5 rounded-xl border-2 border-sky-200 focus-within:border-blue-500 shadow-2xs"
+                    >
+                      <span className="text-[11px] font-bold text-slate-500 font-mono">
+                        #{idx + 1}:
+                      </span>
+                      <input
+                        type="text"
+                        value={val}
+                        onChange={(e) => handleUpdateCustomCode(idx, e.target.value)}
+                        className="w-full text-xs font-black font-mono text-blue-950 focus:outline-none"
+                        placeholder="Mã đề"
+                        maxLength={10}
+                      />
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
@@ -1569,29 +1674,45 @@ export default function App() {
             >
               <FileSpreadsheet className="w-4 h-4 shrink-0" />
               <span>
-                Tải Bảng Đáp Án Chung Tất Cả Mã Đề (.docx)
+                Tải Bảng Đáp Án Khảo Thí (1 Trang A4) (.docx)
               </span>
             </button>
 
-            <div className="grid grid-cols-2 gap-3 pt-0.5">
+            <button
+              onClick={handleDownloadMasterWithSolutions}
+              disabled={isProcessing}
+              className="w-full py-2.5 px-3 rounded-xl text-xs font-bold text-white btn-3d-indigo flex items-center justify-center gap-2 whitespace-nowrap"
+            >
+              <Sparkles className="w-4 h-4 shrink-0" />
+              <span>
+                Tải Đề Gốc Kèm Lời Giải Chi Tiết (.docx)
+              </span>
+            </button>
+
+            <div className="grid grid-cols-2 gap-2.5 pt-0.5">
               <button
                 onClick={handleDownloadZipBundle}
                 disabled={shuffledVariants.length === 0 || isProcessing}
-                className="py-3 px-3 rounded-xl text-xs font-extrabold text-white btn-3d-emerald flex items-center justify-center gap-1.5 whitespace-nowrap"
+                className="py-3 px-2 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center justify-center gap-1.5 whitespace-nowrap"
+                title="Gom trọn bộ đề gốc, bảng đáp án khảo thí và các đề hoán vị vào 1 file .zip"
               >
                 <FileArchive className="w-4 h-4 shrink-0" />
-                <span>Tải Bộ Đề (.zip)</span>
+                <span>Tải Bộ Đề &amp; Đáp Án (.zip)</span>
               </button>
 
               <button
                 onClick={handleDownloadQrZip}
                 disabled={shuffledVariants.length === 0 || isProcessing}
-                className="py-3 px-3 rounded-xl text-xs font-extrabold text-white btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap"
+                className="py-3 px-2 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap"
               >
                 <QrCode className="w-4 h-4 shrink-0" />
                 <span>Tải Mã QR (.zip)</span>
               </button>
             </div>
+
+            <p className="text-[11px] text-slate-500 font-medium italic text-center pt-1">
+              * Tất cả đề trộn (Mã 101, 102...) BẮT BUỘC KHÔNG CÓ LỜI GIẢI — Chỉ là đề cho học sinh làm bài.
+            </p>
           </section>
         </aside>
 
@@ -1654,7 +1775,7 @@ export default function App() {
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={handleSaveEdits}
-                className={`px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+                className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
                   hasUnsavedChanges ? 'btn-3d-orange' : 'btn-3d-emerald'
                 }`}
               >
@@ -1663,12 +1784,22 @@ export default function App() {
               </button>
 
               <button
+                onClick={handleDownloadMasterWithSolutions}
+                disabled={isProcessing}
+                className="px-3 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-indigo flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                title="Tải về Đề gốc kèm lời giải chi tiết cho tất cả các câu (.docx)"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Đề Gốc Kèm Lời Giải (.docx)</span>
+              </button>
+
+              <button
                 onClick={handleDownloadCleanedMaster}
-                className="px-3.5 py-2.5 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                title="Tải về file đề đã sửa (.docx) kèm lời giải chi tiết"
+                className="px-3 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                title="Tải về file đề gốc chuẩn không kèm lời giải cho học sinh làm (.docx)"
               >
                 <Download className="w-4 h-4" />
-                <span>Tải Đề Gốc (.docx)</span>
+                <span>Đề Gốc Không Lời Giải (.docx)</span>
               </button>
             </div>
           </div>
@@ -2532,26 +2663,55 @@ export default function App() {
                         <div className="flex items-center gap-2">
                           <FileCheck className="w-5 h-5 text-blue-700" />
                           <h3 className="text-base sm:text-lg font-black text-sky-950 uppercase">
-                            BẢNG ĐÁP ÁN CHUNG TẤT CẢ CÁC MÃ ĐỀ ({shuffledVariants.length} MÃ ĐỀ TRONG 1 KHUNG)
+                            BẢNG ĐÁP ÁN CHẤM THI CÁC MÃ ĐỀ ({shuffledVariants.length} MÃ ĐỀ)
                           </h3>
                         </div>
                         <p className="text-xs text-slate-700 font-semibold">
-                          Trình bày chuẩn 3 cột màu (Phần I · Phần II · Phần III) từ trên xuống, dùng font{' '}
-                          <strong>Times New Roman 12pt</strong> — Tải về nộp ngay không cần chỉnh sửa!
+                          Bên trái là các Mã đề, bên phải là đáp án từng câu và từng phần theo thứ tự từ trên xuống: Phần I · Phần II · Phần III (Times New Roman 12pt).
                         </p>
                       </div>
 
-                      <button
-                        onClick={handleDownloadMasterAnswerSheetDocx}
-                        className="px-5 py-3 rounded-2xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center gap-2 whitespace-nowrap shrink-0"
-                      >
-                        <Download className="w-4 h-4" />
-                        <span>
-                          Tải Bảng Đáp Án Chung ({shuffledVariants.length} Mã Đề) (.docx)
-                        </span>
-                      </button>
+                      <div className="flex items-center gap-2.5 flex-wrap">
+                        {/* Toggle chế độ xem Bảng Khảo Thí A4 vs Thẻ 3 Cột Màu */}
+                        <div className="flex items-center bg-sky-100 p-1 rounded-xl border border-sky-300">
+                          <button
+                            type="button"
+                            onClick={() => setAnswerSheetViewMode('KHAO_THI_A4')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                              answerSheetViewMode === 'KHAO_THI_A4'
+                                ? 'bg-blue-700 text-white shadow-xs'
+                                : 'text-slate-700 hover:text-blue-900'
+                            }`}
+                          >
+                            Bảng Khảo Thí A4 (Nộp Khảo Thí)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setAnswerSheetViewMode('THREE_COLUMN_CARDS')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                              answerSheetViewMode === 'THREE_COLUMN_CARDS'
+                                ? 'bg-blue-700 text-white shadow-xs'
+                                : 'text-slate-700 hover:text-blue-900'
+                            }`}
+                          >
+                            Thẻ 3 Cột Màu Trực Quan
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={handleDownloadMasterAnswerSheetDocx}
+                          className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center gap-2 whitespace-nowrap shrink-0"
+                          title="Tải về tệp Word bảng đáp án chuẩn trên 1 trang A4 để nộp khảo thí"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>
+                            Tải Bảng Đáp Án Khảo Thí A4 (.docx)
+                          </span>
+                        </button>
+                      </div>
                     </div>
 
+                    {/* Tiêu đề Quốc ngữ (giống đề) */}
                     <div
                       style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
                       className="p-4 rounded-2xl bg-white border-2 border-slate-300 grid grid-cols-1 md:grid-cols-2 gap-4 text-center shadow-xs"
@@ -2564,7 +2724,7 @@ export default function App() {
                           {config.schoolName}
                         </div>
                         <div className="text-sm font-bold text-slate-700 pt-1">
-                          {config.examSubtitle}
+                          BẢNG ĐÁP ÁN CHÍNH THỨC NỘP KHẢO THÍ
                         </div>
                       </div>
                       <div className="space-y-0.5">
@@ -2583,11 +2743,113 @@ export default function App() {
                       </div>
                     </div>
 
-                    <div className="space-y-5">
-                      {shuffledVariants.map((variant) =>
-                        renderThreeColumnAnswerCard(variant)
-                      )}
-                    </div>
+                    {/* NỘI DUNG BẢNG ĐÁP ÁN: CHẾ ĐỘ KHẢO THÍ A4 HOẶC THẺ 3 CỘT MÀU */}
+                    {answerSheetViewMode === 'KHAO_THI_A4' ? (
+                      <div
+                        style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                        className="overflow-x-auto rounded-2xl border-2 border-sky-400 bg-white shadow-xs"
+                      >
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-sky-900 text-white font-extrabold uppercase text-xs">
+                              <th className="py-2.5 px-4 w-1/5 border-b border-sky-800 text-center">
+                                MÃ ĐỀ THI
+                              </th>
+                              <th className="py-2.5 px-4 w-4/5 border-b border-sky-800">
+                                ĐÁP ÁN CHI TIẾT CÁC PHẦN (THEO THỨ TỰ TỪ TRÊN XUỐNG)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y-2 divide-sky-200 text-[13px]">
+                            {shuffledVariants.map((v) => {
+                              const p1Text = v.answerKey.part1
+                                .map((item) => `${item.questionNumber}.${item.answer}`)
+                                .join('   ');
+                              const p2Text = v.answerKey.part2
+                                .map(
+                                  (item) =>
+                                    `Câu ${item.questionNumber}: ${item.dsString} (${item.tfString})`
+                                )
+                                .join('   |   ');
+                              const p3Text = v.answerKey.part3
+                                .map((item) => `Câu ${item.questionNumber}: ${item.answer}`)
+                                .join('   |   ');
+
+                              return (
+                                <tr key={`khao-thi-${v.examCode}`} className="hover:bg-sky-50/50">
+                                  <td className="py-4 px-3 bg-sky-50/90 text-center border-r-2 border-sky-300 align-middle">
+                                    <div className="text-xs font-bold text-sky-800 uppercase tracking-wide">
+                                      MÃ ĐỀ
+                                    </div>
+                                    <div className="text-2xl font-black text-sky-950 font-mono my-0.5">
+                                      {v.examCode}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 italic">
+                                      ({v.questions.length} câu)
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 space-y-2.5 align-middle">
+                                    {/* Phần I */}
+                                    <div className="leading-relaxed">
+                                      <span className="font-bold text-blue-900 mr-2">
+                                        PHẦN I (18 câu 4 lựa chọn):
+                                      </span>
+                                      <span className="font-mono font-bold text-rose-600 tracking-wide">
+                                        {p1Text}
+                                      </span>
+                                    </div>
+                                    {/* Phần II */}
+                                    <div className="leading-relaxed">
+                                      <span className="font-bold text-emerald-900 mr-2">
+                                        PHẦN II (4 câu Đúng / Sai):
+                                      </span>
+                                      <span className="font-mono font-semibold text-slate-900">
+                                        {p2Text}
+                                      </span>
+                                    </div>
+                                    {/* Phần III */}
+                                    <div className="leading-relaxed">
+                                      <span className="font-bold text-amber-900 mr-2">
+                                        PHẦN III (6 câu Trả lời ngắn):
+                                      </span>
+                                      <span className="font-mono font-bold text-rose-600 tracking-wide">
+                                        {p3Text}
+                                      </span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+
+                        {/* Khung chữ ký khảo thí & cán bộ chấm thi */}
+                        <div className="grid grid-cols-2 gap-4 p-4 border-t-2 border-sky-300 text-center text-slate-800 bg-slate-50/70">
+                          <div>
+                            <div className="font-bold text-xs uppercase">
+                              CÁN BỘ CHẤM THI 1
+                            </div>
+                            <div className="text-[11px] italic text-slate-500 pt-1">
+                              (Ký và ghi rõ họ tên)
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs uppercase">
+                              CÁN BỘ CHẤM THI 2 / KHẢO THÍ
+                            </div>
+                            <div className="text-[11px] italic text-slate-500 pt-1">
+                              (Ký và ghi rõ họ tên)
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-5">
+                        {shuffledVariants.map((variant) =>
+                          renderThreeColumnAnswerCard(variant)
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* THANH CHỌN MÃ ĐỀ ĐỂ XEM CHI TIẾT MÃ QR & BẢN DÀN TRANG ĐỀ THI WORD */}
@@ -2805,8 +3067,8 @@ export default function App() {
                           </div>
 
                           <div className="pt-3 mt-4 border-t border-slate-400 flex items-center justify-between text-slate-800">
-                            <span className="font-bold">
-                              {config.subjectName.toUpperCase()} — MÃ ĐỀ: {activeVariant.examCode}
+                            <span className="italic font-bold">
+                              Môn: {formatPedagogicalSubject(config.subjectName)} — Lớp: 12 — Mã đề: {activeVariant.examCode}
                             </span>
                             <span>
                               Trang <strong>1</strong> / <strong>2</strong>

@@ -81,7 +81,14 @@ export async function generateShuffledVariants(
   sourceQuestions: ExamQuestion[],
   config: ShuffleConfig
 ): Promise<ShuffledVariant[]> {
-  const codes = generateExamCodes(config.numVariants, config.examCodeDigits);
+  const defaultCodes = generateExamCodes(config.numVariants, config.examCodeDigits);
+  const codes =
+    config.customCodes && config.customCodes.length > 0
+      ? Array.from({ length: config.numVariants }, (_, i) => {
+          const custom = config.customCodes?.[i]?.trim();
+          return custom || defaultCodes[i];
+        })
+      : defaultCodes;
   const variants: ShuffledVariant[] = [];
 
   const part1Source = sourceQuestions.filter((q) => q.part === 'PART_1');
