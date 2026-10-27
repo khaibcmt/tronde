@@ -113,7 +113,8 @@ export interface ShuffleConfig {
   examTitle: string;      // VD: KỲ THI TỐT NGHIỆP THPT NĂM 2025
   examSubtitle: string;   // VD: ĐỀ THI CHÍNH THỨC
   subjectName: string;    // VD: TOÁN HỌC
-  schoolYear: string;     // VD: Năm học 2024 - 2025
+  gradeLevel?: string;    // VD: Lớp 12
+  schoolYear: string;     // VD: Năm 2026 - 2027
   durationMinutes: number; // VD: 90
 }
 

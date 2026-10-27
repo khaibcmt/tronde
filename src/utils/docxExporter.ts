@@ -957,7 +957,8 @@ function buildFooterXml(
 ): string {
   const subjectLabel = formatPedagogicalSubject(config.subjectName);
   const cleanCode = examCodeText.replace(/^MÃ\s*ĐỀ[:\s]*/i, '').trim();
-  const leftFooterText = `Môn: ${subjectLabel} — Lớp: 12 — Mã đề: ${cleanCode || examCodeText}`;
+  const gradeLabel = (config.gradeLevel || '12').replace(/^lớp\s+/i, '').trim() || '12';
+  const leftFooterText = `Môn: ${subjectLabel} — Lớp: ${gradeLabel} — Mã đề: ${cleanCode || examCodeText}`;
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -1536,6 +1537,42 @@ export async function exportMasterAnswerSheetDocx(
  * - Thư mục Ma_QR_Cham_Thi_PNG/: Mã QR từng mã đề
  * - Bang_Dap_An_Tong_Hop_2025.csv
  */
+/**
+ * Định dạng ngày tháng chuẩn mm-dd-yy theo yêu cầu đặt tên tệp xuất ra
+ */
+export function getFormattedDateMmDdYy(date: Date = new Date()): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  return `${mm}-${dd}-${yy}`;
+}
+
+function cleanFileSegment(raw: string): string {
+  return (raw || '')
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, '')
+    .replace(/\s+/g, ' ');
+}
+
+/**
+ * Tạo chuỗi tên tệp chuẩn: tên môn-lớp-kỳ kiểm tra-mm-dd-yy
+ * Ví dụ: SINH HỌC-Lớp 12-KỲ THI TỐT NGHIỆP THPT NĂM 2025-10-27-26.docx
+ */
+export function buildStandardExportFileName(
+  config: ShuffleConfig,
+  extension: 'docx' | 'zip' | 'csv' | 'png' | 'txt',
+  suffix?: string
+): string {
+  const subjectPart = cleanFileSegment(config.subjectName || 'SINH HỌC');
+  const rawGrade = cleanFileSegment(config.gradeLevel || 'Lớp 12');
+  const gradePart = /^lớp\s+/i.test(rawGrade) ? rawGrade : `Lớp ${rawGrade}`;
+  const examPart = cleanFileSegment(config.examTitle || 'Kỳ kiểm tra');
+  const datePart = getFormattedDateMmDdYy();
+  const baseName = `${subjectPart}-${gradePart}-${examPart}-${datePart}`;
+  const extra = suffix ? `-${cleanFileSegment(suffix)}` : '';
+  return `${baseName}${extra}.${extension}`;
+}
+
 export async function exportAllVariantsZipBundle(
   variants: ShuffledVariant[],
   masterQuestions: ExamQuestion[],
@@ -1545,15 +1582,24 @@ export async function exportAllVariantsZipBundle(
 
   // 1. Lưu file đề gốc CÓ LỜI GIẢI CHI TIẾT
   const masterSolutionsBlob = await exportMasterExamWithSolutionsDocx(masterQuestions, config);
-  bundleZip.file('00_De_Goc_Co_Loi_Giai_Chi_Tiet_2025.docx', masterSolutionsBlob);
+  bundleZip.file(
+    buildStandardExportFileName(config, 'docx', 'Đề gốc có lời giải'),
+    masterSolutionsBlob
+  );
 
   // 2. Lưu file đề gốc chuẩn KHÔNG LỜI GIẢI (Học sinh làm thử)
   const masterCleanBlob = await exportCleanedMasterDocx(masterQuestions, config, false);
-  bundleZip.file('00_De_Goc_Chuan_Khong_Loi_Giai_2025.docx', masterCleanBlob);
+  bundleZip.file(
+    buildStandardExportFileName(config, 'docx', 'Đề gốc không lời giải'),
+    masterCleanBlob
+  );
 
   // 3. Lưu file Bảng đáp án tổng hợp nộp khảo thí (1 trang A4)
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
-  bundleZip.file('01_Bang_Dap_An_Chung_Khao_Thi_2025.docx', masterAnswerDocxBlob);
+  bundleZip.file(
+    buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí'),
+    masterAnswerDocxBlob
+  );
 
   // 4. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
   const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
@@ -1561,11 +1607,17 @@ export async function exportAllVariantsZipBundle(
 
   for (const v of variants) {
     const docxBlob = await exportSingleVariantDocx(v, config);
-    deThiFolder?.file(`De_Thi_Ma_${v.examCode}.docx`, docxBlob);
+    deThiFolder?.file(
+      buildStandardExportFileName(config, 'docx', `Mã đề ${v.examCode}`),
+      docxBlob
+    );
 
     if (v.qrDataUrl) {
       const pngBytes = dataUrlToUint8Array(v.qrDataUrl);
-      qrFolder?.file(`QR_Ma_De_${v.examCode}_${config.qrFormat}.png`, pngBytes);
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
+        pngBytes
+      );
     }
   }
 
@@ -1579,7 +1631,10 @@ export async function exportAllVariantsZipBundle(
     const p3 = v.answerKey.part3.map((x) => `${x.questionNumber}=${x.answer}`).join(' ');
     csvLines.push(`"${v.examCode}","${p1}","${p2}","${p3}","${v.qrPayload}"`);
   }
-  bundleZip.file('Bang_Dap_An_Tong_Hop_2025.csv', '\uFEFF' + csvLines.join('\n'));
+  bundleZip.file(
+    buildStandardExportFileName(config, 'csv', 'Bảng đáp án tổng hợp'),
+    '\uFEFF' + csvLines.join('\n')
+  );
 
   return bundleZip.generateAsync({ type: 'blob' });
 }
@@ -1597,14 +1652,17 @@ export async function exportQrCodesZip(
   for (const v of variants) {
     if (v.qrDataUrl) {
       qrZip.file(
-        `QR_${config.qrFormat}_MaDe_${v.examCode}.png`,
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
         dataUrlToUint8Array(v.qrDataUrl)
       );
     }
     lines.push(v.qrPayload);
   }
 
-  qrZip.file('Payload_Key_Cham_Thi.txt', lines.join('\n'));
+  qrZip.file(
+    buildStandardExportFileName(config, 'txt', 'Payload-QR'),
+    lines.join('\n')
+  );
   return qrZip.generateAsync({ type: 'blob' });
 }
 
@@ -1628,13 +1686,19 @@ export async function exportFourAiClonesZipBundle(
       },
       false
     );
-    folderStudent?.file(`De_AI_${v.examCode}_Hoc_Sinh.docx`, studentBlob);
+    folderStudent?.file(
+      buildStandardExportFileName(config, 'docx', `${v.examCode}`),
+      studentBlob
+    );
 
     const teacherBlob = await exportMasterExamWithSolutionsDocx(v.questions, {
       ...config,
       examSubtitle: `${v.title.toUpperCase()} (CÓ LỜI GIẢI) — MÃ: ${v.examCode}`,
     });
-    folderTeacher?.file(`De_AI_${v.examCode}_Co_Loi_Giai_Chi_Tiet.docx`, teacherBlob);
+    folderTeacher?.file(
+      buildStandardExportFileName(config, 'docx', `${v.examCode}-Có lời giải`),
+      teacherBlob
+    );
   }
 
   return aiZip.generateAsync({ type: 'blob' });
