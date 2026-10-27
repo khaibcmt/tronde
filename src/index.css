@@ -395,3 +395,54 @@
 .guide-card-3d-cyan:hover {
   transform: translateY(-2px);
 }
+
+/* ================= HIỆU ỨNG CHỮ NHẤP NHÁY TÁC GIẢ HỒ TẤN KHẢI - TRƯỜNG THPT MANG THÍT ================= */
+@keyframes authorBlinkPulse {
+  0%, 100% {
+    color: #FEF08A;
+    text-shadow:
+      0 0 8px rgba(250, 204, 21, 0.95),
+      0 0 18px rgba(244, 63, 94, 0.85);
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    color: #38BDF8;
+    text-shadow:
+      0 0 10px rgba(56, 189, 248, 0.95),
+      0 0 22px rgba(16, 185, 129, 0.9);
+    opacity: 0.78;
+    transform: scale(1.02);
+  }
+}
+
+.animate-author-blink {
+  animation: authorBlinkPulse 1.15s ease-in-out infinite;
+}
+
+.footer-fixed-3d {
+  background: linear-gradient(90deg, #0F172A 0%, #1E1B4B 50%, #0F172A 100%);
+  border-top: 2px solid #38BDF8;
+  box-shadow:
+    0 -6px 24px rgba(15, 23, 42, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* ================= THANH RIBBON CHUẨN MICROSOFT WORD & TRANG GIẤY A4 ================= */
+.word-ribbon-bar {
+  background: linear-gradient(180deg, #F8FAFC 0%, #E2E8F0 100%);
+  border: 2px solid #94A3B8;
+  box-shadow:
+    0 4px 0 #64748B,
+    0 8px 18px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 #FFFFFF;
+}
+
+.word-a4-sheet {
+  background: #FFFFFF;
+  border: 2px solid #94A3B8;
+  box-shadow:
+    0 12px 32px rgba(15, 23, 42, 0.18),
+    0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+

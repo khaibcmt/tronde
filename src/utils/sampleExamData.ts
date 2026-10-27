@@ -505,6 +505,36 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
 
 export const DYNAMIC_FEATURE_REGISTRY: FeatureReleaseItem[] = [
   {
+    id: 'feat-declump-strict-4-options',
+    version: 'v4.5.0',
+    releaseDate: '2026-10',
+    title: 'Nhận Diện Câu Hỏi & Đáp Án Dính Chùm — Bắt Buộc Đúng 4 Đáp Án Phần I & Phần II',
+    category: 'CORE_PARSER',
+    description: 'Tự động bóc tách các câu hỏi và phương án dài dính chùm không tách biệt (ngắt dòng bằng Shift+Enter <w:br/>, dính liền dấu chấm câu hoặc không có khoảng trắng trước A. B. C. D. / a) b) c) d)). Bắt buộc mỗi câu ở Phần I có đúng 4 phương án (A, B, C, D) và mỗi câu ở Phần II có đúng 4 lệnh hỏi (a, b, c, d) — tuyệt đối không thiếu, không dư.',
+    technicalSpec: 'Ordered 4-Marker Tail Scanner (A→B→C→D & a→b→c→d) · <w:br/> Linebreak Splitter · Strict 4-Option Normalizer.',
+    autoDetected: true,
+  },
+  {
+    id: 'feat-ms-word-live-editor',
+    version: 'v4.5.0',
+    releaseDate: '2026-10',
+    title: 'Trình Soạn Thảo Trực Tiếp Như Môi Trường Microsoft Word (Ribbon Toolbar & Trang A4 Trực Tiếp)',
+    category: 'LIVE_EDITOR',
+    description: 'Tích hợp thanh công cụ chuẩn Microsoft Word (Chọn Font, Cỡ chữ, In đậm B, In nghiêng I, Gạch chân U, Tô đỏ đáp án A, Chỉ số dưới x₂, Chỉ số trên x², Chèn kí hiệu Toán-Lý-Hóa-Sinh → ⇄ Δ α β ♂ ♀) và chế độ Soạn Thảo Trực Tiếp Trên Trang Giấy A4 giúp giáo viên gõ, dán hoặc sửa câu dính chùm ngay trên màn hình.',
+    technicalSpec: 'MS Word Ribbon UI · Live A4 Document Canvas · 1-Click De-Clump & Re-Parse AST.',
+    autoDetected: true,
+  },
+  {
+    id: 'feat-4-simultaneous-ai-exams',
+    version: 'v4.5.0',
+    releaseDate: '2026-10',
+    title: 'AI Tạo Cùng Lúc 4 Đề Tương Đương Khác Nhau (Đề AI 01, 02, 03, 04) Bảo Mật Tuyệt Đối',
+    category: 'AI_ENGINE',
+    description: 'Chỉ với 1 cú nhấp chuột, hệ thống đồng thời sinh ra 4 Bộ Đề AI Tương Đương hoàn toàn khác nhau về số liệu, ngữ cảnh khoa học, chiều hướng mệnh đề (Đúng ↔ Sai) và vị trí phương án. Hỗ trợ chuyển đổi xem từng đề AI, chọn bất kỳ đề nào làm đề gốc hoặc tải trọn bộ 4 đề AI về máy.',
+    technicalSpec: '4-Variant Parallel Isomorphic Generator · Zero-Trace Server Key Isolation.',
+    autoDetected: true,
+  },
+  {
     id: 'feat-multimodal-smart-recognition',
     version: 'v4.0.0',
     releaseDate: '2025-10',

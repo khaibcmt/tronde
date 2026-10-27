@@ -60,8 +60,11 @@ import {
 } from './utils/sampleExamData';
 import {
   computeAutoLayoutForOptions,
+  normalizeAllQuestionsStrictFourOptions,
   parseDocxExamFile,
+  parseRawTextToExamQuestions,
   recalculateQuestionNumbering,
+  serializeQuestionsToWordRawText,
   validateExamQuestions,
 } from './utils/docxParser';
 import { parsePdfExamFile } from './utils/pdfParser';
@@ -69,6 +72,7 @@ import { generateShuffledVariants } from './utils/shuffleEngine';
 import {
   exportAllVariantsZipBundle,
   exportCleanedMasterDocx,
+  exportFourAiClonesZipBundle,
   exportMasterAnswerSheetDocx,
   exportMasterExamWithSolutionsDocx,
   exportQrCodesZip,
@@ -77,12 +81,13 @@ import {
   triggerBrowserDownload,
 } from './utils/docxExporter';
 import {
+  AiClonedExamVariant,
   AiConnectionStatus,
   AiNodeChannel,
   DEFAULT_AI_NODE_CLUSTER,
   GEMINI_MODEL_OPTIONS,
   checkAiPrivacyConnectionStatus,
-  generateIsomorphicExamClone,
+  generateFourSimultaneousAiExams,
   triggerZeroTracePurgeOnDownload,
 } from './utils/aiExamCloner';
 import { UserGuideModal } from './components/UserGuideModal';
@@ -130,11 +135,19 @@ export default function App() {
     examTitle: 'KỲ THI TỐT NGHIỆP THPT NĂM 2025',
     examSubtitle: 'ĐỀ THI CHÍNH THỨC',
     subjectName: 'SINH HỌC',
-    schoolYear: 'Năm học 2024 - 2025',
+    schoolYear: 'Năm 2026 - 2027',
     durationMinutes: 50,
   });
 
-  // 3. State AI Gemini Studio (Tạo đề tương đương thông minh như người thật) & Bảo mật Zero-Trace
+  // 2b. State Chế độ Soạn thảo Trực tiếp kiểu MS Word (Word Ribbon + Trang A4)
+  const [editorViewMode, setEditorViewMode] = useState<'CARDS_3D' | 'WORD_A4_PAGE'>('CARDS_3D');
+  const [wordRawDocumentText, setWordRawDocumentText] = useState<string>(() =>
+    serializeQuestionsToWordRawText(SAMPLE_2025_EXAM_WITH_ERRORS)
+  );
+  const [wordFontSizePt, setWordFontSizePt] = useState<number>(12);
+  const [activeFocusedQuestionId, setActiveFocusedQuestionId] = useState<string | null>(null);
+
+  // 3. State AI Gemini Studio (Sinh Cùng Lúc 4 Đề AI Tương Đương Khác Nhau) & Bảo mật Zero-Trace
   const [selectedModelTier, setSelectedModelTier] =
     useState<GeminiModelTier>('3.8-flash');
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState<boolean>(false);
@@ -153,16 +166,18 @@ export default function App() {
       mode: 'MULTI_NODE_EXPERT_CLUSTER_ACTIVE',
       privacyShield: 'ZERO_TRACE_AUTO_PURGE_ENABLED',
       message:
-        'Đã kích hoạt Cụm 4 Luồng Chuyên Gia AI (Settings > Secrets) + Ẩn danh Trường/Kỳ thi + Tự xóa sạch dấu vết ngay sau khi tải đề.',
+        'Đã kích hoạt Cụm 4 Luồng Chuyên Gia AI (Settings > Secrets) + Sinh cùng lúc 4 Đề AI khác nhau + Ẩn danh Trường/Kỳ thi + Tự xóa dấu vết sau khi tải.',
     });
 
   const [aiCustomPrompt, setAiCustomPrompt] = useState<string>(
-    'Đảo chiều câu hỏi Đúng thành Sai (và ngược lại), đổi câu đếm ý đúng sang đếm ý sai, đổi số liệu bài toán di truyền, thay đổi sơ đồ chuỗi thức ăn dài hơn/ngắn hơn và chuyển biểu đồ hình tròn sang biểu đồ dạng cột. Tuyệt đối không thêm câu dẫn sáo rỗng.'
+    'Sinh cùng lúc 4 Đề AI khác nhau: Đảo chiều câu hỏi Đúng thành Sai (và ngược lại), đổi câu đếm ý đúng sang đếm ý sai, đổi số liệu bài toán di truyền, thay đổi sơ đồ chuỗi thức ăn dài hơn/ngắn hơn và chuyển biểu đồ hình tròn sang biểu đồ dạng cột. Mỗi câu Phần I và Phần II bắt buộc đủ 4 phương án.'
   );
+  const [aiClonedVariants, setAiClonedVariants] = useState<AiClonedExamVariant[]>([]);
+  const [selectedAiVariantIdx, setSelectedAiVariantIdx] = useState<number>(0);
   const [clonedQuestions, setClonedQuestions] = useState<ExamQuestion[]>([]);
   const [cloneIteration, setCloneIteration] = useState<number>(1);
   const [lastAiEngineUsed, setLastAiEngineUsed] = useState<string>(
-    '3.8 Flash · Cụm 4 Luồng Chuyên Gia'
+    '3.8 Flash · Cụm 4 Luồng Chuyên Gia (4 Đề Song Song)'
   );
 
   // 4. State kết quả sau khi bấm [Trộn đề]
@@ -329,14 +344,16 @@ export default function App() {
 
         setFileName(file.name);
         setQuestions(parsed);
+        setWordRawDocumentText(serializeQuestionsToWordRawText(parsed));
         setHasUnsavedChanges(false);
         setShuffledVariants([]);
         setClonedQuestions([]);
+        setAiClonedVariants([]);
         setActiveRightTab('LIVE_EDITOR');
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
         setStatusBanner({
           type: 'SUCCESS',
-          text: `Đã phân tích thông minh tệp "${file.name}" (${parsed.length} câu hỏi 3 phần${
+          text: `Đã phân tích thông minh & tách câu dính chùm tệp "${file.name}" (${parsed.length} câu hỏi chuẩn 4 đáp án${
             totalImages > 0 ? `, nhận diện ${totalImages} sơ đồ/hình ảnh` : ''
           }${formulaCount > 0 ? `, ${formulaCount} câu có công thức` : ''}).`,
         });
@@ -367,8 +384,12 @@ export default function App() {
         });
       }
     }
-    const numbered = recalculateQuestionNumbering(cloned, config.resetNumberingPerPart);
+    const numbered = normalizeAllQuestionsStrictFourOptions(
+      cloned,
+      config.resetNumberingPerPart
+    );
     setQuestions(numbered);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(numbered));
     setConfig((prev) => ({
       ...prev,
       subjectName: 'SINH HỌC',
@@ -379,11 +400,71 @@ export default function App() {
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
     setStatusBanner({
       type: 'SUCCESS',
-      text: 'Đã nạp Đề Thi Chuẩn THPT 2025 — Môn Sinh Học (Tỉ lệ 18 - 4 - 6 = 28 câu, 0 lỗi định dạng). Giáo viên có thể bấm [Trộn Đề Ngay] hoặc [AI Tạo Đề Tương Đương]!',
+      text: 'Đã nạp Đề Thi Chuẩn THPT 2025 — Môn Sinh Học (Tỉ lệ 18 - 4 - 6 = 28 câu, chuẩn 100% 4 đáp án mỗi câu Phần I & II). Giáo viên có thể bấm [Trộn Đề Ngay] hoặc [AI Sinh Cùng Lúc 4 Đề]!',
     });
   };
 
-  // ================= HANDLER: AI TẠO ĐỀ TƯƠNG ĐƯƠNG ĐỀ GỐC (ISOMORPHIC CLONING) =================
+  // ================= HANDLER: TÁCH CÂU DÍNH CHÙM & ÉP CHUẨN ĐỦ 4 ĐÁP ÁN =================
+  const handleNormalizeAndDeClumpAllQuestions = () => {
+    const normalized = normalizeAllQuestionsStrictFourOptions(
+      questions,
+      config.resetNumberingPerPart
+    );
+    setQuestions(normalized);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
+    setHasUnsavedChanges(false);
+    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
+    setStatusBanner({
+      type: 'SUCCESS',
+      text: 'Đã tự động tách các câu hỏi/đáp án dính chùm và ép chuẩn bắt buộc đủ 4 phương án cho mọi câu ở Phần I (A, B, C, D) và Phần II (a, b, c, d)!',
+    });
+  };
+
+  // Đồng bộ từ trình soạn thảo trang giấy Word A4 sang danh sách câu hỏi chuẩn 4 đáp án
+  const handleSyncFromWordA4Editor = () => {
+    const parsedFromWord = parseRawTextToExamQuestions(
+      wordRawDocumentText,
+      config.resetNumberingPerPart
+    );
+    if (parsedFromWord.length === 0) {
+      setStatusBanner({
+        type: 'ERROR',
+        text: 'Không nhận diện được câu hỏi nào từ trang soạn thảo Word. Hãy đảm bảo có tiêu đề Câu 1., Câu 2...',
+      });
+      return;
+    }
+    setQuestions(parsedFromWord);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(parsedFromWord));
+    setHasUnsavedChanges(false);
+    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
+    setStatusBanner({
+      type: 'SUCCESS',
+      text: `Đã đồng bộ thành công ${parsedFromWord.length} câu hỏi từ Môi trường Word A4 và tự động tách chuẩn 4 đáp án (A, B, C, D / a, b, c, d) cho từng câu!`,
+    });
+  };
+
+  // Chèn nhanh ký hiệu khoa học / công thức trên thanh Ribbon Word
+  const handleInsertScientificSymbol = (symbol: string) => {
+    if (editorViewMode === 'WORD_A4_PAGE') {
+      setWordRawDocumentText((prev) => `${prev}${symbol}`);
+      setHasUnsavedChanges(true);
+      return;
+    }
+    const targetId = activeFocusedQuestionId || questions[0]?.id;
+    if (!targetId) return;
+    setQuestions((prev) =>
+      prev.map((q) =>
+        q.id === targetId ? { ...q, stemText: `${q.stemText} ${symbol}` } : q
+      )
+    );
+    setHasUnsavedChanges(true);
+    setStatusBanner({
+      type: 'INFO',
+      text: `Đã chèn ký hiệu "${symbol}" vào câu đang chọn. Bạn có thể chỉnh sửa trực tiếp như trên Word.`,
+    });
+  };
+
+  // ================= HANDLER: AI TẠO CÙNG LÚC 4 ĐỀ TƯƠNG ĐƯƠNG KHÁC NHAU =================
   const handleGenerateAiCloneExam = async () => {
     setIsProcessing(true);
     setActiveRightTab('AI_CLONE_STUDIO');
@@ -396,69 +477,107 @@ export default function App() {
         .map((n) => n.specialty)
         .join('; ');
 
-      const result = await generateIsomorphicExamClone(
+      const result = await generateFourSimultaneousAiExams(
         questions,
         selectedModelTier,
         config.subjectName,
         `${aiCustomPrompt} | Luồng kích hoạt: ${activeNodesSummary}`,
         cloneIteration,
-        sensitiveList
-      );
-      const numberedClones = recalculateQuestionNumbering(
-        result.questions,
+        sensitiveList,
         config.resetNumberingPerPart
       );
-      setClonedQuestions(numberedClones);
-      setCloneIteration((prev) => prev + 1);
+
+      setAiClonedVariants(result.variants);
+      setSelectedAiVariantIdx(0);
+      if (result.variants.length > 0) {
+        setClonedQuestions(result.variants[0].questions);
+      }
+      setCloneIteration((prev) => prev + 4);
       setLastAiEngineUsed(result.engineUsed);
-      setRedactedItemsCount((prev) => prev + result.redactedCount + 3);
+      setRedactedItemsCount((prev) => prev + result.totalRedactedCount + 4);
       if (zeroRetentionMode) {
         const purgedAt = await triggerZeroTracePurgeOnDownload();
         setLastPurgedTime(purgedAt);
       }
       setStatusBanner({
         type: 'SUCCESS',
-        text: `Đã tạo bộ Đề Tương Đương thông minh bằng [${result.engineUsed}]! Đã đảo chiều Đúng ↔ Sai, đổi số liệu, mở rộng sơ đồ chuỗi thức ăn, chuyển biểu đồ tròn ↔ cột và ẩn danh bảo mật tuyệt đối.`,
+        text: `Đã sinh CÙNG LÚC 4 ĐỀ AI TƯƠNG ĐƯƠNG KHÁC NHAU (Đề AI 01, 02, 03, 04) bằng [${result.engineUsed}]! Mỗi đề đều đủ chuẩn 4 đáp án A, B, C, D và a, b, c, d.`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi AI';
       setStatusBanner({
         type: 'ERROR',
-        text: `Không thể tạo đề tương đương: ${msg}`,
+        text: `Không thể tạo 4 đề tương đương: ${msg}`,
       });
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Áp dụng bộ đề tương đương AI vừa tạo làm đề gốc chính thức để trộn đề
+  // Áp dụng bộ đề tương đương AI đang chọn làm đề gốc chính thức để trộn đề
   const handleApplyAiCloneAsMaster = () => {
-    if (clonedQuestions.length === 0) return;
-    setQuestions(clonedQuestions);
-    setFileName(`De_AI_Tuong_Duong_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`);
+    const activeClone =
+      aiClonedVariants[selectedAiVariantIdx]?.questions || clonedQuestions;
+    if (activeClone.length === 0) return;
+    const normalized = normalizeAllQuestionsStrictFourOptions(
+      activeClone,
+      config.resetNumberingPerPart
+    );
+    const codeLabel = aiClonedVariants[selectedAiVariantIdx]?.examCode || 'AI-01';
+    setQuestions(normalized);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
+    setFileName(
+      `De_${codeLabel}_Tuong_Duong_${config.subjectName.replace(/\s+/g, '_')}.docx`
+    );
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
     setActiveRightTab('LIVE_EDITOR');
     setStatusBanner({
       type: 'SUCCESS',
-      text: 'Đã nạp Bộ Đề AI Tương Đương vào Trình Biên Tập Đề Gốc! Bạn có thể bấm [Trộn Đề Ngay] hoặc xuất file Word.',
+      text: `Đã nạp Bộ Đề ${codeLabel} vào Trình Biên Tập Đề Gốc! Bạn có thể chỉnh sửa trực tiếp hoặc bấm [Trộn Đề Ngay].`,
     });
   };
 
-  // Tải trực tiếp file Word (.docx) của Bộ Đề AI Tương Đương & Xóa dấu vết tức thì
+  // Tải trực tiếp file Word (.docx) của Đề AI đang chọn
   const handleDownloadAiCloneDocx = async () => {
-    if (clonedQuestions.length === 0) return;
+    const activeVariantObj = aiClonedVariants[selectedAiVariantIdx];
+    const activeClone = activeVariantObj?.questions || clonedQuestions;
+    if (activeClone.length === 0) return;
     setIsProcessing(true);
     try {
-      const blob = await exportCleanedMasterDocx(clonedQuestions, {
+      const codeLabel = activeVariantObj?.examCode || 'AI-01';
+      const blob = await exportCleanedMasterDocx(activeClone, {
         ...config,
-        examSubtitle: 'ĐỀ TƯƠNG ĐƯƠNG (AI GEMINI BIÊN SOẠN)',
+        examSubtitle: `ĐỀ TƯƠNG ĐƯƠNG DO AI BIÊN SOẠN — MÃ ${codeLabel}`,
       });
       triggerBrowserDownload(
         blob,
-        `De_Tuong_Duong_AI_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`
+        `De_Tuong_Duong_${codeLabel}_${config.subjectName.replace(/\s+/g, '_')}.docx`
       );
-      await executePostDownloadZeroTracePurge('Đề Tương Đương AI (.docx)');
+      await executePostDownloadZeroTracePurge(`Đề Tương Đương ${codeLabel} (.docx)`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Tải trọn bộ 4 Đề AI khác nhau (.zip)
+  const handleDownloadAllFourAiClonesZip = async () => {
+    if (aiClonedVariants.length === 0) return;
+    setIsProcessing(true);
+    try {
+      const blob = await exportFourAiClonesZipBundle(
+        aiClonedVariants.map((v) => ({
+          examCode: v.examCode,
+          title: v.title,
+          questions: v.questions,
+        })),
+        config
+      );
+      triggerBrowserDownload(
+        blob,
+        `Bo_4_De_AI_Tuong_Duong_Khac_Nhau_${config.subjectName.replace(/\s+/g, '_')}.zip`
+      );
+      await executePostDownloadZeroTracePurge('Trọn Bộ 4 Đề AI Khác Nhau (.zip)');
     } finally {
       setIsProcessing(false);
     }
@@ -635,11 +754,12 @@ export default function App() {
   };
 
   const handleSaveEdits = () => {
-    const recalculated = recalculateQuestionNumbering(
+    const recalculated = normalizeAllQuestionsStrictFourOptions(
       questions,
       config.resetNumberingPerPart
     );
     setQuestions(recalculated);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(recalculated));
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
 
@@ -979,7 +1099,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col text-slate-900">
+    <div className="min-h-screen flex flex-col text-slate-900 pb-24">
       {/* ================= HEADER NỔI 3D KHOA HỌC & ĐẸP MẮT (3 ZONE CHUẨN) ================= */}
       <header className="sticky top-0 z-30 flex items-center justify-between gap-6 px-6 py-3 bg-white/95 backdrop-blur-md border-b-2 border-sky-300 shadow-lg">
         {/* Zone 1: Logo 3D bắt mắt + Dòng chữ EduMix 2025 chạy đổi màu + Tác giả Hồ Tấn Khải dưới logo */}
@@ -1336,7 +1456,7 @@ export default function App() {
               />
             </div>
 
-            <div className="md:col-span-2 space-y-1.5">
+            <div className="md:col-span-2 lg:col-span-1 space-y-1.5">
               <label className="block text-xs sm:text-sm font-extrabold text-sky-950">
                 5. Tên Kỳ thi / Bài kiểm tra định kỳ:
               </label>
@@ -1366,40 +1486,42 @@ export default function App() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <label className="block text-xs sm:text-sm font-extrabold text-sky-950">
-                  7. Số phút:
-                </label>
-                <input
-                  type="number"
-                  min={15}
-                  max={300}
-                  value={config.durationMinutes}
-                  onChange={(e) =>
-                    setConfig((prev) => ({
-                      ...prev,
-                      durationMinutes: Number(e.target.value) || 50,
-                    }))
-                  }
-                  className="w-full px-4 py-3 text-sm sm:text-base font-mono font-black text-rose-700 bg-white border-2 border-sky-300 rounded-2xl shadow-inner focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs sm:text-sm font-extrabold text-sky-950">
+                7. Thời gian làm bài (Số phút):
+              </label>
+              <input
+                type="number"
+                min={15}
+                max={300}
+                value={config.durationMinutes}
+                onChange={(e) =>
+                  setConfig((prev) => ({
+                    ...prev,
+                    durationMinutes: Number(e.target.value) || 50,
+                  }))
+                }
+                className="w-full px-4 py-3 text-sm sm:text-base font-mono font-black text-rose-700 bg-white border-2 border-sky-300 rounded-2xl shadow-inner focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
+              />
+            </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-xs sm:text-sm font-extrabold text-sky-950">
-                  8. Năm học:
-                </label>
-                <input
-                  type="text"
-                  value={config.schoolYear}
-                  onChange={(e) =>
-                    setConfig((prev) => ({ ...prev, schoolYear: e.target.value }))
-                  }
-                  placeholder="Năm học 2024 - 2025"
-                  className="w-full px-3.5 py-3 text-sm sm:text-base font-bold text-slate-900 bg-white border-2 border-sky-300 rounded-2xl shadow-inner focus:outline-none focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition-all"
-                />
-              </div>
+            <div className="md:col-span-2 lg:col-span-1 space-y-1.5">
+              <label className="block text-xs sm:text-sm font-extrabold text-sky-950 flex items-center justify-between gap-1">
+                <span>8. Năm học (Tự dãn rộng):</span>
+                <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-900 text-[10px] font-black">
+                  To &amp; Rõ
+                </span>
+              </label>
+              <input
+                type="text"
+                size={Math.max(24, (config.schoolYear || '').length + 6)}
+                value={config.schoolYear}
+                onChange={(e) =>
+                  setConfig((prev) => ({ ...prev, schoolYear: e.target.value }))
+                }
+                placeholder="Năm 2026 - 2027"
+                className="w-full min-w-[240px] px-4 py-3.5 text-base sm:text-lg font-black text-indigo-950 bg-amber-50/80 border-2 border-indigo-400 rounded-2xl shadow-md focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
+              />
             </div>
           </div>
         </section>
@@ -1451,7 +1573,19 @@ export default function App() {
               <span>Chế độ thông minh: Nhận dạng Hình ảnh, Sơ đồ, Công thức Toán Lý Hóa Sinh &amp; Đánh số Auto</span>
             </div>
 
-            {/* Nút 3D Nhân Bản Đề Tương Đương Bằng AI Gemini */}
+            {/* Nút 3D Tách Câu Dính Chùm & Ép Chuẩn 4 Đáp Án */}
+            <button
+              type="button"
+              onClick={handleNormalizeAndDeClumpAllQuestions}
+              disabled={isProcessing}
+              className="w-full py-2.5 px-3 rounded-xl text-xs font-black text-white btn-3d-orange flex items-center justify-center gap-1.5 whitespace-nowrap"
+              title="Tự động tách các câu hỏi/đáp án dính chùm và ép chuẩn đủ 4 phương án A,B,C,D / a,b,c,d"
+            >
+              <Wand2 className="w-4 h-4 shrink-0" />
+              <span>Tách Câu Dính Chùm &amp; Ép Đủ 4 Đáp Án</span>
+            </button>
+
+            {/* Nút 3D Nhân Bản Cùng Lúc 4 Đề Tương Đương Bằng AI Gemini */}
             <button
               onClick={handleGenerateAiCloneExam}
               disabled={isProcessing}
@@ -1459,7 +1593,7 @@ export default function App() {
             >
               <Bot className="w-4 h-4 shrink-0" />
               <span>
-                AI Tạo Đề Tương Đương ({currentModelInfo.name})
+                AI Sinh Cùng Lúc 4 Đề Khác Nhau ({currentModelInfo.name})
               </span>
             </button>
 
@@ -1954,9 +2088,137 @@ export default function App() {
             </div>
           </div>
 
-          {/* ================= TAB 1: CHẾ ĐỘ XEM TRƯỚC & CHỈNH SỬA TRỰC TIẾP (LIVE IN-APP EDITOR) ================= */}
+          {/* ================= TAB 1: CHẾ ĐỘ XEM TRƯỚC & CHỈNH SỬA TRỰC TIẾP NHƯ MICROSOFT WORD ================= */}
           {activeRightTab === 'LIVE_EDITOR' && (
             <div className="space-y-4">
+              {/* THANH CÔNG CỤ RIBBON MICROSOFT WORD TRỰC TIẾP TRÊN FILE HIỂN THỊ */}
+              <div className="p-3.5 rounded-2xl word-ribbon-bar space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-200">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-lg bg-blue-700 text-white text-xs font-black flex items-center gap-1.5">
+                      <Edit3 className="w-3.5 h-3.5" />
+                      <span>WORD LIVE EDITOR 2025</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setEditorViewMode('CARDS_3D')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        editorViewMode === 'CARDS_3D'
+                          ? 'btn-3d-primary text-white'
+                          : 'bg-white text-slate-700 border border-sky-300 hover:bg-sky-50'
+                      }`}
+                    >
+                      Chế Độ Thẻ Câu Hỏi 3D Trực Quan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWordRawDocumentText(serializeQuestionsToWordRawText(questions));
+                        setEditorViewMode('WORD_A4_PAGE');
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                        editorViewMode === 'WORD_A4_PAGE'
+                          ? 'btn-3d-indigo text-white'
+                          : 'bg-white text-slate-700 border border-sky-300 hover:bg-sky-50'
+                      }`}
+                    >
+                      Chế Độ Trang Giấy Word A4 Trực Tiếp (Soạn &amp; Dán Đề Dính Chùm)
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleNormalizeAndDeClumpAllQuestions}
+                    className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-orange flex items-center gap-1.5"
+                    title="Tự động tách các câu hỏi và đáp án bị dính chùm trên cùng 1 dòng, ép chuẩn đủ 4 phương án A,B,C,D / a,b,c,d"
+                  >
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>Tách Câu Dính Chùm &amp; Ép Đủ 4 Đáp Án</span>
+                  </button>
+                </div>
+
+                {/* Dải nút công cụ định dạng Word & Chèn nhanh Ký hiệu Toán - Lý - Hóa - Sinh */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 font-serif font-bold text-slate-800">
+                      Times New Roman
+                    </span>
+                    <select
+                      value={wordFontSizePt}
+                      onChange={(e) => setWordFontSizePt(Number(e.target.value))}
+                      className="px-2 py-1 rounded-lg bg-white border border-slate-300 font-mono font-bold text-slate-900"
+                      title="Cỡ chữ hiển thị trên trình soạn thảo Word"
+                    >
+                      <option value={11}>11pt</option>
+                      <option value={12}>12pt (Chuẩn)</option>
+                      <option value={13}>13pt</option>
+                      <option value={14}>14pt</option>
+                    </select>
+
+                    <span className="text-slate-300 mx-0.5">|</span>
+                    <span className="text-[11px] font-extrabold text-sky-950">
+                      Chèn ký hiệu khoa học:
+                    </span>
+                    {['→', '⇄', 'Δ', 'α', 'β', 'γ', '♂', '♀', '×', '±', '°C', 'λ', '²', '³', '₁', '₂'].map(
+                      (sym) => (
+                        <button
+                          key={sym}
+                          type="button"
+                          onClick={() => handleInsertScientificSymbol(sym)}
+                          className="w-7 h-7 rounded-lg bg-white hover:bg-blue-50 border border-sky-300 font-mono font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                          title={`Chèn ký hiệu ${sym} vào câu đang soạn`}
+                        >
+                          {sym}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <div className="text-[11px] font-extrabold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-300">
+                    Cam kết 100%: Mỗi câu Phần I &amp; II luôn có đúng 4 phương án
+                  </div>
+                </div>
+              </div>
+
+              {/* CHẾ ĐỘ SOẠN THẢO TRỰC TIẾP TRÊN TRANG GIẤY WORD A4 */}
+              {editorViewMode === 'WORD_A4_PAGE' && (
+                <div className="p-6 sm:p-8 rounded-3xl word-a4-sheet space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-slate-300">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-black text-blue-950 uppercase">
+                        TRANG SOẠN THẢO TRỰC TIẾP NHƯ MICROSOFT WORD (DÁN ĐỀ DÍNH CHÙM &amp; CHỈNH SỬA TOÀN VĂN)
+                      </h3>
+                      <p className="text-xs text-slate-600 font-medium">
+                        Giáo viên có thể gõ, sửa trực tiếp trên trang A4 hoặc dán các câu hỏi bị dính chùm trên 1 dòng rồi bấm <strong>[Đồng Bộ &amp; Tách Chuẩn 4 Đáp Án]</strong>. Đáp án đúng đánh dấu bằng dấu <code>*</code> trước chữ cái (VD: <code>*A.</code> hoặc <code>*a)</code>).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSyncFromWordA4Editor}
+                      className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 shrink-0"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Đồng Bộ &amp; Tách Chuẩn 4 Đáp Án</span>
+                    </button>
+                  </div>
+
+                  <textarea
+                    rows={24}
+                    value={wordRawDocumentText}
+                    onChange={(e) => {
+                      setWordRawDocumentText(e.target.value);
+                      setHasUnsavedChanges(true);
+                    }}
+                    style={{
+                      fontFamily: "'Times New Roman', Times, serif",
+                      fontSize: `${wordFontSizePt}pt`,
+                    }}
+                    className="w-full p-5 bg-white border-2 border-slate-300 rounded-2xl shadow-inner text-slate-950 leading-relaxed focus:outline-none focus:border-blue-600"
+                    placeholder="Nhập hoặc dán nội dung đề thi tại đây..."
+                  />
+                </div>
+              )}
+
               {/* Thanh công cụ lọc Phần I / Phần II / Phần III thiết kế 3D đa sắc màu */}
               <div className="px-4 py-3 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -2139,6 +2401,7 @@ export default function App() {
                           <textarea
                             rows={2}
                             value={q.stemText}
+                            onFocus={() => setActiveFocusedQuestionId(q.id)}
                             onChange={(e) =>
                               handleUpdateStemText(q.id, e.target.value)
                             }
@@ -2585,9 +2848,9 @@ export default function App() {
                           className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`}
                         />
                         <span>
-                          {clonedQuestions.length > 0
-                            ? `Tạo Phiên Bản Đề Tương Đương Mới (#${cloneIteration})`
-                            : `Bắt Đầu Nhân Bản Đề Tương Đương (${currentModelInfo.name})`}
+                          {aiClonedVariants.length > 0
+                            ? 'Sinh Lại Cùng Lúc 4 Đề AI Khác Nhau Mới'
+                            : `Sinh Cùng Lúc 4 Đề AI Khác Nhau (${currentModelInfo.name})`}
                         </span>
                       </button>
 
@@ -2595,19 +2858,29 @@ export default function App() {
                         <>
                           <button
                             onClick={handleApplyAiCloneAsMaster}
-                            className="py-3 px-4 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 whitespace-nowrap"
+                            className="py-3 px-3.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <ArrowRightLeft className="w-4 h-4" />
-                            <span>Dùng Làm Đề Gốc Để Trộn</span>
+                            <span>Dùng Đề AI Đang Xem Làm Đề Gốc</span>
                           </button>
 
                           <button
                             onClick={handleDownloadAiCloneDocx}
-                            className="py-3 px-4 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap"
+                            className="py-3 px-3.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap"
                           >
                             <Download className="w-4 h-4" />
-                            <span>Tải Word (.docx)</span>
+                            <span>Tải Đề AI Này (.docx)</span>
                           </button>
+
+                          {aiClonedVariants.length > 0 && (
+                            <button
+                              onClick={handleDownloadAllFourAiClonesZip}
+                              className="py-3 px-3.5 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                              <FileArchive className="w-4 h-4" />
+                              <span>Tải Trọn Bộ 4 Đề AI (.zip)</span>
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -2628,11 +2901,53 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* THANH CHỌN 4 ĐỀ AI KHÁC NHAU ĐƯỢC SINH CÙNG LÚC */}
+                  {aiClonedVariants.length > 0 && (
+                    <div className="p-4 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-black text-purple-950 uppercase mr-1">
+                          Chọn xem 1 trong 4 Đề AI vừa sinh:
+                        </span>
+                        {aiClonedVariants.map((variant, vIdx) => {
+                          const isSelected = selectedAiVariantIdx === vIdx;
+                          const btnColors = [
+                            'btn-3d-purple',
+                            'btn-3d-primary',
+                            'btn-3d-emerald',
+                            'btn-3d-orange',
+                          ];
+                          return (
+                            <button
+                              key={variant.examCode}
+                              type="button"
+                              onClick={() => {
+                                setSelectedAiVariantIdx(vIdx);
+                                setClonedQuestions(variant.questions);
+                              }}
+                              className={`px-4 py-2 rounded-xl text-xs font-black text-white transition-all cursor-pointer ${
+                                btnColors[vIdx % btnColors.length]
+                              } ${
+                                isSelected
+                                  ? 'ring-4 ring-purple-300 scale-105'
+                                  : 'opacity-85 hover:opacity-100'
+                              }`}
+                            >
+                              {variant.title} ({variant.examCode})
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="text-xs font-bold text-indigo-950 bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-300">
+                        Đặc tả biến thể: {aiClonedVariants[selectedAiVariantIdx]?.specialtyLabel}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="px-5 py-3 rounded-2xl bg-slate-900 text-white flex flex-wrap items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-xs font-extrabold uppercase">
                       <Sparkles className="w-4 h-4 text-amber-400" />
                       <span>
-                        Đối Chiếu Song Song: Đề Gốc & Đề Tương Đương ({clonedQuestions.length} câu)
+                        Đối Chiếu Song Song: Đề Gốc &amp; {aiClonedVariants[selectedAiVariantIdx]?.title || 'Đề Tương Đương'} ({clonedQuestions.length} câu — Đủ 4 phương án/câu)
                       </span>
                     </div>
                     <span className="text-xs font-mono text-emerald-400">
@@ -3554,6 +3869,32 @@ export default function App() {
           });
         }}
       />
+
+      {/* ================= CHÂN TRANG CỐ ĐỊNH (FIXED FOOTER) VỚI LOGO 3D & CHỮ NHẤP NHÁY HỒ TẤN KHẢI — TRƯỜNG THPT MANG THÍT ================= */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-4 sm:px-6 py-2.5 text-white">
+        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3">
+          {/* Cụm Trái: Logo 3D + Tên trang web EduMix 2025 */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl logo-3d-badge flex items-center justify-center text-white shrink-0 shadow-md">
+              <GraduationCap className="w-4 h-4" />
+            </div>
+            <span className="text-base sm:text-lg font-black tracking-tight animate-edumix-gradient">
+              EduMix 2025
+            </span>
+            <span className="hidden md:inline-block text-xs text-sky-200 font-semibold border-l border-sky-700 pl-2.5">
+              Hệ Thống Trộn Đề &amp; AI Nhân Bản 4 Đề Chuẩn THPT 2025
+            </span>
+          </div>
+
+          {/* Cụm Giữa/Phải: Dòng chữ nhấp nháy nổi bật tên tác giả Hồ Tấn Khải Trường THPT Mang Thít */}
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-amber-300 animate-spin shrink-0" />
+            <span className="text-xs sm:text-sm md:text-base font-black tracking-wide uppercase animate-author-blink">
+              Tác giả: Hồ Tấn Khải — Trường THPT Mang Thít ...
+            </span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
