@@ -307,3 +307,91 @@
     0 5px 0 #7DD3FC,
     0 10px 24px rgba(2, 132, 199, 0.12);
 }
+
+/* ================= KHUNG 3D ĐA SẮC MÀU CHO MODAL HƯỚNG DẪN SỬ DỤNG ================= */
+.modal-3d-shell {
+  background: linear-gradient(180deg, #F0F9FF 0%, #E0F2FE 50%, #ECFDF5 100%);
+  border: 3px solid #38BDF8;
+  box-shadow:
+    0 10px 0 #0284C7,
+    0 25px 50px rgba(15, 23, 42, 0.45),
+    inset 0 2px 0 rgba(255, 255, 255, 0.9);
+}
+
+.guide-card-3d-blue {
+  background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%);
+  border: 2px solid #60A5FA;
+  box-shadow:
+    0 6px 0 #2563EB,
+    0 12px 24px rgba(37, 99, 235, 0.18),
+    inset 0 2px 0 #FFFFFF;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.guide-card-3d-blue:hover {
+  transform: translateY(-2px);
+}
+
+.guide-card-3d-amber {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFFBEB 100%);
+  border: 2px solid #FBBF24;
+  box-shadow:
+    0 6px 0 #D97706,
+    0 12px 24px rgba(217, 119, 6, 0.18),
+    inset 0 2px 0 #FFFFFF;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.guide-card-3d-amber:hover {
+  transform: translateY(-2px);
+}
+
+.guide-card-3d-emerald {
+  background: linear-gradient(180deg, #FFFFFF 0%, #ECFDF5 100%);
+  border: 2px solid #34D399;
+  box-shadow:
+    0 6px 0 #059669,
+    0 12px 24px rgba(5, 150, 105, 0.18),
+    inset 0 2px 0 #FFFFFF;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.guide-card-3d-emerald:hover {
+  transform: translateY(-2px);
+}
+
+.guide-card-3d-purple {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAF5FF 100%);
+  border: 2px solid #C084FC;
+  box-shadow:
+    0 6px 0 #7C3AED,
+    0 12px 24px rgba(124, 58, 237, 0.18),
+    inset 0 2px 0 #FFFFFF;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.guide-card-3d-purple:hover {
+  transform: translateY(-2px);
+}
+
+.guide-card-3d-rose {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFF1F2 100%);
+  border: 2px solid #FB7185;
+  box-shadow:
+    0 6px 0 #E11D48,
+    0 12px 24px rgba(225, 29, 72, 0.18),
+    inset 0 2px 0 #FFFFFF;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.guide-card-3d-rose:hover {
+  transform: translateY(-2px);
+}
+
+.guide-card-3d-cyan {
+  background: linear-gradient(180deg, #FFFFFF 0%, #ECFEFF 100%);
+  border: 2px solid #22D3EE;
+  box-shadow:
+    0 6px 0 #0891B2,
+    0 12px 24px rgba(8, 145, 178, 0.18),
+    inset 0 2px 0 #FFFFFF;
+  transition: transform 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.guide-card-3d-cyan:hover {
+  transform: translateY(-2px);
+}
