@@ -396,28 +396,46 @@
   transform: translateY(-2px);
 }
 
-/* ================= HIỆU ỨNG CHỮ NHẤP NHÁY TÁC GIẢ HỒ TẤN KHẢI - TRƯỜNG THPT MANG THÍT ================= */
-@keyframes authorBlinkPulse {
+/* ================= HIỆU ỨNG LOGO NHẤP NHÁY CHÂN TRANG & KHUNG ĐẾM CÂU 3 PHẦN 3 MÀU ================= */
+@keyframes logoBlinkGlow {
   0%, 100% {
-    color: #FEF08A;
-    text-shadow:
-      0 0 8px rgba(250, 204, 21, 0.95),
-      0 0 18px rgba(244, 63, 94, 0.85);
-    opacity: 1;
     transform: scale(1);
+    box-shadow:
+      0 3px 0 #1E40AF,
+      0 0 12px rgba(56, 189, 248, 0.95),
+      0 0 24px rgba(16, 185, 129, 0.75);
+    filter: brightness(1.08);
   }
   50% {
-    color: #38BDF8;
-    text-shadow:
-      0 0 10px rgba(56, 189, 248, 0.95),
-      0 0 22px rgba(16, 185, 129, 0.9);
-    opacity: 0.78;
-    transform: scale(1.02);
+    transform: scale(1.09);
+    box-shadow:
+      0 3px 0 #7C3AED,
+      0 0 18px rgba(250, 204, 21, 0.95),
+      0 0 30px rgba(244, 63, 94, 0.85);
+    filter: brightness(1.25);
   }
 }
 
-.animate-author-blink {
-  animation: authorBlinkPulse 1.15s ease-in-out infinite;
+.animate-logo-blink {
+  animation: logoBlinkGlow 1.15s ease-in-out infinite;
+}
+
+.part-stat-box-1 {
+  background: linear-gradient(180deg, #EFF6FF 0%, #DBEAFE 100%);
+  border: 2px solid #3B82F6;
+  box-shadow: 0 4px 0 #1D4ED8;
+}
+
+.part-stat-box-2 {
+  background: linear-gradient(180deg, #ECFDF5 0%, #D1FAE5 100%);
+  border: 2px solid #10B981;
+  box-shadow: 0 4px 0 #047857;
+}
+
+.part-stat-box-3 {
+  background: linear-gradient(180deg, #FFFBEB 0%, #FEF3C7 100%);
+  border: 2px solid #F59E0B;
+  box-shadow: 0 4px 0 #B45309;
 }
 
 .footer-fixed-3d {
