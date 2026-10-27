@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import {
+  ExamImageAttachment,
   ExamQuestion,
   OptionPart1,
   PartType,
@@ -25,6 +26,7 @@ interface ParsedRun {
   isRed: boolean;
   isBold: boolean;
   hasFormula: boolean;
+  images?: ExamImageAttachment[];
 }
 
 interface ParsedParagraph {
@@ -33,6 +35,10 @@ interface ParsedParagraph {
   hasUnderline: boolean;
   hasRed: boolean;
   hasFormula: boolean;
+  isAutoNumbered: boolean;
+  images: ExamImageAttachment[];
+  rawFormulaXml?: string;
+  formulaLatex?: string;
 }
 
 /**
@@ -56,7 +62,7 @@ export function computeAutoLayoutForOptions(
 }
 
 /**
- * Đánh số lại từ Câu 1 ở mỗi phần hoặc đánh số liên tục (Mục II.3)
+ * Đánh số lại từ Câu 1 ở mỗi phần hoặc đánh số liên tục
  */
 export function recalculateQuestionNumbering(
   questions: ExamQuestion[],
@@ -86,7 +92,7 @@ export function recalculateQuestionNumbering(
 }
 
 /**
- * Bộ kiểm tra lỗi thông minh (Validator - Mục III.1)
+ * Bộ kiểm tra lỗi thông minh (Validator)
  */
 export function validateExamQuestions(
   questions: ExamQuestion[]
@@ -226,8 +232,10 @@ function inspectRunProperties(rPr: Element | null): {
     const rawColor = (colorNodes[0].getAttribute('w:val') || '').toUpperCase().trim();
     if (RED_COLOR_HEXES.has(rawColor)) {
       isRed = true;
-    } else if (/^[C-F][0-9A-F]0000$/i.test(rawColor) || /^[C-F][0-9A-F][0-3][0-9A-F][0-3][0-9A-F]$/i.test(rawColor)) {
-      // Nhận diện cả các sắc thái đỏ đậm/đỏ tươi trong Word
+    } else if (
+      /^[C-F][0-9A-F]0000$/i.test(rawColor) ||
+      /^[C-F][0-9A-F][0-3][0-9A-F][0-3][0-9A-F]$/i.test(rawColor)
+    ) {
       isRed = true;
     }
   }
@@ -244,21 +252,146 @@ function inspectRunProperties(rPr: Element | null): {
 }
 
 /**
- * Trích xuất văn bản từ công thức toán OMML (<m:oMath> hoặc <m:oMathPara>)
+ * Chuyển đổi công thức OMML (<m:oMath> hoặc <m:oMathPara>) sang chuỗi LaTeX trực quan
  */
-function extractOmmlText(mathNode: Element): string {
-  const mTexts = mathNode.getElementsByTagName('m:t');
-  let out = '';
-  for (let i = 0; i < mTexts.length; i++) {
-    out += mTexts[i].textContent || '';
+function ommlToLatex(mathNode: Element): string {
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent || '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+    const el = node as Element;
+    const tag = el.localName || el.tagName.replace(/^m:/, '');
+
+    switch (tag) {
+      case 't':
+        return el.textContent || '';
+      case 'f': {
+        const num = el.getElementsByTagName('m:num')[0];
+        const den = el.getElementsByTagName('m:den')[0];
+        const numText = num ? walk(num) : '';
+        const denText = den ? walk(den) : '';
+        return `\\frac{${numText.trim()}}{${denText.trim()}}`;
+      }
+      case 'sSup': {
+        const e = el.getElementsByTagName('m:e')[0];
+        const sup = el.getElementsByTagName('m:sup')[0];
+        const eText = e ? walk(e) : '';
+        const supText = sup ? walk(sup) : '';
+        return `${eText}^{${supText}}`;
+      }
+      case 'sSub': {
+        const e = el.getElementsByTagName('m:e')[0];
+        const sub = el.getElementsByTagName('m:sub')[0];
+        const eText = e ? walk(e) : '';
+        const subText = sub ? walk(sub) : '';
+        return `${eText}_{${subText}}`;
+      }
+      case 'sSubSup': {
+        const e = el.getElementsByTagName('m:e')[0];
+        const sub = el.getElementsByTagName('m:sub')[0];
+        const sup = el.getElementsByTagName('m:sup')[0];
+        const eText = e ? walk(e) : '';
+        const subText = sub ? walk(sub) : '';
+        const supText = sup ? walk(sup) : '';
+        return `${eText}_{${subText}}^{${supText}}`;
+      }
+      case 'rad': {
+        const deg = el.getElementsByTagName('m:deg')[0];
+        const e = el.getElementsByTagName('m:e')[0];
+        const degText = deg ? walk(deg).trim() : '';
+        const eText = e ? walk(e).trim() : '';
+        return degText ? `\\sqrt[${degText}]{${eText}}` : `\\sqrt{${eText}}`;
+      }
+      default: {
+        let childAcc = '';
+        for (let i = 0; i < el.childNodes.length; i++) {
+          childAcc += walk(el.childNodes[i]);
+        }
+        return childAcc;
+      }
+    }
   }
-  return out;
+
+  const rawLatex = walk(mathNode).trim();
+  // Khử các ký tự khoảng trắng thừa
+  return rawLatex.replace(/\s+/g, ' ');
 }
 
 /**
- * Bóc tách cây XML của file Word (.docx) thành danh sách các đoạn văn kèm thuộc tính Gạch chân / Tô đỏ
+ * Trích xuất ảnh từ node drawing hoặc pict trong Word
  */
-function extractParagraphsFromDocxXml(xmlString: string): ParsedParagraph[] {
+function extractImagesFromElement(
+  container: Element,
+  mediaMap: Map<string, { dataUrl: string; fileName: string }>
+): ExamImageAttachment[] {
+  const images: ExamImageAttachment[] = [];
+
+  // 1. Kiểm tra <w:drawing>
+  const blipNodes = container.getElementsByTagName('a:blip');
+  for (let i = 0; i < blipNodes.length; i++) {
+    const blip = blipNodes[i];
+    const rId =
+      blip.getAttribute('r:embed') ||
+      blip.getAttribute('r:link') ||
+      blip.getAttribute('embed') ||
+      '';
+    if (rId && mediaMap.has(rId)) {
+      const media = mediaMap.get(rId)!;
+      // Tìm kích thước extent nếu có
+      let widthTwips: number | undefined;
+      let heightTwips: number | undefined;
+      const extentNode = container.getElementsByTagName('wp:extent')[0];
+      if (extentNode) {
+        const cx = parseInt(extentNode.getAttribute('cx') || '0', 10);
+        const cy = parseInt(extentNode.getAttribute('cy') || '0', 10);
+        if (cx > 0) widthTwips = Math.round(cx / 635);
+        if (cy > 0) heightTwips = Math.round(cy / 635);
+      }
+
+      images.push({
+        id: `img-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        dataUrl: media.dataUrl,
+        fileName: media.fileName,
+        widthTwips,
+        heightTwips,
+      });
+    }
+  }
+
+  // 2. Kiểm tra <w:pict> và <v:imagedata>
+  const imgDataNodes = container.getElementsByTagName('v:imagedata');
+  for (let i = 0; i < imgDataNodes.length; i++) {
+    const imgData = imgDataNodes[i];
+    const rId =
+      imgData.getAttribute('r:id') ||
+      imgData.getAttribute('id') ||
+      '';
+    if (rId && mediaMap.has(rId)) {
+      const media = mediaMap.get(rId)!;
+      images.push({
+        id: `pict-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        dataUrl: media.dataUrl,
+        fileName: media.fileName,
+      });
+    }
+  }
+
+  return images;
+}
+
+/**
+ * Bóc tách cây XML của file Word (.docx) thành danh sách các đoạn văn kèm:
+ * - Gạch chân / Tô đỏ
+ * - Nhận diện tự động danh sách câu hỏi auto-numbering (<w:numPr>)
+ * - Trích xuất ảnh, sơ đồ hình vẽ (<w:drawing>, <w:pict>)
+ * - Công thức toán học chuẩn OMML (<m:oMath>)
+ */
+function extractParagraphsFromDocxXml(
+  xmlString: string,
+  mediaMap: Map<string, { dataUrl: string; fileName: string }>
+): ParsedParagraph[] {
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(xmlString, 'application/xml');
   const pNodes = xmlDoc.getElementsByTagName('w:p');
@@ -268,6 +401,21 @@ function extractParagraphsFromDocxXml(xmlString: string): ParsedParagraph[] {
     const p = pNodes[i];
     const runs: ParsedRun[] = [];
     let hasFormula = false;
+    let rawFormulaXml: string | undefined;
+    let formulaLatex: string | undefined;
+
+    // Kiểm tra auto-numbering trong <w:pPr>
+    const pPr = p.getElementsByTagName('w:pPr')[0] || null;
+    let isAutoNumbered = false;
+    if (pPr) {
+      const numPr = pPr.getElementsByTagName('w:numPr');
+      if (numPr.length > 0) {
+        isAutoNumbered = true;
+      }
+    }
+
+    // Trích xuất hình ảnh gắn với đoạn văn này
+    const paragraphImages = extractImagesFromElement(p, mediaMap);
 
     const childNodes = p.childNodes;
     for (let j = 0; j < childNodes.length; j++) {
@@ -286,21 +434,28 @@ function extractParagraphsFromDocxXml(xmlString: string): ParsedParagraph[] {
         if (tabNodes.length > 0 && !text.endsWith(' ')) {
           text += '\t';
         }
-        if (text) {
+
+        // Kiểm tra hình ảnh bên trong run
+        const runImages = extractImagesFromElement(child, mediaMap);
+
+        if (text || runImages.length > 0) {
           runs.push({
             text,
             isUnderline: props.isUnderline,
             isRed: props.isRed,
             isBold: props.isBold,
             hasFormula: false,
+            images: runImages.length > 0 ? runImages : undefined,
           });
         }
       } else if (child.tagName === 'm:oMath' || child.tagName === 'm:oMathPara') {
         hasFormula = true;
-        const mathText = extractOmmlText(child);
-        if (mathText) {
+        const latex = ommlToLatex(child);
+        rawFormulaXml = new XMLSerializer().serializeToString(child);
+        formulaLatex = latex;
+        if (latex) {
           runs.push({
-            text: ` ${mathText} `,
+            text: ` ${latex} `,
             isUnderline: false,
             isRed: false,
             isBold: false,
@@ -311,13 +466,17 @@ function extractParagraphsFromDocxXml(xmlString: string): ParsedParagraph[] {
     }
 
     const fullText = runs.map((r) => r.text).join('').trim();
-    if (fullText) {
+    if (fullText || paragraphImages.length > 0) {
       result.push({
         fullText,
         runs,
         hasUnderline: runs.some((r) => r.isUnderline && r.text.trim().length > 0),
         hasRed: runs.some((r) => r.isRed && r.text.trim().length > 0),
         hasFormula,
+        isAutoNumbered,
+        images: paragraphImages,
+        rawFormulaXml,
+        formulaLatex,
       });
     }
   }
@@ -352,7 +511,6 @@ function checkRangeHighlight(
     const runEnd = cursor + run.text.length;
     cursor = runEnd;
 
-    // Kiểm tra giao nhau giữa [runStart, runEnd) và [startIdx, endIdx)
     if (runEnd > startIdx && runStart < endIdx && run.text.trim().length > 0) {
       if (run.isUnderline) isUnderline = true;
       if (run.isRed) isRed = true;
@@ -363,7 +521,63 @@ function checkRangeHighlight(
 }
 
 /**
+ * Đọc toàn bộ quan hệ media từ word/_rels/document.xml.rels
+ */
+async function loadMediaRelationships(
+  zip: JSZip
+): Promise<Map<string, { dataUrl: string; fileName: string }>> {
+  const mediaMap = new Map<string, { dataUrl: string; fileName: string }>();
+  const relsFile = zip.file('word/_rels/document.xml.rels');
+  if (!relsFile) return mediaMap;
+
+  const relsXml = await relsFile.async('string');
+  const parser = new DOMParser();
+  const relsDoc = parser.parseFromString(relsXml, 'application/xml');
+  const relNodes = relsDoc.getElementsByTagName('Relationship');
+
+  for (let i = 0; i < relNodes.length; i++) {
+    const rel = relNodes[i];
+    const id = rel.getAttribute('Id');
+    const target = rel.getAttribute('Target');
+    const type = rel.getAttribute('Type') || '';
+
+    if (id && target && (type.includes('image') || /\.(png|jpe?g|gif|svg|emf|wmf)$/i.test(target))) {
+      // Chuẩn hóa đường dẫn file trong zip
+      let zipPath = target;
+      if (target.startsWith('../')) {
+        zipPath = target.replace(/^\.\.\//, '');
+      } else if (!target.startsWith('word/')) {
+        zipPath = `word/${target}`;
+      }
+
+      const mediaFile = zip.file(zipPath);
+      if (mediaFile) {
+        const ext = zipPath.split('.').pop()?.toLowerCase() || 'png';
+        let mime = 'image/png';
+        if (ext === 'jpg' || ext === 'jpeg') mime = 'image/jpeg';
+        else if (ext === 'gif') mime = 'image/gif';
+        else if (ext === 'svg') mime = 'image/svg+xml';
+        else if (ext === 'emf' || ext === 'wmf') mime = 'image/x-emf';
+
+        const base64 = await mediaFile.async('base64');
+        const dataUrl = `data:${mime};base64,${base64}`;
+        mediaMap.set(id, {
+          dataUrl,
+          fileName: zipPath.split('/').pop() || `image.${ext}`,
+        });
+      }
+    }
+  }
+
+  return mediaMap;
+}
+
+/**
  * Phân tích File Word (.docx) theo cấu trúc 3 phần năm 2025
+ * Hỗ trợ nhận diện toàn diện:
+ * - Ảnh minh họa, sơ đồ sinh học/hóa học/vật lý (<w:drawing>, <w:pict>)
+ * - Công thức toán học (OMML <m:oMath> -> LaTeX)
+ * - Tự động nhận diện Auto-Numbering và mọi dạng câu hỏi (Câu, Bài, Question...)
  */
 export async function parseDocxExamFile(
   file: File,
@@ -377,8 +591,11 @@ export async function parseDocxExamFile(
     throw new Error('Không tìm thấy cấu trúc word/document.xml hợp lệ trong tệp .docx');
   }
 
+  // 1. Trích xuất toàn bộ media và sơ đồ trong file Word
+  const mediaMap = await loadMediaRelationships(zip);
+
   const xmlString = await docXmlFile.async('string');
-  const paragraphs = extractParagraphsFromDocxXml(xmlString);
+  const paragraphs = extractParagraphsFromDocxXml(xmlString, mediaMap);
 
   let currentPart: PartType = 'PART_1';
   const questions: ExamQuestion[] = [];
@@ -415,11 +632,22 @@ export async function parseDocxExamFile(
       continue;
     }
 
-    // 2. Nhận diện bắt đầu một câu hỏi mới: "Câu 1.", "Câu 1:", "Câu 12."
-    const qMatch = text.match(/^Câu\s+(\d+)\s*[.:]\s*(.*)$/i);
-    if (qMatch) {
+    // 2. Nhận diện bắt đầu một câu hỏi mới:
+    // Hỗ trợ: "Câu 1.", "Câu 1:", "Câu 1 -", "Câu 01.", "Bài 1:", "Question 1:"
+    // Hoặc danh sách đánh số tự động Word (auto-numbering <w:numPr>)
+    const qMatch = text.match(/^(?:Câu|Bài|Question)\s*(\d+)[\s.:\-–—]*(.*)$/i);
+    const isAutoNumberQuestion =
+      para.isAutoNumbered &&
+      !/^\b[A-D]\s*[.:]/i.test(text) &&
+      !/^[a-d]\s*[).]/i.test(text) &&
+      !/^(?:Đáp\s*án|Đáp\s*số|ĐS)/i.test(text);
+
+    if (qMatch || isAutoNumberQuestion) {
       pushCurrentQuestion();
-      const stemContent = qMatch[2].trim();
+      const stemContent = qMatch ? qMatch[2].trim() : text;
+
+      // Gom toàn bộ ảnh đính kèm từ paragraph này
+      const initialImages: ExamImageAttachment[] = [...para.images];
 
       currentQuestion = {
         id: `q-${currentPart.toLowerCase()}-${globalIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -427,7 +655,11 @@ export async function parseDocxExamFile(
         originalIndex: globalIndex++,
         displayIndex: 1,
         stemText: stemContent,
-        hasFormula: para.hasFormula,
+        hasFormula: para.hasFormula || /[√∫∑πΔαβλθ±×÷≤≥≠∈∉→∞]/.test(stemContent),
+        hasImage: initialImages.length > 0,
+        images: initialImages.length > 0 ? initialImages : undefined,
+        rawFormulaOmmlXml: para.rawFormulaXml,
+        formulaLatex: para.formulaLatex,
         options: currentPart === 'PART_1' ? [] : undefined,
         subItems: currentPart === 'PART_2' ? [] : undefined,
         shortAnswer: currentPart === 'PART_3' ? '' : undefined,
@@ -442,7 +674,9 @@ export async function parseDocxExamFile(
           currentQuestion.shortAnswerDetectedBy = 'KEYWORD';
           currentQuestion.stemText = stemContent.replace(ansKeyword[0], '').trim();
         } else {
-          const highlightedRuns = para.runs.filter((r) => (r.isUnderline || r.isRed) && /[-\d.,]+/.test(r.text));
+          const highlightedRuns = para.runs.filter(
+            (r) => (r.isUnderline || r.isRed) && /[-\d.,]+/.test(r.text)
+          );
           if (highlightedRuns.length > 0) {
             const numMatch = highlightedRuns.map((r) => r.text).join('').match(/-?\d+([.,]\d+)?/);
             if (numMatch) {
@@ -456,6 +690,12 @@ export async function parseDocxExamFile(
     }
 
     if (!currentQuestion) continue;
+
+    // Gắn thêm ảnh xuất hiện ở các paragraph giữa các dòng của câu hỏi
+    if (para.images.length > 0) {
+      currentQuestion.hasImage = true;
+      currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+    }
 
     // 3. Xử lý nội dung bên trong câu hỏi tùy theo từng Phần
     if (currentQuestion.part === 'PART_1') {

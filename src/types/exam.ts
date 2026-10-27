@@ -16,12 +16,22 @@ export type BloomLevel =
   | 'VAN_DUNG'
   | 'VAN_DUNG_CAO';
 
+export interface ExamImageAttachment {
+  id: string;
+  dataUrl: string; // Base64 data URL (image/png, image/jpeg, etc.)
+  fileName?: string;
+  caption?: string;
+  widthTwips?: number;
+  heightTwips?: number;
+}
+
 export interface OptionPart1 {
   id: string;
   originalLabel: 'A' | 'B' | 'C' | 'D';
   currentLabel: 'A' | 'B' | 'C' | 'D';
   text: string;
   richHtml?: string;
+  images?: ExamImageAttachment[];
   isUnderline: boolean;
   isRed: boolean;
   isCorrect: boolean;
@@ -33,6 +43,7 @@ export interface SubItemPart2 {
   currentLabel: 'a' | 'b' | 'c' | 'd';
   text: string;
   richHtml?: string;
+  images?: ExamImageAttachment[];
   isUnderline: boolean;
   isRed: boolean;
   isTrue: boolean; // Đúng (true) hoặc Sai (false)
@@ -47,6 +58,9 @@ export interface ExamQuestion {
   stemRichHtml?: string;
   hasFormula?: boolean;
   hasImage?: boolean;
+  images?: ExamImageAttachment[]; // Danh sách hình ảnh, sơ đồ đính kèm
+  rawFormulaOmmlXml?: string;     // Khối XML công thức toán gốc OMML (nếu có)
+  formulaLatex?: string;          // Biểu diễn LaTeX công thức (nếu có)
   // Siêu dữ liệu Sư phạm & AI (Lời giải chi tiết, Mức độ nhận thức, Yêu cầu cần đạt)
   explanation?: string;
   bloomLevel?: BloomLevel;

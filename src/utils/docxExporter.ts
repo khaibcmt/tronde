@@ -681,8 +681,6 @@ function buildEmbeddedQrDrawingXml(relId: string, examCode: string): string {
 }
 
 /**
- * Tạo nội dung body XML cho 1 bộ câu hỏi:
-/**
  * Định dạng tên môn thi sang dạng chữ thường thanh lịch sư phạm (Ví dụ: SINH HỌC -> Sinh học)
  */
 export function formatPedagogicalSubject(raw: string): string {
@@ -693,15 +691,94 @@ export function formatPedagogicalSubject(raw: string): string {
 }
 
 /**
+ * Tạo block XML nhúng hình ảnh/sơ đồ bài tập vào tệp Word
+ */
+function buildQuestionImageDrawingXml(relId: string, imgId: string): string {
+  const cx = 3600000; // ~3.93 inches
+  const cy = 2400000; // ~2.62 inches
+  return `<w:p>
+    <w:pPr>
+      <w:spacing w:before="80" w:after="100"/>
+      <w:jc w:val="center"/>
+    </w:pPr>
+    <w:r>
+      <w:drawing>
+        <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+          <wp:extent cx="${cx}" cy="${cy}"/>
+          <wp:docPr id="${Math.floor(Math.random() * 80000) + 1000}" name="Diagram_${escapeXml(imgId)}"/>
+          <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:nvPicPr>
+                  <pic:cNvPr id="${Math.floor(Math.random() * 80000) + 1000}" name="img_${escapeXml(imgId)}.png"/>
+                  <pic:cNvPicPr/>
+                </pic:nvPicPr>
+                <pic:blipFill>
+                  <a:blip r:embed="${relId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
+                  <a:stretch><a:fillRect/></a:stretch>
+                </pic:blipFill>
+                <pic:spPr>
+                  <a:xfrm>
+                    <a:off x="0" y="0"/>
+                    <a:ext cx="${cx}" cy="${cy}"/>
+                  </a:xfrm>
+                  <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                </pic:spPr>
+              </pic:pic>
+            </a:graphicData>
+          </a:graphic>
+        </wp:inline>
+      </w:drawing>
+    </w:r>
+  </w:p>`;
+}
+
+/**
+ * Gom toàn bộ ảnh đính kèm từ danh sách câu hỏi và tạo bản đồ quan hệ rId
+ */
+function collectImagesAndBuildRelMap(questions: ExamQuestion[]): {
+  imagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }>;
+  imageRelMap: Map<string, string>;
+} {
+  const imagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }> = [];
+  const imageRelMap = new Map<string, string>();
+  let imgIndex = 1;
+
+  for (const q of questions) {
+    if (q.images && q.images.length > 0) {
+      for (const img of q.images) {
+        if (!imageRelMap.has(img.id) && !imageRelMap.has(img.dataUrl)) {
+          const relId = `rIdImg${imgIndex++}`;
+          const ext = img.fileName?.split('.').pop()?.toLowerCase() || 'png';
+          const safeExt = ['jpg', 'jpeg', 'gif', 'png', 'svg'].includes(ext) ? ext : 'png';
+          const fileName = `figure_${imgIndex - 1}.${safeExt}`;
+          imagesToEmbed.push({
+            relId,
+            dataUrl: img.dataUrl,
+            fileName,
+          });
+          imageRelMap.set(img.id, relId);
+          imageRelMap.set(img.dataUrl, relId);
+        }
+      }
+    }
+  }
+
+  return { imagesToEmbed, imageRelMap };
+}
+
+/**
  * Tạo nội dung body XML cho 1 bộ câu hỏi:
  * - Bắt buộc dùng Times New Roman 12pt, canh trái (left), tự động co dãn đều đẹp mắt
  * - Cho phép bật/tắt hiển thị Lời giải chi tiết độc lập
+ * - Tự động nhúng hình ảnh, sơ đồ minh họa đi kèm câu hỏi
  */
 function buildQuestionsBodyXml(
   questions: ExamQuestion[],
   config: ShuffleConfig,
   highlightCorrectAnswers: boolean,
-  includeSolutions: boolean = false
+  includeSolutions: boolean = false,
+  imageRelMap?: Map<string, string>
 ): string {
   const part1 = questions.filter((q) => q.part === 'PART_1');
   const part2 = questions.filter((q) => q.part === 'PART_2');
@@ -725,6 +802,15 @@ function buildQuestionsBodyXml(
           fontSizeHalfPt: 24,
         })
       );
+      // Nhúng ảnh / sơ đồ câu hỏi nếu có
+      if (q.images && q.images.length > 0 && imageRelMap) {
+        for (const img of q.images) {
+          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
+          if (rId) {
+            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
+          }
+        }
+      }
       if (q.options && q.options.length > 0) {
         const layout =
           config.layoutOverride === 'AUTO'
@@ -769,6 +855,15 @@ function buildQuestionsBodyXml(
           fontSizeHalfPt: 24,
         })
       );
+      // Nhúng ảnh / sơ đồ câu hỏi nếu có
+      if (q.images && q.images.length > 0 && imageRelMap) {
+        for (const img of q.images) {
+          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
+          if (rId) {
+            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
+          }
+        }
+      }
       for (const sub of q.subItems || []) {
         const isMarked = highlightCorrectAnswers && sub.isTrue;
         blocks.push(
@@ -813,6 +908,15 @@ function buildQuestionsBodyXml(
           fontSizeHalfPt: 24,
         })
       );
+      // Nhúng ảnh / sơ đồ câu hỏi nếu có
+      if (q.images && q.images.length > 0 && imageRelMap) {
+        for (const img of q.images) {
+          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
+          if (rId) {
+            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
+          }
+        }
+      }
       if (highlightCorrectAnswers && q.shortAnswer) {
         blocks.push(
           buildStandardParagraphXml(`Đáp án: `, q.shortAnswer, {
@@ -916,16 +1020,18 @@ function buildFooterXml(
 }
 
 /**
- * Đóng gói một tệp Word (.docx) hoàn chỉnh chuẩn OpenXML (hỗ trợ Footer đánh số trang + Mã đề & Nhúng ảnh QR)
+ * Đóng gói một tệp Word (.docx) hoàn chỉnh chuẩn OpenXML (hỗ trợ Footer đánh số trang + Mã đề & Nhúng ảnh QR + Ảnh/Sơ đồ bài tập)
  */
 async function packOpenXmlDocx(
   documentBodyInnerXml: string,
   config: ShuffleConfig,
   footerExamCodeLabel: string,
-  embeddedQrDataUrl?: string
+  embeddedQrDataUrl?: string,
+  embeddedImages?: Array<{ relId: string; dataUrl: string; fileName: string }>
 ): Promise<Blob> {
   const zip = new JSZip();
-  const hasImage = Boolean(embeddedQrDataUrl);
+  const hasQrImage = Boolean(embeddedQrDataUrl);
+  const hasAnyImage = hasQrImage || (embeddedImages && embeddedImages.length > 0);
 
   zip.file(
     '[Content_Types].xml',
@@ -933,7 +1039,10 @@ async function packOpenXmlDocx(
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  ${hasImage ? '<Default Extension="png" ContentType="image/png"/>' : ''}
+  ${hasAnyImage ? '<Default Extension="png" ContentType="image/png"/>' : ''}
+  ${hasAnyImage ? '<Default Extension="jpg" ContentType="image/jpeg"/>' : ''}
+  ${hasAnyImage ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : ''}
+  ${hasAnyImage ? '<Default Extension="gif" ContentType="image/gif"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
 </Types>`
@@ -951,11 +1060,25 @@ async function packOpenXmlDocx(
     `<Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>`,
   ];
 
-  if (hasImage && embeddedQrDataUrl) {
+  if (hasQrImage && embeddedQrDataUrl) {
     relsItems.push(
       `<Relationship Id="rIdQr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/qrcode.png"/>`
     );
     zip.file('word/media/qrcode.png', dataUrlToUint8Array(embeddedQrDataUrl));
+  }
+
+  // Nhúng các ảnh minh họa, sơ đồ của đề thi
+  if (embeddedImages && embeddedImages.length > 0) {
+    for (const img of embeddedImages) {
+      relsItems.push(
+        `<Relationship Id="${img.relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.fileName}"/>`
+      );
+      try {
+        zip.file(`word/media/${img.fileName}`, dataUrlToUint8Array(img.dataUrl));
+      } catch (err) {
+        console.warn('Không thể chuyển đổi dataUrl sang byte array cho ảnh:', img.fileName, err);
+      }
+    }
   }
 
   zip.file(
@@ -998,6 +1121,7 @@ export async function exportCleanedMasterDocx(
   config: ShuffleConfig,
   includeSolutions: boolean = false
 ): Promise<Blob> {
+  const { imagesToEmbed, imageRelMap } = collectImagesAndBuildRelMap(questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     includeSolutions
@@ -1008,12 +1132,15 @@ export async function exportCleanedMasterDocx(
     questions,
     config,
     true,
-    includeSolutions
+    includeSolutions,
+    imageRelMap
   );
   return packOpenXmlDocx(
     `${headerXml}\n${bodyQuestionsXml}`,
     config,
-    'Đề gốc chuẩn 2025'
+    'Đề gốc chuẩn 2025',
+    undefined,
+    imagesToEmbed
   );
 }
 
@@ -1025,6 +1152,7 @@ export async function exportMasterExamWithSolutionsDocx(
   questions: ExamQuestion[],
   config: ShuffleConfig
 ): Promise<Blob> {
+  const { imagesToEmbed, imageRelMap } = collectImagesAndBuildRelMap(questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
@@ -1033,12 +1161,15 @@ export async function exportMasterExamWithSolutionsDocx(
     questions,
     config,
     true,  // gạch chân / đỏ đáp án đúng
-    true   // in toàn bộ lời giải chi tiết
+    true,  // in toàn bộ lời giải chi tiết
+    imageRelMap
   );
   return packOpenXmlDocx(
     `${headerXml}\n${bodyQuestionsXml}`,
     config,
-    'Đề gốc có lời giải'
+    'Đề gốc có lời giải',
+    undefined,
+    imagesToEmbed
   );
 }
 
@@ -1046,12 +1177,14 @@ export async function exportMasterExamWithSolutionsDocx(
  * Tiện ích 3: Xuất 1 tệp Đề thi hoán vị (.docx) DÀNH RIÊNG CHO HỌC SINH LÀM BÀI:
  * - BẮT BUỘC KHÔNG CÓ LỜI GIẢI & KHÔNG CÓ ĐÁP ÁN
  * - KHÔNG XUẤT KHUNG ĐÁP ÁN Ở CUỐI ĐỀ THI (Thỏa mãn yêu cầu 4)
+ * - Tự động nhúng hình ảnh, sơ đồ sinh động
  * - Footer sư phạm chữ thường: “Môn: Sinh học — Lớp: 12 — Mã đề: 101”
  */
 export async function exportSingleVariantDocx(
   variant: ShuffledVariant,
   config: ShuffleConfig
 ): Promise<Blob> {
+  const { imagesToEmbed, imageRelMap } = collectImagesAndBuildRelMap(variant.questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     `MÃ ĐỀ THI: ${variant.examCode}`
@@ -1062,7 +1195,8 @@ export async function exportSingleVariantDocx(
     variant.questions,
     config,
     false,
-    false
+    false,
+    imageRelMap
   );
 
   const footerEndXml = [
@@ -1084,7 +1218,9 @@ export async function exportSingleVariantDocx(
   return packOpenXmlDocx(
     fullInnerXml,
     config,
-    variant.examCode
+    variant.examCode,
+    undefined,
+    imagesToEmbed
   );
 }
 

@@ -215,8 +215,18 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
     part: 'PART_1',
     originalIndex: 12,
     displayIndex: 12,
-    stemText: 'Ở người, bệnh mù màu đỏ - lục do một allele lặn nằm trên vùng không tương đồng của nhiễm sắc thể giới tính X quy định (không có allele tương ứng trên Y). Đặc điểm di truyền của gene gây bệnh này là:',
+    stemText: 'Ở người, bệnh mù màu đỏ - lục do một allele lặn nằm trên vùng không tương đồng của nhiễm sắc thể giới tính X quy định (không có allele tương ứng trên Y). Quan sát sơ đồ phả hệ dưới đây và xác định đặc điểm di truyền chuẩn xác của gene gây bệnh này:',
     hasFormula: false,
+    hasImage: true,
+    images: [
+      {
+        id: 'img-bio-pedigree-12',
+        dataUrl:
+          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="440" height="170" viewBox="0 0 440 170"><rect width="100%" height="100%" fill="%23f8fafc" rx="10" stroke="%23cbd5e1" stroke-width="1.5"/><text x="220" y="24" font-family="Times New Roman, serif" font-size="13" font-weight="bold" text-anchor="middle" fill="%230f172a">SƠ ĐỒ PHẢ HỆ DI TRUYỀN PHÂN TỬ (CÂU 12)</text><circle cx="90" cy="65" r="17" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="90" y="69" font-family="serif" font-size="11" text-anchor="middle">I.1</text><line x1="107" y1="65" x2="165" y2="65" stroke="%23334155" stroke-width="2"/><rect x="165" y="48" width="34" height="34" fill="%23f87171" stroke="%23b91c1c" stroke-width="2"/><text x="182" y="69" font-family="serif" font-size="11" text-anchor="middle" fill="white">I.2</text><line x1="136" y1="65" x2="136" y2="98" stroke="%23334155" stroke-width="2"/><line x1="75" y1="98" x2="265" y2="98" stroke="%23334155" stroke-width="2"/><circle cx="75" cy="132" r="17" fill="%23f87171" stroke="%23b91c1c" stroke-width="2"/><text x="75" y="136" font-family="serif" font-size="11" text-anchor="middle" fill="white">II.1</text><line x1="75" y1="98" x2="75" y2="115" stroke="%23334155" stroke-width="2"/><rect x="150" y="115" width="34" height="34" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="167" y="136" font-family="serif" font-size="11" text-anchor="middle">II.2</text><line x1="167" y1="98" x2="167" y2="115" stroke="%23334155" stroke-width="2"/><circle cx="265" cy="132" r="17" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="265" y="136" font-family="serif" font-size="11" text-anchor="middle">II.3</text><line x1="265" y1="98" x2="265" y2="115" stroke="%23334155" stroke-width="2"/><rect x="310" y="46" width="115" height="105" fill="white" stroke="%2394a3b8" rx="8"/><text x="367" y="66" font-family="Times New Roman, serif" font-size="11" font-weight="bold" text-anchor="middle" fill="%231e3a8a">CHÚ THÍCH</text><circle cx="328" cy="85" r="7" fill="%23e2e8f0" stroke="%23334155"/><text x="342" y="89" font-family="serif" font-size="10.5">Nữ bình thường</text><rect x="321" y="103" width="14" height="14" fill="%23f87171" stroke="%23b91c1c"/><text x="342" y="115" font-family="serif" font-size="10.5">Nam bị bệnh</text><circle cx="328" cy="133" r="7" fill="%23f87171" stroke="%23b91c1c"/><text x="342" y="137" font-family="serif" font-size="10.5">Nữ bị bệnh</text></svg>',
+        fileName: 'pha_he_benh_mu_mau_cau_12.svg',
+        caption: 'Hình 1. Sơ đồ phả hệ di truyền bệnh mù màu qua 2 thế hệ',
+      },
+    ],
     bloomLevel: 'THONG_HIEU',
     learningOutcome: 'Phân tích được quy luật di truyền chéo của gene nằm trên vùng không tương đồng của nhiễm sắc thể giới tính X.',
     explanation: 'Gene trên vùng không tương đồng của NST X có đặc điểm di truyền chéo (bố truyền nhiễm sắc thể X mang gene bệnh cho con gái, mẹ truyền cho cả con trai và con gái).',
@@ -233,8 +243,9 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
     part: 'PART_1',
     originalIndex: 13,
     displayIndex: 13,
-    stemText: 'Một quần thể ngẫu phối đang ở trạng thái cân bằng di truyền Hardy - Weinberg có cấu trúc di truyền là 0,36AA : 0,48Aa : 0,16aa. Tần số tương đối của allele A và allele a trong quần thể này lần lượt là:',
+    stemText: 'Một quần thể ngẫu phối đang ở trạng thái cân bằng di truyền Hardy - Weinberg có cấu trúc di truyền là 0,36AA : 0,48Aa : 0,16aa (thỏa mãn p² + 2pq + q² = 1). Tần số tương đối của allele A và allele a trong quần thể này lần lượt là:',
     hasFormula: true,
+    formulaLatex: 'p^2(AA) + 2pq(Aa) + q^2(aa) = 1 \\implies p(A) = 0.60, q(a) = 0.40',
     bloomLevel: 'VAN_DUNG',
     learningOutcome: 'Tính được tần số allele và tần số kiểu gene của quần thể theo định luật Hardy - Weinberg.',
     explanation: 'Tần số allele A = 0,36 + 0,48 / 2 = 0,60; tần số allele a = 1 - 0,60 = 0,40.',
@@ -493,6 +504,26 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
 ];
 
 export const DYNAMIC_FEATURE_REGISTRY: FeatureReleaseItem[] = [
+  {
+    id: 'feat-multimodal-smart-recognition',
+    version: 'v4.0.0',
+    releaseDate: '2025-10',
+    title: 'Kích Hoạt Chế Độ Thông Minh Nhận Dạng: Hình Ảnh, Sơ Đồ, Công Thức Toán/Lý/Hóa/Sinh, Tệp PDF & Đánh Số Auto',
+    category: 'CORE_PARSER',
+    description: 'Hỗ trợ tải lên cả tệp Word (.docx) và PDF (.pdf). Tự động bóc tách và trích xuất hình ảnh minh họa, sơ đồ sinh học/hóa học/vật lý, nhận dạng công thức toán OMML (<m:oMath>) sang LaTeX, tự động nhận diện danh sách đánh số Auto-Numbering (<w:numPr>) và các dạng Câu 1., Câu 1:, Bài 1., Question 1... Tự động nhúng ngược hình ảnh và công thức vào file Word xuất ra với độ sắc nét tuyệt đối, không bị lỗi icon ảnh hỏng.',
+    technicalSpec: 'PDF.js ESM text-layer extraction · Word DrawingML & OpenXML media relationship mapper · Math OMML to LaTeX AST.',
+    autoDetected: true,
+  },
+  {
+    id: 'feat-fluid-responsive-toolbars',
+    version: 'v4.0.0',
+    releaseDate: '2025-10',
+    title: 'Thanh Công Cụ Tự Động Co Dãn Khung Hình & Tương Thích Tất Cả Thiết Bị (Mobile, Tablet, Desktop)',
+    category: 'LIVE_EDITOR',
+    description: 'Toàn bộ thanh công cụ, menu điều hướng 4 bước, khung nhập liệu cỡ lớn, bảng đối chiếu và bảng đáp án tự động co dãn linh hoạt theo từng độ phân giải màn hình từ smartphone (320px-430px), iPad/máy tính bảng (768px-1024px) đến laptop và máy tính để bàn (1920px+). Trải nghiệm cảm ứng mượt mà, không bị tràn hay đứt gãy khung hình.',
+    technicalSpec: 'Fluid Flex-Wrap & Horizontal Sticky Toolbar · Dynamic Breakpoint Grid · Touch-Optimized Action Deck.',
+    autoDetected: true,
+  },
   {
     id: 'feat-ai-isomorphic-cloning',
     version: 'v3.5.0',

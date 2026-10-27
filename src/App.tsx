@@ -19,22 +19,29 @@ import {
   FileSpreadsheet,
   FileText,
   GraduationCap,
+  Image as ImageIcon,
   Layers,
   ListRestart,
+  Maximize2,
   Palette,
+  Plus,
   QrCode,
   RefreshCw,
   Save,
   ShieldCheck,
   Shuffle,
+  Sigma,
   Sliders,
   Sparkles,
+  Trash2,
   Underline,
   Upload,
   Wand2,
+  X,
 } from 'lucide-react';
 import {
   BloomLevel,
+  ExamImageAttachment,
   ExamQuestion,
   FeatureReleaseItem,
   GeminiModelTier,
@@ -57,6 +64,7 @@ import {
   recalculateQuestionNumbering,
   validateExamQuestions,
 } from './utils/docxParser';
+import { parsePdfExamFile } from './utils/pdfParser';
 import { generateShuffledVariants } from './utils/shuffleEngine';
 import {
   exportAllVariantsZipBundle,
@@ -228,20 +236,97 @@ export default function App() {
     });
   };
 
-  // ================= HANDLERS: UPLOAD & PARSE DOCX =================
+  // Modal xem phóng to sơ đồ / hình ảnh
+  const [previewModalImage, setPreviewModalImage] = useState<{
+    src: string;
+    caption?: string;
+  } | null>(null);
+
+  // Thêm ảnh / sơ đồ đính kèm vào câu hỏi
+  const handleAddImageToQuestion = (
+    questionId: string,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      if (!dataUrl) return;
+
+      setQuestions((prev) =>
+        prev.map((q) => {
+          if (q.id !== questionId) return q;
+          const newImg: ExamImageAttachment = {
+            id: `img-man-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            dataUrl,
+            fileName: file.name,
+            caption: `Hình minh họa Câu ${q.displayIndex}`,
+          };
+          return {
+            ...q,
+            hasImage: true,
+            images: [...(q.images || []), newImg],
+          };
+        })
+      );
+      setHasUnsavedChanges(true);
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã đính kèm ảnh "${file.name}" vào câu hỏi.`,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Xóa ảnh / sơ đồ khỏi câu hỏi
+  const handleRemoveImageFromQuestion = (
+    questionId: string,
+    imageId: string
+  ) => {
+    setQuestions((prev) =>
+      prev.map((q) => {
+        if (q.id !== questionId) return q;
+        const filtered = (q.images || []).filter((img) => img.id !== imageId);
+        return {
+          ...q,
+          hasImage: filtered.length > 0,
+          images: filtered.length > 0 ? filtered : undefined,
+        };
+      })
+    );
+    setHasUnsavedChanges(true);
+  };
+
+  // ================= HANDLERS: UPLOAD & PARSE DOCX & PDF =================
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessing(true);
     try {
-      const parsed = await parseDocxExamFile(file, config.resetNumberingPerPart);
+      const isPdf =
+        file.name.toLowerCase().endsWith('.pdf') ||
+        file.type === 'application/pdf';
+
+      const parsed = isPdf
+        ? await parsePdfExamFile(file, config.resetNumberingPerPart)
+        : await parseDocxExamFile(file, config.resetNumberingPerPart);
+
       if (parsed.length === 0) {
         setStatusBanner({
           type: 'ERROR',
-          text: 'Không tìm thấy câu hỏi dạng "Câu 1." trong file Word. Đã giữ nguyên dữ liệu hiện tại.',
+          text: `Không tìm thấy câu hỏi hợp lệ trong tệp ${isPdf ? 'PDF' : 'Word'}. Vui lòng kiểm tra lại cấu trúc câu hỏi.`,
         });
       } else {
+        const totalImages = parsed.reduce(
+          (acc, q) => acc + (q.images?.length || 0),
+          0
+        );
+        const formulaCount = parsed.filter((q) => q.hasFormula).length;
+
         setFileName(file.name);
         setQuestions(parsed);
         setHasUnsavedChanges(false);
@@ -251,14 +336,16 @@ export default function App() {
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
         setStatusBanner({
           type: 'SUCCESS',
-          text: `Đã phân tích thành công tệp "${file.name}" (${parsed.length} câu hỏi qua 3 phần).`,
+          text: `Đã phân tích thông minh tệp "${file.name}" (${parsed.length} câu hỏi 3 phần${
+            totalImages > 0 ? `, nhận diện ${totalImages} sơ đồ/hình ảnh` : ''
+          }${formulaCount > 0 ? `, ${formulaCount} câu có công thức` : ''}).`,
         });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Lỗi đọc file .docx';
+      const message = err instanceof Error ? err.message : 'Lỗi xử lý file';
       setStatusBanner({
         type: 'ERROR',
-        text: `Không thể phân tích file Word: ${message}`,
+        text: `Không thể phân tích tệp: ${message}`,
       });
     } finally {
       setIsProcessing(false);
@@ -916,10 +1003,10 @@ export default function App() {
         </a>
 
         {/* Zone 2: Thanh điều hướng trung tâm phân nhóm khoa học */}
-        <nav className="hidden xl:flex items-center gap-2">
+        <nav className="hidden lg:flex items-center gap-1.5 xl:gap-2">
           <button
             onClick={() => setActiveRightTab('LIVE_EDITOR')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeRightTab === 'LIVE_EDITOR'
                 ? 'btn-3d-primary ring-2 ring-blue-300'
                 : 'btn-3d-cyan'
@@ -931,7 +1018,7 @@ export default function App() {
 
           <button
             onClick={() => setActiveRightTab('AI_CLONE_STUDIO')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeRightTab === 'AI_CLONE_STUDIO'
                 ? 'btn-3d-purple ring-2 ring-purple-300'
                 : 'btn-3d-indigo'
@@ -943,7 +1030,7 @@ export default function App() {
 
           <button
             onClick={() => setActiveRightTab('BLOOM_MATRIX')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeRightTab === 'BLOOM_MATRIX'
                 ? 'btn-3d-amber ring-2 ring-amber-300'
                 : 'btn-3d-orange'
@@ -961,7 +1048,7 @@ export default function App() {
                 handleRunShuffle();
               }
             }}
-            className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeRightTab === 'SHUFFLED_PREVIEW'
                 ? 'btn-3d-rose ring-2 ring-rose-300'
                 : 'btn-3d-emerald'
@@ -1049,6 +1136,63 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* ================= THANH ĐIỀU HƯỚNG TỰ CO DÃN CHO THIẾT BỊ DI ĐỘNG & MÁY TÍNH BẢNG ================= */}
+      <div className="lg:hidden bg-sky-100/95 border-b-2 border-sky-300 px-3 py-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar shadow-xs sticky top-[65px] z-20 backdrop-blur-md">
+        <button
+          onClick={() => setActiveRightTab('LIVE_EDITOR')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-black text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            activeRightTab === 'LIVE_EDITOR'
+              ? 'btn-3d-primary ring-2 ring-blue-300'
+              : 'btn-3d-cyan'
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5" />
+          <span>1. Biên Tập Đề</span>
+        </button>
+
+        <button
+          onClick={() => setActiveRightTab('AI_CLONE_STUDIO')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-black text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            activeRightTab === 'AI_CLONE_STUDIO'
+              ? 'btn-3d-purple ring-2 ring-purple-300'
+              : 'btn-3d-indigo'
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" />
+          <span>2. AI Tạo Đề</span>
+        </button>
+
+        <button
+          onClick={() => setActiveRightTab('BLOOM_MATRIX')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-black text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            activeRightTab === 'BLOOM_MATRIX'
+              ? 'btn-3d-amber ring-2 ring-amber-300'
+              : 'btn-3d-orange'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>3. Ma Trận</span>
+        </button>
+
+        <button
+          onClick={() => {
+            if (shuffledVariants.length > 0) {
+              setActiveRightTab('SHUFFLED_PREVIEW');
+            } else {
+              handleRunShuffle();
+            }
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-black text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+            activeRightTab === 'SHUFFLED_PREVIEW'
+              ? 'btn-3d-rose ring-2 ring-rose-300'
+              : 'btn-3d-emerald'
+          }`}
+        >
+          <QrCode className="w-3.5 h-3.5" />
+          <span>4. Đáp Án & QR</span>
+        </button>
+      </div>
 
       {/* Status Notification Bar */}
       {statusBanner && (
@@ -1277,7 +1421,7 @@ export default function App() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".docx"
+              accept=".docx,.pdf"
               onChange={handleFileUpload}
               className="hidden"
             />
@@ -1287,9 +1431,10 @@ export default function App() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
                 className="py-3 px-3 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center justify-center gap-1.5 whitespace-nowrap"
+                title="Tải lên tệp đề thi Word (.docx) hoặc PDF (.pdf)"
               >
                 <Upload className="w-4 h-4 shrink-0" />
-                <span>Tải File (.docx)</span>
+                <span>Tải Word / PDF</span>
               </button>
 
               <button
@@ -1299,6 +1444,11 @@ export default function App() {
                 <Sparkles className="w-4 h-4 shrink-0" />
                 <span>Đề Sinh Học 18-4-6</span>
               </button>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 text-[11px] text-emerald-900 font-bold leading-tight">
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Chế độ thông minh: Nhận dạng Hình ảnh, Sơ đồ, Công thức Toán Lý Hóa Sinh &amp; Đánh số Auto</span>
             </div>
 
             {/* Nút 3D Nhân Bản Đề Tương Đương Bằng AI Gemini */}
@@ -1998,6 +2148,101 @@ export default function App() {
                             }}
                             className="w-full px-3.5 py-2 text-left text-slate-900 bg-white border-2 border-sky-200 rounded-xl focus:outline-none focus:border-blue-600 leading-relaxed shadow-inner"
                           />
+                        </div>
+
+                        {/* ================= CÔNG THỨC TOÁN / LÝ / HÓA / SINH NHẬN DIỆN ĐƯỢC ================= */}
+                        {q.hasFormula && (
+                          <div className="mb-3 px-3 py-2 rounded-xl bg-indigo-50/90 border border-indigo-200 flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-950">
+                            <div className="flex items-center gap-1.5 font-medium">
+                              <Sigma className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <span className="font-bold">Công thức toán / khoa học:</span>
+                              <span className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200 font-bold text-indigo-700">
+                                {q.formulaLatex || 'Đã chuẩn hóa biểu thức OMML'}
+                              </span>
+                            </div>
+                            <span className="text-[11px] font-bold text-indigo-600 bg-white/70 px-2 py-0.5 rounded">
+                              Tự động xuất Word OMML không lỗi
+                            </span>
+                          </div>
+                        )}
+
+                        {/* ================= HÌNH ẢNH / SƠ ĐỒ ĐÍNH KÈM CỦA CÂU HỎI ================= */}
+                        <div className="mb-3 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
+                              <ImageIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span>Hình ảnh, Sơ đồ, Đồ thị câu hỏi ({q.images?.length || 0}):</span>
+                            </label>
+
+                            <div>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                id={`upload-img-${q.id}`}
+                                onChange={(e) => handleAddImageToQuestion(q.id, e)}
+                                className="hidden"
+                              />
+                              <label
+                                htmlFor={`upload-img-${q.id}`}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white btn-3d-cyan flex items-center gap-1 cursor-pointer transition-transform hover:scale-102"
+                                title="Thêm sơ đồ / hình ảnh minh họa cho câu hỏi này"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Thêm ảnh / sơ đồ</span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {q.images && q.images.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                              {q.images.map((img) => (
+                                <div
+                                  key={img.id}
+                                  className="relative group p-2 rounded-xl bg-white border-2 border-sky-200 shadow-xs flex flex-col items-center"
+                                >
+                                  <img
+                                    src={img.dataUrl}
+                                    alt={img.caption || `Hình câu ${q.displayIndex}`}
+                                    className="max-h-36 object-contain rounded-lg border border-slate-100 cursor-pointer transition-transform group-hover:scale-102"
+                                    onClick={() =>
+                                      setPreviewModalImage({
+                                        src: img.dataUrl,
+                                        caption: img.caption || `Câu ${q.displayIndex}`,
+                                      })
+                                    }
+                                  />
+                                  <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[11px] text-slate-500 font-mono">
+                                    <span className="truncate max-w-[120px]" title={img.fileName}>
+                                      {img.fileName || 'diagram.png'}
+                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setPreviewModalImage({
+                                            src: img.dataUrl,
+                                            caption: img.caption || `Câu ${q.displayIndex}`,
+                                          })
+                                        }
+                                        className="p-1 hover:text-blue-600 rounded cursor-pointer"
+                                        title="Phóng to xem chi tiết"
+                                      >
+                                        <Maximize2 className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveImageFromQuestion(q.id, img.id)}
+                                        className="p-1 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
+                                        title="Xóa hình ảnh này"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* ================= NỘI DUNG PHẦN I: 4 PHƯƠNG ÁN A, B, C, D ================= */}
@@ -3247,6 +3492,49 @@ export default function App() {
               >
                 <Bot className="w-4 h-4" />
                 <span>Chạy AI Tạo Đề Tương Đương Khôn Như Người Thật</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Phóng To Sơ Đồ / Hình Ảnh Minh Họa */}
+      {previewModalImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setPreviewModalImage(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-3xl p-4 shadow-2xl overflow-hidden flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between pb-3 border-b border-slate-200">
+              <span className="text-sm font-black text-sky-950 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4 text-blue-600" />
+                <span>{previewModalImage.caption || 'Xem Chi Tiết Sơ Đồ / Hình Ảnh'}</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewModalImage(null)}
+                className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-auto max-h-[75vh] flex items-center justify-center">
+              <img
+                src={previewModalImage.src}
+                alt={previewModalImage.caption || 'Hình ảnh phóng to'}
+                className="max-h-[70vh] max-w-full object-contain rounded-xl shadow-md"
+              />
+            </div>
+            <div className="w-full pt-2 border-t border-slate-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setPreviewModalImage(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white btn-3d-primary"
+              >
+                Đóng Cửa Sổ
               </button>
             </div>
           </div>
