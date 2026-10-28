@@ -1081,18 +1081,27 @@ export async function generateIsomorphicExamClone(
   const { sanitizedQuestions, redactedCount } =
     sanitizeExamQuestionsForZeroTrace(sourceQuestions, sensitiveTermsToRedact);
 
+  const storedUserApiKey =
+    (typeof window !== 'undefined' &&
+      (localStorage.getItem('gemini_api_key') ||
+        localStorage.getItem('GEMINI_API_KEY'))) ||
+    '';
+
+  // 1. Thử gửi yêu cầu đến backend /api/ai/clone-exam (nếu có server chạy)
   try {
     const response = await fetch('/api/ai/clone-exam', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'no-store',
+        ...(storedUserApiKey ? { 'x-gemini-api-key': storedUserApiKey.trim() } : {}),
       },
       body: JSON.stringify({
         questions: sanitizedQuestions,
         modelTier,
         subjectName,
         customInstruction,
+        userApiKey: storedUserApiKey.trim() || undefined,
       }),
     });
 
@@ -1201,7 +1210,146 @@ export async function generateIsomorphicExamClone(
       }
     }
   } catch {
-    // Fallback êm ái sang Động cơ Chuyên gia Nội bộ khi không có kết nối backend
+    // Không có backend hoặc chạy trên GitHub Pages tĩnh
+  }
+
+  // 2. Chạy trực tiếp từ trình duyệt đến Google Gemini API (dành cho GitHub Pages khi giáo viên nhập Key)
+  if (storedUserApiKey && storedUserApiKey.trim().length > 10) {
+    try {
+      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${storedUserApiKey.trim()}`;
+      const directPrompt = `Bạn là Chuyên gia Ra đề thi Tốt nghiệp THPT (Môn: ${subjectName || 'Sinh học'}).
+Nhiệm vụ: Tạo một BỘ ĐỀ THI TƯƠNG ĐƯƠNG (Isomorphic Clone) từ bộ câu hỏi gốc dưới đây.
+QUY TẮC:
+1. Viết trực tiếp vào câu hỏi, không thêm cụm từ mở đầu sáo rỗng.
+2. Đảo chiều tư duy đúng/sai hoặc hoán đổi trạng thái đối lập.
+3. Thay đổi số liệu và tính lại đáp án chính xác 100%.
+4. Giữ nguyên 100% cấu trúc 3 phần (PART_1, PART_2, PART_3).
+${customInstruction ? `Chỉ thị bổ sung từ Giáo viên: ${customInstruction}` : ''}
+
+Trả về DUY NHẤT một mảng JSON các câu hỏi có cấu trúc id, part, stemText, explanation, bloomLevel, learningOutcome, options (cho PART_1 gồm text, isCorrect), subItems (cho PART_2 gồm text, isTrue), shortAnswer (cho PART_3):
+${JSON.stringify(sanitizedQuestions, null, 2)}`;
+
+      const directRes = await fetch(directUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: directPrompt }] }],
+          generationConfig: { responseMimeType: 'application/json' },
+        }),
+      });
+
+      if (directRes.ok) {
+        const directData = await directRes.json();
+        const rawJsonText = directData?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawJsonText) {
+          const cleanJson = rawJsonText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const directNormalized: ExamQuestion[] = parsed.map(
+              (item: Partial<ExamQuestion>, idx: number) => {
+                const orig = sourceQuestions[idx] || sourceQuestions[0];
+                const part = (item.part as ExamQuestion['part']) || orig.part;
+                const qId = `ai-q-${idx}-${Date.now()}`;
+
+                const rawOptions =
+                  part === 'PART_1'
+                    ? (item.options || orig.options || []).map((opt, oIdx) => {
+                        const label = (['A', 'B', 'C', 'D'][oIdx] || 'A') as
+                          | 'A'
+                          | 'B'
+                          | 'C'
+                          | 'D';
+                        const isCorrect = Boolean(opt.isCorrect);
+                        return {
+                          id: `${qId}-opt-${label}`,
+                          originalLabel: label,
+                          currentLabel: label,
+                          text: opt.text || '',
+                          isUnderline: isCorrect,
+                          isRed: isCorrect,
+                          isCorrect,
+                        };
+                      })
+                    : undefined;
+
+                const rawSubs =
+                  part === 'PART_2'
+                    ? (item.subItems || orig.subItems || []).map((sub, sIdx) => {
+                        const label = (['a', 'b', 'c', 'd'][sIdx] || 'a') as
+                          | 'a'
+                          | 'b'
+                          | 'c'
+                          | 'd';
+                        const isTrue = Boolean(sub.isTrue);
+                        return {
+                          id: `${qId}-sub-${label}`,
+                          originalLabel: label,
+                          currentLabel: label,
+                          text: sub.text || '',
+                          isUnderline: isTrue,
+                          isRed: isTrue,
+                          isTrue,
+                        };
+                      })
+                    : undefined;
+
+                const candidateQ: ExamQuestion = {
+                  id: qId,
+                  part,
+                  originalIndex: idx + 1,
+                  displayIndex: orig.displayIndex,
+                  stemText: item.stemText || orig.stemText,
+                  hasFormula: orig.hasFormula,
+                  formulaLatex: orig.formulaLatex,
+                  hasImage: orig.hasImage,
+                  images: orig.images,
+                  isAiCloned: true,
+                  explanation:
+                    item.explanation ||
+                    orig.explanation ||
+                    'Lời giải được tạo trực tiếp từ Google Gemini API.',
+                  bloomLevel:
+                    (item.bloomLevel as BloomLevel) ||
+                    orig.bloomLevel ||
+                    'THONG_HIEU',
+                  learningOutcome:
+                    item.learningOutcome ||
+                    orig.learningOutcome ||
+                    'Đảm bảo chuẩn kiến thức kỹ năng GDPT 2018.',
+                  options: rawOptions,
+                  computedLayout: rawOptions
+                    ? computeAutoLayoutForOptions(rawOptions)
+                    : undefined,
+                  subItems: rawSubs,
+                  shortAnswer:
+                    part === 'PART_3'
+                      ? String(item.shortAnswer ?? orig.shortAnswer ?? '1')
+                      : undefined,
+                  shortAnswerDetectedBy: part === 'PART_3' ? 'MANUAL' : undefined,
+                };
+
+                if (part === 'PART_1') {
+                  return enforceStrictFourOptionsPart1(candidateQ);
+                }
+                if (part === 'PART_2') {
+                  return enforceStrictFourSubItemsPart2(candidateQ);
+                }
+                return candidateQ;
+              }
+            );
+
+            return {
+              questions: directNormalized,
+              engineUsed: 'Google Gemini API Trực Tiếp (GitHub Pages / API Key Cá Nhân) · Zero-Trace',
+              redactedCount,
+              zeroTraceVerified: true,
+            };
+          }
+        }
+      }
+    } catch {
+      // Fallback sang chế độ tự hành nội bộ
+    }
   }
 
   const fallbackCloned = buildAutonomousIsomorphicClone(

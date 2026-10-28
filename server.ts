@@ -45,17 +45,20 @@ async function startServer() {
   });
 
   // 0. API Kiểm tra trạng thái kết nối Cụm Đa Luồng AI & Bảo mật Zero-Trace
-  app.get('/api/ai/status', (_req, res) => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    const hasServerKey = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
+  app.get('/api/ai/status', (req, res) => {
+    const clientKey = (req.query?.userApiKey || req.headers['x-gemini-api-key']) as string | undefined;
+    const apiKey = (clientKey && clientKey.trim()) || process.env.GEMINI_API_KEY;
+    const hasKey = Boolean(apiKey && apiKey !== 'MY_GEMINI_API_KEY');
     res.json({
       connected: true,
-      mode: hasServerKey
-        ? 'MULTI_NODE_GEMINI_CLUSTER_ACTIVE'
+      mode: hasKey
+        ? (clientKey ? 'USER_PERSONAL_GEMINI_API_KEY_ACTIVE' : 'MULTI_NODE_GEMINI_CLUSTER_ACTIVE')
         : 'AUTONOMOUS_EXPERT_CLUSTER_ACTIVE',
       privacyShield: 'ZERO_TRACE_AUTO_PURGE_ENABLED',
-      message: hasServerKey
-        ? 'Đã kích hoạt Cụm Đa Kênh Gemini (Settings > Secrets) kết hợp Chế độ Ẩn danh & Tự động xóa sạch dấu vết ngay sau khi tải đề.'
+      message: hasKey
+        ? (clientKey
+            ? 'Đã kích hoạt Gemini API với API Key cá nhân của Thầy/Cô (Zero-Trace).'
+            : 'Đã kích hoạt Cụm Đa Kênh Gemini (Settings > Secrets) kết hợp Chế độ Ẩn danh & Tự động xóa sạch dấu vết ngay sau khi tải đề.')
         : 'Đã kích hoạt Cụm Đa Luồng Chuyên Gia Tự Hành 100% (Settings > Secrets) kèm Chế độ Ẩn danh Trường/Kỳ thi & Tự xóa dấu vết sau khi tải.',
     });
   });
@@ -84,7 +87,8 @@ async function startServer() {
   // 1. API Tạo Đề Tương Đương Đề Gốc Với Trí Tuệ Chuyên Gia (Human-Expert Isomorphic Exam Cloning)
   app.post('/api/ai/clone-exam', async (req, res) => {
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const clientKey = (req.body?.userApiKey || req.headers['x-gemini-api-key']) as string | undefined;
+      const apiKey = (clientKey && clientKey.trim()) || process.env.GEMINI_API_KEY;
       if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         res.status(503).json({
           error: 'MISSING_SERVER_KEY',

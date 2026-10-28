@@ -20,6 +20,7 @@ import {
   FileText,
   GraduationCap,
   Image as ImageIcon,
+  Key,
   Layers,
   ListRestart,
   Maximize2,
@@ -92,6 +93,7 @@ import {
   triggerZeroTracePurgeOnDownload,
 } from './utils/aiExamCloner';
 import { UserGuideModal } from './components/UserGuideModal';
+import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 
 export default function App() {
   // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề chuẩn Sinh học 2025 tỉ lệ 18 - 4 - 6 = 28 câu sạch lỗi 100%)
@@ -195,6 +197,7 @@ export default function App() {
 
   // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [featureRegistry, setFeatureRegistry] = useState<FeatureReleaseItem[]>(
     DYNAMIC_FEATURE_REGISTRY
   );
@@ -1216,6 +1219,16 @@ export default function App() {
               >
                 <ShieldCheck className="w-4 h-4 shrink-0" />
                 <span>Bảo Mật AI</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsApiKeyModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-amber flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-xs"
+                title="Cấu hình Google Gemini API Key để chạy trực tiếp trên GitHub Pages không cần backend"
+              >
+                <Key className="w-4 h-4 shrink-0" />
+                <span>⚙ Cấu Hình API Key</span>
               </button>
 
               {/* Dropdown chọn 4 mô hình Gemini */}
@@ -2450,10 +2463,21 @@ export default function App() {
                     </p>
                   </div>
 
-                  <span className="px-3 py-1.5 rounded-xl bg-emerald-100 border-2 border-emerald-400 text-emerald-950 text-xs font-extrabold flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                    <span>Bảo mật tuyệt đối · Tự hành 100%</span>
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsApiKeyModalOpen(true)}
+                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm transition-transform active:scale-95"
+                      title="Cấu hình Google Gemini API Key để chạy trực tiếp trên GitHub Pages"
+                    >
+                      <Key className="w-4 h-4 text-slate-950 shrink-0" />
+                      <span>⚙ Cấu Hình Gemini API Key</span>
+                    </button>
+                    <span className="px-3 py-1.5 rounded-xl bg-emerald-100 border-2 border-emerald-400 text-emerald-950 text-xs font-extrabold flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                      <span>Bảo mật tuyệt đối · Tự hành 100%</span>
+                    </span>
+                  </div>
                 </div>
 
                 {/* Bộ chọn 4 mô hình AI Gemini thiết kế chuẩn theo hình ảnh đính kèm */}
@@ -3559,6 +3583,18 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-sky-200">
               <button
                 type="button"
+                onClick={() => {
+                  setIsAiSecurityModalOpen(false);
+                  setIsApiKeyModalOpen(true);
+                }}
+                className="px-4 py-2.5 rounded-xl text-xs font-black text-slate-900 bg-amber-400 hover:bg-amber-500 flex items-center gap-2 cursor-pointer shadow-xs"
+              >
+                <Key className="w-4 h-4 text-slate-950" />
+                <span>⚙ Cấu Hình Google Gemini API Key</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleVerifyAiSecuritySession}
                 disabled={isProcessing}
                 className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-2"
@@ -3627,6 +3663,19 @@ export default function App() {
       )}
 
       {/* Modal Hướng dẫn sử dụng chi tiết & Tự động cập nhật khi nâng cấp tính năng */}
+      <GeminiApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onKeySaved={(newKey) => {
+          setStatusBanner({
+            type: 'SUCCESS',
+            text: newKey
+              ? 'Đã cấu hình thành công Google Gemini API Key vào trình duyệt!'
+              : 'Đã xóa API Key. Hệ thống chuyển sang chế độ tự hành dự phòng thông minh.',
+          });
+        }}
+      />
+
       <UserGuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
