@@ -466,73 +466,85 @@
 
 
 
-/* ================= CHUẨN HÓA ĐỒNG NHẤT CỠ CHỮ 12PT TOÀN TRANG WEB ================= */
-.text-12pt-uniform,
-.text-12pt-uniform button,
-.text-12pt-uniform input,
-.text-12pt-uniform select,
-.text-12pt-uniform textarea,
-.text-12pt-uniform label,
-.text-12pt-uniform h1,
-.text-12pt-uniform h2,
-.text-12pt-uniform h3,
-.text-12pt-uniform span {
-  font-size: 12pt !important;
-  line-height: 1.35 !important;
+
+/* ================= CỠ CHỮ NÚT BẤM TỰ ĐỘNG CO GIÃN HỢP LÝ & KHÔNG BỊ VỠ KHUNG ================= */
+.btn-auto-scale {
+  font-size: clamp(11px, 0.8vw, 13.5px);
+  line-height: 1.25;
 }
 
-/* Các màu nút 3D bổ sung để mỗi nút chức năng mang 1 sắc thái riêng biệt */
+/* Các màu nút 3D bổ sung để mỗi nút chức năng mang 1 sắc thái riêng biệt, đầy đủ khung nổi 3D */
 .btn-3d-teal {
   background: linear-gradient(180deg, #14B8A6 0%, #0F766E 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 #115E59, 0 5px 10px rgba(15, 118, 110, 0.3);
+  box-shadow: 0 4px 0 #115E59, 0 6px 12px rgba(15, 118, 110, 0.3);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .btn-3d-teal:hover:not(:disabled) {
   background: linear-gradient(180deg, #2DD4BF 0%, #0D9488 100%);
   transform: translateY(-1px);
 }
+.btn-3d-teal:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #115E59;
+}
 
 .btn-3d-fuchsia {
   background: linear-gradient(180deg, #D946EF 0%, #A21CAF 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 #701A75, 0 5px 10px rgba(162, 28, 175, 0.3);
+  box-shadow: 0 4px 0 #701A75, 0 6px 12px rgba(162, 28, 175, 0.3);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .btn-3d-fuchsia:hover:not(:disabled) {
   background: linear-gradient(180deg, #E879F9 0%, #C026D3 100%);
   transform: translateY(-1px);
 }
+.btn-3d-fuchsia:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #701A75;
+}
 
 .btn-3d-slate {
   background: linear-gradient(180deg, #334155 0%, #0F172A 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 3px 0 #020617, 0 5px 10px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 4px 0 #020617, 0 6px 12px rgba(15, 23, 42, 0.35);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .btn-3d-slate:hover:not(:disabled) {
   background: linear-gradient(180deg, #475569 0%, #1E293B 100%);
   transform: translateY(-1px);
 }
+.btn-3d-slate:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #020617;
+}
 
 .btn-3d-sky {
   background: linear-gradient(180deg, #0EA5E9 0%, #0369A1 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 #0C4A6E, 0 5px 10px rgba(3, 105, 161, 0.3);
+  box-shadow: 0 4px 0 #0C4A6E, 0 6px 12px rgba(3, 105, 161, 0.3);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .btn-3d-sky:hover:not(:disabled) {
   background: linear-gradient(180deg, #38BDF8 0%, #0284C7 100%);
   transform: translateY(-1px);
 }
+.btn-3d-sky:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #0C4A6E;
+}
 
 .btn-3d-violet {
   background: linear-gradient(180deg, #7C3AED 0%, #4C1D95 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: 0 3px 0 #2E1065, 0 5px 10px rgba(76, 29, 149, 0.3);
+  box-shadow: 0 4px 0 #2E1065, 0 6px 12px rgba(76, 29, 149, 0.3);
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .btn-3d-violet:hover:not(:disabled) {
   background: linear-gradient(180deg, #8B5CF6 0%, #5B21B6 100%);
   transform: translateY(-1px);
+}
+.btn-3d-violet:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #2E1065;
 }
