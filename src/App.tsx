@@ -3655,9 +3655,14 @@ export default function App() {
 
           {/* Cụm Phải: Dòng chữ liên hệ & góp ý sản phẩm của tác giả Hồ Tấn Khải (Đứng yên, rõ nét) */}
           <div className="text-center lg:text-right">
-            <p className="text-xs sm:text-[13px] font-bold tracking-wide text-amber-300 leading-snug">
-              Mọi chi tiết liên hệ và góp ý sản phẩm xin liên hệ tác giả: <span className="text-white font-black">Hồ Tấn Khải Trường THPT Mang Thít</span>. Email: <a href="mailto:khaibcmt@gmail.com" className="text-sky-300 underline hover:text-white font-mono">khaibcmt@gmail.com</a> và Nhắn tin qua Zalo: <span className="text-emerald-300 font-mono font-black">0939580982</span>. Xin chân thành cám ơn góp ý của quí đồng nghiệp để sản phẩm ngày càng tốt hơn !!!
-            </p>
+            <div className="space-y-0.5 leading-snug">
+              <p className="text-xs sm:text-[13px] font-bold tracking-wide text-amber-300">
+                Mọi chi tiết liên hệ và góp ý sản phẩm xin liên hệ tác giả: <span className="text-white font-black">Hồ Tấn Khải Trường THPT Mang Thít</span>. Email: <a href="mailto:khaibcmt@gmail.com" className="text-sky-300 underline hover:text-white font-mono">khaibcmt@gmail.com</a> và Nhắn tin qua Zalo: <span className="text-emerald-300 font-mono font-black">0939580982</span>.
+              </p>
+              <p className="text-xs sm:text-[13px] font-extrabold tracking-wide text-cyan-300">
+                Xin chân thành cám ơn góp ý của quí đồng nghiệp để sản phẩm ngày càng tốt hơn !!!
+              </p>
+            </div>
           </div>
         </div>
       </footer>
