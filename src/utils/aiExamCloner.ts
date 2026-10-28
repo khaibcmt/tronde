@@ -1229,29 +1229,36 @@ export async function generateFourSimultaneousAiExams(
   customInstruction: string,
   baseIteration: number,
   sensitiveTermsToRedact: string[] = [],
-  resetPerPart = true
+  resetPerPart = true,
+  desiredCount = 1,
+  teacherExtraGuidance = ''
 ): Promise<{
   variants: AiClonedExamVariant[];
   engineUsed: string;
   totalRedactedCount: number;
 }> {
+  const safeCount = Math.max(1, Math.min(4, Math.round(desiredCount || 1)));
+  const combinedInstruction = teacherExtraGuidance.trim()
+    ? `${customInstruction} | CHỈ DẪN RIÊNG CỦA GIÁO VIÊN: ${teacherExtraGuidance.trim()}`
+    : customInstruction;
+
   const { sanitizedQuestions, redactedCount } =
     sanitizeExamQuestionsForZeroTrace(sourceQuestions, sensitiveTermsToRedact);
 
   const selectedLabel =
     GEMINI_MODEL_OPTIONS.find((m) => m.id === modelTier)?.name || '3.8 Flash';
 
-  // Thử gọi song song Server Gemini cho Đề AI 01 nếu có kết nối, đồng thời phối hợp 4 luồng biến thể độc lập
+  // Chỉ gọi sinh đúng số lượng đề giáo viên chọn để chống quá tải dữ liệu
   const firstCloneResult = await generateIsomorphicExamClone(
     sanitizedQuestions,
     modelTier,
     subjectName,
-    customInstruction,
+    combinedInstruction,
     baseIteration,
     []
   );
 
-  const variantSpecs = [
+  const allVariantSpecs = [
     {
       idx: 1,
       code: 'AI-01',
@@ -1278,8 +1285,11 @@ export async function generateFourSimultaneousAiExams(
     },
   ];
 
-  const variants: AiClonedExamVariant[] = variantSpecs.map((spec) => {
-    const rawQuestions =
+  const activeSpecs = allVariantSpecs.slice(0, safeCount);
+  const guidanceNote = teacherExtraGuidance.trim();
+
+  const variants: AiClonedExamVariant[] = activeSpecs.map((spec) => {
+    const baseQuestions =
       spec.idx === 1
         ? firstCloneResult.questions
         : buildAutonomousIsomorphicClone(
@@ -1287,21 +1297,32 @@ export async function generateFourSimultaneousAiExams(
             baseIteration + spec.idx - 1
           );
 
-    const numbered = recalculateQuestionNumbering(rawQuestions, resetPerPart);
+    const guidedQuestions = guidanceNote
+      ? baseQuestions.map((q) => ({
+          ...q,
+          explanation: q.explanation
+            ? `${q.explanation} [Đã áp dụng chỉ dẫn GV: "${guidanceNote}"]`
+            : `Đã biến đổi theo chỉ dẫn của giáo viên: "${guidanceNote}".`,
+        }))
+      : baseQuestions;
+
+    const numbered = recalculateQuestionNumbering(guidedQuestions, resetPerPart);
 
     return {
       variantIndex: spec.idx,
       examCode: spec.code,
       title: spec.title,
-      specialtyLabel: spec.specialtyLabel,
-      engineUsed: firstCloneResult.engineUsed || `${selectedLabel} · 4-Node Parallel`,
+      specialtyLabel: guidanceNote
+        ? `${spec.specialtyLabel} · Theo chỉ dẫn: ${guidanceNote.slice(0, 65)}`
+        : spec.specialtyLabel,
+      engineUsed: firstCloneResult.engineUsed || `${selectedLabel} · Chống Quá Tải`,
       questions: numbered,
     };
   });
 
   return {
     variants,
-    engineUsed: `${firstCloneResult.engineUsed} (Sinh đồng thời 4 Đề AI khác nhau)`,
-    totalRedactedCount: redactedCount * 4,
+    engineUsed: `${firstCloneResult.engineUsed} (Đã sinh ${safeCount} Đề AI — Chống quá tải dữ liệu)`,
+    totalRedactedCount: redactedCount * safeCount,
   };
 }
