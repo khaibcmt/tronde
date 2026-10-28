@@ -1109,68 +1109,78 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col text-slate-900 pb-24">
-      {/* ================= KHỐI CỐ ĐỊNH TRÊN CÙNG (4.1 TIÊU ĐỀ LOGO CHỨC NĂNG + 4.2 THÔNG TIN & CẤU HÌNH TRỘN ĐỀ) ================= */}
-      <div className="sticky top-0 z-30 bg-sky-50/95 backdrop-blur-md border-b-2 border-sky-300 shadow-lg">
-        {/* ================= 4.1. TIÊU ĐỀ LOGO & CÁC CHỨC NĂNG CHÍNH ================= */}
-        <header className="max-w-[1440px] w-full mx-auto flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-2.5 border-b border-sky-200 bg-white/95">
-          {/* Logo 3D + Tên trang web + Tác giả */}
+    <div className="min-h-screen flex flex-col text-slate-900 pb-14 text-12pt-uniform">
+      {/* ================= KHỐI ĐIỀU KHIỂN CỐ ĐỊNH TRÊN CÙNG (BỐ CỤC CHUYÊN GIA: GỌN, THẲNG HÀNG, ĐỒNG NHẤT 12PT, ƯU TIÊN KHÔNG GIAN XEM & SỬA ĐỀ) ================= */}
+      <div className="sticky top-0 z-30 bg-sky-50/95 backdrop-blur-md border-b-2 border-sky-300 shadow-md">
+        {/* ================= TẦNG 1: TIÊU ĐỀ LOGO + TÁC GIẢ (12PT) + 4 CHẾ ĐỘ CHÍNH + CÔNG CỤ HỆ THỐNG (TRÊN CÙNG 1 HÀNG NGANG) ================= */}
+        <header className="max-w-[1440px] w-full mx-auto flex items-center justify-between gap-2 px-3 sm:px-5 py-1.5 border-b border-sky-200 bg-white/95 overflow-x-auto no-scrollbar">
+          {/* Cụm Trái: Logo 3D + Tên trang web + Tác giả (Đồng nhất cỡ chữ 12pt, gọn trên 1 khối ngang) */}
           <a
             href="#top"
-            className="flex items-center gap-3 shrink-0 group focus:outline-none"
+            className="flex items-center gap-2 shrink-0 group focus:outline-none"
           >
-            <div className="w-10 h-10 rounded-xl logo-3d-badge flex items-center justify-center text-white shrink-0 transition-transform group-hover:scale-105">
-              <GraduationCap className="w-5 h-5 drop-shadow" />
+            <div className="w-8 h-8 rounded-xl logo-3d-badge flex items-center justify-center text-white shrink-0 transition-transform group-hover:scale-105">
+              <GraduationCap className="w-4 h-4 drop-shadow" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-xl sm:text-2xl font-black tracking-tight animate-edumix-gradient whitespace-nowrap leading-none">
-                EduMix 2025
-              </span>
-              <span className="text-[11px] font-extrabold text-sky-900 tracking-wide whitespace-nowrap mt-0.5">
-                Tác giả: Hồ Tấn Khải — Trường THPT Mang Thít
+            <div className="flex flex-col leading-tight">
+              <div className="flex items-center gap-2">
+                <span className="font-black tracking-tight animate-edumix-gradient whitespace-nowrap" style={{ fontSize: '12pt' }}>
+                  EduMix 2025
+                </span>
+                <span className="text-slate-300 hidden xl:inline">|</span>
+                <span className="font-bold text-sky-900 whitespace-nowrap hidden xl:inline" style={{ fontSize: '12pt' }}>
+                  Tác giả: Hồ Tấn Khải — THPT Mang Thít
+                </span>
+              </div>
+              <span className="font-bold text-sky-900 whitespace-nowrap xl:hidden" style={{ fontSize: '12pt' }}>
+                Hồ Tấn Khải — THPT Mang Thít
               </span>
             </div>
           </a>
 
-          {/* Các chức năng chính (4 Chế độ trung tâm) */}
-          <nav className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
+          {/* Cụm Giữa: 4 Chế độ chức năng chính (Mỗi nút 1 màu riêng biệt, cỡ chữ 12pt) */}
+          <nav className="flex items-center gap-1.5 shrink-0">
             <button
+              type="button"
               onClick={() => setActiveRightTab('LIVE_EDITOR')}
-              className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer btn-3d-primary ${
                 activeRightTab === 'LIVE_EDITOR'
-                  ? 'btn-3d-primary ring-2 ring-blue-300'
-                  : 'btn-3d-cyan opacity-90 hover:opacity-100'
+                  ? 'ring-2 ring-blue-300 brightness-105'
+                  : 'opacity-90 hover:opacity-100'
               }`}
             >
-              <FileText className="w-3.5 h-3.5" />
+              <FileText className="w-3.5 h-3.5 shrink-0" />
               <span>1. Biên Tập Đề Gốc</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveRightTab('AI_CLONE_STUDIO')}
-              className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer btn-3d-purple ${
                 activeRightTab === 'AI_CLONE_STUDIO'
-                  ? 'btn-3d-purple ring-2 ring-purple-300'
-                  : 'btn-3d-indigo opacity-90 hover:opacity-100'
+                  ? 'ring-2 ring-purple-300 brightness-105'
+                  : 'opacity-90 hover:opacity-100'
               }`}
             >
-              <Bot className="w-3.5 h-3.5" />
-              <span>2. AI Tạo Đề Tương Đương</span>
+              <Bot className="w-3.5 h-3.5 shrink-0" />
+              <span>2. AI Tạo Đề</span>
             </button>
 
             <button
+              type="button"
               onClick={() => setActiveRightTab('BLOOM_MATRIX')}
-              className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer btn-3d-orange ${
                 activeRightTab === 'BLOOM_MATRIX'
-                  ? 'btn-3d-amber ring-2 ring-amber-300'
-                  : 'btn-3d-orange opacity-90 hover:opacity-100'
+                  ? 'ring-2 ring-amber-300 brightness-105'
+                  : 'opacity-90 hover:opacity-100'
               }`}
             >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span>3. Ma Trận &amp; Đặc Tả</span>
+              <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+              <span>3. Ma Trận</span>
             </button>
 
             <button
+              type="button"
               onClick={() => {
                 if (shuffledVariants.length > 0) {
                   setActiveRightTab('SHUFFLED_PREVIEW');
@@ -1178,27 +1188,27 @@ export default function App() {
                   handleRunShuffle();
                 }
               }}
-              className={`px-3 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`px-2.5 py-1 rounded-xl font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer btn-3d-emerald ${
                 activeRightTab === 'SHUFFLED_PREVIEW'
-                  ? 'btn-3d-rose ring-2 ring-rose-300'
-                  : 'btn-3d-emerald opacity-90 hover:opacity-100'
+                  ? 'ring-2 ring-emerald-300 brightness-105'
+                  : 'opacity-90 hover:opacity-100'
               }`}
             >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>4. Đáp Án Chung &amp; Mã QR</span>
+              <QrCode className="w-3.5 h-3.5 shrink-0" />
+              <span>4. Đáp Án &amp; QR</span>
             </button>
           </nav>
 
-          {/* Cụm nút Hệ thống: Bảo mật AI + Chọn Mô hình + Hướng dẫn + Thu gọn thanh cấu hình */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Cụm Phải: Nút Hệ thống (Bảo Mật AI + Chọn Mô hình + Hướng Dẫn + Thu Gọn) nằm thẳng hàng */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => setIsAiSecurityModalOpen(true)}
-              className="px-3 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-emerald flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+              className="px-2.5 py-1 rounded-xl font-extrabold text-white btn-3d-teal flex items-center gap-1 whitespace-nowrap cursor-pointer"
               title="Cấu hình bảo mật AI & cô lập dữ liệu đề thi"
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Bảo Mật AI</span>
+              <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+              <span>Bảo Mật AI</span>
             </button>
 
             {/* Dropdown chọn 4 mô hình Gemini */}
@@ -1206,16 +1216,16 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setIsModelDropdownOpen((prev) => !prev)}
-                className="px-3 py-2 rounded-xl text-xs font-extrabold text-white bg-slate-900 hover:bg-slate-800 border border-slate-700 shadow-sm flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+                className="px-2.5 py-1 rounded-xl font-extrabold text-white btn-3d-slate flex items-center gap-1 whitespace-nowrap cursor-pointer"
               >
-                <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                <Cpu className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>{currentModelInfo.name}</span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
+                <ChevronDown className="w-3.5 h-3.5 text-slate-300 shrink-0" />
               </button>
 
               {isModelDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl bg-[#18191C] text-white border border-slate-700 shadow-2xl p-2 z-50 space-y-1">
-                  <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                <div className="absolute right-0 mt-1.5 w-64 rounded-2xl bg-[#18191C] text-white border border-slate-700 shadow-2xl p-2 z-50 space-y-1">
+                  <div className="px-3 py-1 font-bold text-slate-400 border-b border-slate-800 flex items-center justify-between">
                     <span>MÔ HÌNH AI GEMINI</span>
                     <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
@@ -1229,7 +1239,7 @@ export default function App() {
                           setSelectedModelTier(m.id);
                           setIsModelDropdownOpen(false);
                         }}
-                        className={`w-full text-left px-3.5 py-2 rounded-xl flex items-center gap-3 transition-all cursor-pointer ${
+                        className={`w-full text-left px-3 py-1.5 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer ${
                           isSelected
                             ? 'bg-[#26272B] border border-slate-400 shadow-inner'
                             : 'hover:bg-white/5 border border-transparent'
@@ -1239,10 +1249,10 @@ export default function App() {
                           {isSelected && <Check className="w-4 h-4 text-white" />}
                         </div>
                         <div>
-                          <div className="text-sm font-bold text-white leading-tight">
+                          <div className="font-bold text-white leading-tight">
                             {m.name}
                           </div>
-                          <div className="text-xs text-slate-400 mt-0.5">
+                          <div className="text-slate-400 mt-0.5">
                             {m.subtitle}
                           </div>
                         </div>
@@ -1254,29 +1264,28 @@ export default function App() {
             </div>
 
             <button
+              type="button"
               onClick={() => setIsGuideOpen(true)}
-              className="px-3 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-purple flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
+              className="px-2.5 py-1 rounded-xl font-extrabold text-white btn-3d-fuchsia flex items-center gap-1 whitespace-nowrap cursor-pointer"
             >
-              <BookOpen className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Hướng Dẫn</span>
+              <BookOpen className="w-3.5 h-3.5 shrink-0" />
+              <span>Hướng Dẫn</span>
             </button>
 
             <button
               type="button"
               onClick={() => setIsConfigCollapsed((prev) => !prev)}
-              className="px-2.5 py-2 rounded-xl text-xs font-extrabold text-sky-950 bg-sky-100 hover:bg-sky-200 border border-sky-300 flex items-center gap-1 whitespace-nowrap cursor-pointer"
-              title="Thu gọn hoặc mở rộng bảng thông tin & tùy chỉnh đề khi kéo nội dung"
+              className="px-2.5 py-1 rounded-xl font-extrabold text-white btn-3d-cyan flex items-center gap-1 whitespace-nowrap cursor-pointer"
+              title="Thu gọn hoặc mở rộng khung thông tin hành chính để ưu tiên diện tích xem và sửa đề"
             >
-              <Sliders className="w-3.5 h-3.5 text-blue-700" />
-              <span className="hidden md:inline">
-                {isConfigCollapsed ? 'Mở Cấu Hình' : 'Thu Gọn'}
-              </span>
+              <Sliders className="w-3.5 h-3.5 shrink-0" />
+              <span>{isConfigCollapsed ? 'Mở Thông Tin' : 'Thu Gọn'}</span>
             </button>
           </div>
         </header>
 
-        {/* ================= 4.2. KHỐI THÔNG TIN ĐỀ CẦN TRỘN, CÁCH TRỘN ĐỀ, CẤU TRÚC 3 PHẦN & THANH CÔNG CỤ (KHÓA CỐ ĐỊNH) ================= */}
-        <div className="max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-2.5 space-y-2.5">
+        {/* ================= TẦNG 2 & 3: KHỐI THÔNG TIN ĐỀ CẦN TRỘN + THANH CÔNG CỤ SOẠN THẢO HỢP NHẤT ================= */}
+        <div className="max-w-[1440px] w-full mx-auto px-3 sm:px-5 py-1.5 space-y-1.5">
           {/* Input ẩn phục vụ tải tệp Word / PDF */}
           <input
             ref={fileInputRef}
@@ -1286,14 +1295,13 @@ export default function App() {
             className="hidden"
           />
 
-          {/* DÒNG 1 (Có thể thu gọn khi cuộn): THÔNG TIN ĐỀ CẦN TRỘN & TÙY CHỈNH HOÁN VỊ */}
+          {/* KHỐI THÔNG TIN ĐỀ CẦN TRỘN (Gọn gàng 1 hàng 8 ô, có thể thu gọn để nhường tối đa diện tích cho khung xem/sửa đề) */}
           {!isConfigCollapsed && (
-            <div className="p-3.5 rounded-2xl bg-white/95 border-2 border-sky-300 shadow-sm space-y-3">
-              {/* Lưới 8 ô: Thông tin đề (Sở, Trường, Kỳ kiểm tra chọn sẵn, Môn thi 12 môn THPT, Lớp, Phút) + Tùy chỉnh trộn (Số đề, Sửa mã & Dàn trang) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2.5 items-end">
+            <div className="px-2.5 py-1.5 rounded-xl bg-white/95 border border-sky-300 shadow-xs space-y-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-1.5 items-end">
                 {/* 1. Sở / Phòng GD&ĐT */}
-                <div className="lg:col-span-2 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase">
+                <div className="lg:col-span-2">
+                  <label className="block font-extrabold text-sky-950 truncate mb-0.5">
                     1. Sở / Phòng GD&amp;ĐT:
                   </label>
                   <input
@@ -1303,13 +1311,13 @@ export default function App() {
                       setConfig((prev) => ({ ...prev, departmentName: e.target.value }))
                     }
                     placeholder="SỞ GD&ĐT VĨNH LONG"
-                    className="w-full px-3 py-2 text-xs sm:text-sm font-bold text-slate-900 bg-sky-50/60 border-2 border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
+                    className="w-full px-2 py-1 font-bold text-slate-900 bg-sky-50/70 border border-sky-300 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
 
                 {/* 2. Trường / Đơn vị */}
-                <div className="lg:col-span-2 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase">
+                <div className="lg:col-span-2">
+                  <label className="block font-extrabold text-sky-950 truncate mb-0.5">
                     2. Trường / Đơn vị:
                   </label>
                   <input
@@ -1319,13 +1327,13 @@ export default function App() {
                       setConfig((prev) => ({ ...prev, schoolName: e.target.value }))
                     }
                     placeholder="TRƯỜNG THPT MANG THÍT"
-                    className="w-full px-3 py-2 text-xs sm:text-sm font-bold text-slate-900 bg-sky-50/60 border-2 border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
+                    className="w-full px-2 py-1 font-bold text-slate-900 bg-sky-50/70 border border-sky-300 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
 
-                {/* 3. Tên Kỳ thi (Tích hợp thẻ chọn sẵn 5 kỳ kiểm tra theo yêu cầu) */}
-                <div className="lg:col-span-2 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-blue-950 uppercase">
+                {/* 3. Kỳ kiểm tra */}
+                <div className="lg:col-span-2">
+                  <label className="block font-extrabold text-blue-950 truncate mb-0.5">
                     3. Kỳ kiểm tra:
                   </label>
                   <select
@@ -1333,7 +1341,7 @@ export default function App() {
                     onChange={(e) =>
                       setConfig((prev) => ({ ...prev, examTitle: e.target.value }))
                     }
-                    className="w-full px-2.5 py-2 text-xs sm:text-sm font-black text-blue-950 bg-blue-50/80 border-2 border-blue-400 rounded-xl focus:outline-none focus:border-blue-700 cursor-pointer"
+                    className="w-full px-2 py-1 font-black text-blue-950 bg-blue-50/80 border border-blue-400 rounded-lg focus:outline-none focus:border-blue-700 cursor-pointer"
                   >
                     <option value="KIỂM TRA GIỮA KÌ I">KIỂM TRA GIỮA KÌ I</option>
                     <option value="KIỂM TRA GIỮA KÌ II">KIỂM TRA GIỮA KÌ II</option>
@@ -1344,10 +1352,10 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* 4. Môn thi (Tích hợp thẻ chọn đầy đủ 12 môn THPT hiện hành) */}
-                <div className="lg:col-span-2 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-emerald-950 uppercase">
-                    4. Môn thi (12 môn THPT):
+                {/* 4. Môn thi (12 môn THPT) */}
+                <div className="lg:col-span-2">
+                  <label className="block font-extrabold text-emerald-950 truncate mb-0.5">
+                    4. Môn thi (12 môn):
                   </label>
                   <select
                     value={config.subjectName}
@@ -1373,7 +1381,7 @@ export default function App() {
                         durationMinutes: minsMap[val] || prev.durationMinutes,
                       }));
                     }}
-                    className="w-full px-2.5 py-2 text-xs sm:text-sm font-black text-emerald-950 bg-emerald-50/80 border-2 border-emerald-400 rounded-xl focus:outline-none focus:border-emerald-700 cursor-pointer"
+                    className="w-full px-2 py-1 font-black text-emerald-950 bg-emerald-50/80 border border-emerald-400 rounded-lg focus:outline-none focus:border-emerald-700 cursor-pointer"
                   >
                     <option value="SINH HỌC">SINH HỌC</option>
                     <option value="TOÁN HỌC">TOÁN HỌC</option>
@@ -1391,8 +1399,8 @@ export default function App() {
                 </div>
 
                 {/* 5. Lớp */}
-                <div className="lg:col-span-1 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-purple-950 uppercase">
+                <div className="lg:col-span-1">
+                  <label className="block font-extrabold text-purple-950 truncate mb-0.5">
                     5. Lớp:
                   </label>
                   <select
@@ -1400,7 +1408,7 @@ export default function App() {
                     onChange={(e) =>
                       setConfig((prev) => ({ ...prev, gradeLevel: e.target.value }))
                     }
-                    className="w-full px-2 py-2 text-xs sm:text-sm font-black text-purple-950 bg-purple-50/80 border-2 border-purple-300 rounded-xl focus:outline-none cursor-pointer"
+                    className="w-full px-1.5 py-1 font-black text-purple-950 bg-purple-50/80 border border-purple-300 rounded-lg focus:outline-none cursor-pointer"
                   >
                     <option value="Lớp 12">Lớp 12</option>
                     <option value="Lớp 11">Lớp 11</option>
@@ -1408,9 +1416,9 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* 6. Thời gian (Phút) */}
-                <div className="lg:col-span-1 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-rose-950 uppercase">
+                {/* 6. Phút */}
+                <div className="lg:col-span-1">
+                  <label className="block font-extrabold text-rose-950 truncate mb-0.5">
                     6. Phút:
                   </label>
                   <input
@@ -1424,13 +1432,13 @@ export default function App() {
                         durationMinutes: Number(e.target.value) || 50,
                       }))
                     }
-                    className="w-full px-2 py-2 text-xs sm:text-sm font-mono font-black text-rose-700 bg-rose-50/60 border-2 border-rose-300 rounded-xl text-center focus:outline-none"
+                    className="w-full px-1.5 py-1 font-mono font-black text-rose-700 bg-rose-50/60 border border-rose-300 rounded-lg text-center focus:outline-none"
                   />
                 </div>
 
-                {/* 7. Cách trộn & Số lượng mã đề */}
-                <div className="lg:col-span-1 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase">
+                {/* 7. Số đề */}
+                <div className="lg:col-span-1">
+                  <label className="block font-extrabold text-indigo-950 truncate mb-0.5">
                     7. Số đề:
                   </label>
                   <select
@@ -1450,7 +1458,7 @@ export default function App() {
                         };
                       });
                     }}
-                    className="w-full px-2 py-2 text-xs sm:text-sm font-mono font-black text-indigo-950 bg-indigo-50/80 border-2 border-indigo-300 rounded-xl focus:outline-none cursor-pointer"
+                    className="w-full px-1.5 py-1 font-mono font-black text-indigo-950 bg-indigo-50/80 border border-indigo-300 rounded-lg focus:outline-none cursor-pointer"
                   >
                     <option value={4}>4 đề</option>
                     <option value={8}>8 đề</option>
@@ -1459,18 +1467,18 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* 8. Nút bật tùy chỉnh Mã đề & Dàn trang */}
-                <div className="lg:col-span-1 space-y-1">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase">
+                {/* 8. Sửa mã */}
+                <div className="lg:col-span-1">
+                  <label className="block font-extrabold text-sky-950 truncate mb-0.5">
                     8. Mã đề:
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowCustomCodeEditor((prev) => !prev)}
-                    className="w-full px-2 py-2 rounded-xl text-xs font-black text-blue-950 bg-sky-100 hover:bg-sky-200 border-2 border-sky-300 flex items-center justify-center gap-1 cursor-pointer"
+                    className="w-full px-1.5 py-1 rounded-lg font-black text-white btn-3d-violet flex items-center justify-center gap-1 cursor-pointer"
                     title="Điều chỉnh mã đề (101, 102...) và tùy chọn dàn trang, mã QR"
                   >
-                    <Edit3 className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                    <Edit3 className="w-3.5 h-3.5 shrink-0" />
                     <span>Sửa mã</span>
                   </button>
                 </div>
@@ -1478,10 +1486,10 @@ export default function App() {
 
               {/* Khung mở rộng khi bấm [Sửa mã]: Cho phép sửa từng mã đề 101, 102... và tùy chỉnh Dàn trang / QR */}
               {showCustomCodeEditor && (
-                <div className="pt-2.5 border-t border-sky-200 grid grid-cols-1 lg:grid-cols-12 gap-3 items-center bg-sky-50/70 p-3 rounded-xl">
-                  <div className="lg:col-span-7 space-y-1.5">
+                <div className="pt-1.5 border-t border-sky-200 grid grid-cols-1 lg:grid-cols-12 gap-2 items-center bg-sky-50/70 p-2 rounded-lg">
+                  <div className="lg:col-span-7 space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-black text-sky-950">
+                      <span className="font-black text-sky-950">
                         Nhập mã đề tùy ý ({config.numVariants} mã đề):
                       </span>
                       <div className="flex items-center gap-2">
@@ -1501,7 +1509,7 @@ export default function App() {
                               };
                             });
                           }}
-                          className="px-2 py-1 text-xs font-bold bg-white border border-sky-300 rounded-lg"
+                          className="px-2 py-0.5 font-bold bg-white border border-sky-300 rounded-md"
                         >
                           <option value={3}>Hệ 3 số (101...)</option>
                           <option value={4}>Hệ 4 số (1001...)</option>
@@ -1509,13 +1517,13 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleResetDefaultCodes}
-                          className="text-xs font-bold text-blue-700 hover:underline cursor-pointer"
+                          className="font-bold text-blue-700 hover:underline cursor-pointer"
                         >
                           Mặc định
                         </button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
+                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
                       {Array.from({ length: config.numVariants }, (_, idx) => {
                         const val =
                           config.customCodes?.[idx] ??
@@ -1526,7 +1534,7 @@ export default function App() {
                             type="text"
                             value={val}
                             onChange={(e) => handleUpdateCustomCode(idx, e.target.value)}
-                            className="px-2 py-1 text-xs font-black font-mono text-center text-blue-950 bg-white border border-sky-300 rounded-lg focus:outline-none focus:border-blue-600"
+                            className="px-1.5 py-0.5 font-black font-mono text-center text-blue-950 bg-white border border-sky-300 rounded-md focus:outline-none focus:border-blue-600"
                             maxLength={10}
                           />
                         );
@@ -1534,9 +1542,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div className="space-y-1">
-                      <span className="font-bold text-slate-700 block">Chia cột đáp án Phần I:</span>
+                  <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <span className="font-bold text-slate-700 block mb-0.5">Chia cột đáp án Phần I:</span>
                       <select
                         value={config.layoutOverride}
                         onChange={(e) =>
@@ -1545,7 +1553,7 @@ export default function App() {
                             layoutOverride: e.target.value as LayoutMode,
                           }))
                         }
-                        className="w-full px-2.5 py-1.5 font-bold bg-white border border-sky-300 rounded-lg"
+                        className="w-full px-2 py-1 font-bold bg-white border border-sky-300 rounded-md"
                       >
                         <option value="AUTO">Tự động co dãn (Auto)</option>
                         <option value="1_ROW_4_COL">Luôn chia 4 cột ngang</option>
@@ -1554,8 +1562,8 @@ export default function App() {
                       </select>
                     </div>
 
-                    <div className="space-y-1">
-                      <span className="font-bold text-slate-700 block">Chuẩn mã QR Chấm thi:</span>
+                    <div>
+                      <span className="font-bold text-slate-700 block mb-0.5">Chuẩn mã QR Chấm thi:</span>
                       <select
                         value={config.qrFormat}
                         onChange={(e) =>
@@ -1564,7 +1572,7 @@ export default function App() {
                             qrFormat: e.target.value as QRAppFormat,
                           }))
                         }
-                        className="w-full px-2.5 py-1.5 font-bold bg-white border border-sky-300 rounded-lg"
+                        className="w-full px-2 py-1 font-bold bg-white border border-sky-300 rounded-md"
                       >
                         <option value="QM2025">QM2025 (Chuẩn 3 Phần)</option>
                         <option value="TNMAKER">TNMaker</option>
@@ -1578,16 +1586,12 @@ export default function App() {
             </div>
           )}
 
-          {/* KHỐI THANH CÔNG CỤ HỢP NHẤT (HÌNH 1 + HÌNH 2 GỘP CHUNG KHOA HỌC): CHUYỂN NHANH 3 PHẦN + KHUNG CẢNH BÁO CÂU LỖI + NÚT TÁC VỤ + CÔNG CỤ SOẠN THẢO WORD */}
-          <div className="p-3 sm:p-3.5 rounded-2xl toolbar-3d space-y-2.5">
-            {/* TẦNG 1: NÚT CHUYỂN NHANH GIỮA 3 PHẦN CỦA CÂU HỎI + KHUNG CẢNH BÁO CÂU HỎI CHƯA HỢP LỆ */}
-            <div className="flex flex-wrap items-center justify-between gap-2.5 pb-2.5 border-b border-sky-200/90">
-              {/* Cụm Trái: Nút chuyển nhanh giữa 3 phần (Phần I, Phần II, Phần III) */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <span className="text-[11px] font-black text-sky-950 uppercase tracking-tight mr-0.5 hidden sm:inline">
-                  Chuyển nhanh phần:
-                </span>
-
+          {/* ================= THANH CÔNG CỤ HỢP NHẤT GỌN ĐẸP 2 HÀNG (CHUYỂN NHANH 3 PHẦN + TÁC VỤ ĐA SẮC MÀU + KHUNG CẢNH BÁO LỖI + SOẠN THẢO WORD) ================= */}
+          <div className="px-2.5 py-1.5 rounded-xl toolbar-3d space-y-1.5">
+            {/* HÀNG 1: CHUYỂN NHANH 3 PHẦN + CHẾ ĐỘ XEM (THẺ 3D / WORD A4) + CÁC NÚT TÁC VỤ CHÍNH (MỖI NÚT 1 MÀU KHÁC NHAU, ĐÃ BỎ Ô TẢI ĐỀ GỐC KHÔNG LỜI GIẢI) */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-sky-200/90">
+              {/* Cụm Trái: Chuyển nhanh 3 Phần + Chuyển chế độ Thẻ 3D / Trang Word A4 */}
+              <div className="flex items-center gap-1 flex-wrap">
                 <button
                   type="button"
                   onClick={() => {
@@ -1595,16 +1599,14 @@ export default function App() {
                     setFilterPart('ALL');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                    filterPart === 'ALL'
-                      ? 'bg-slate-900 text-white shadow-sm ring-2 ring-slate-400'
-                      : 'bg-white text-slate-800 border-2 border-slate-300 hover:bg-slate-100'
+                  className={`px-2.5 py-1 rounded-lg font-black text-white btn-3d-slate cursor-pointer ${
+                    filterPart === 'ALL' ? 'ring-2 ring-slate-400' : 'opacity-85 hover:opacity-100'
                   }`}
+                  title="Hiển thị toàn bộ câu hỏi của cả 3 phần"
                 >
-                  Tất cả: {questions.length} câu
+                  Tất cả: {questions.length}
                 </button>
 
-                {/* Nút chuyển nhanh PHẦN I (Xanh dương) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1620,18 +1622,14 @@ export default function App() {
                       }, 60);
                     }
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl part-stat-box-1 flex items-center gap-1.5 cursor-pointer transition-all ${
-                    filterPart === 'PART_1'
-                      ? 'ring-3 ring-blue-500 scale-105'
-                      : 'hover:scale-102 opacity-95 hover:opacity-100'
+                  className={`px-2.5 py-1 rounded-lg font-black text-white btn-3d-primary cursor-pointer ${
+                    filterPart === 'PART_1' ? 'ring-2 ring-blue-300' : 'opacity-90 hover:opacity-100'
                   }`}
-                  title="Chuyển nhanh tới các câu hỏi Phần I (4 lựa chọn A, B, C, D)"
+                  title="Chuyển nhanh tới Phần I (Trắc nghiệm 4 lựa chọn A, B, C, D)"
                 >
-                  <span className="text-xs font-black text-blue-950 uppercase">PHẦN I:</span>
-                  <span className="text-sm font-black text-blue-700 font-mono">{part1Count} câu</span>
+                  PHẦN I: {part1Count}
                 </button>
 
-                {/* Nút chuyển nhanh PHẦN II (Xanh ngọc) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1647,18 +1645,14 @@ export default function App() {
                       }, 60);
                     }
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl part-stat-box-2 flex items-center gap-1.5 cursor-pointer transition-all ${
-                    filterPart === 'PART_2'
-                      ? 'ring-3 ring-emerald-500 scale-105'
-                      : 'hover:scale-102 opacity-95 hover:opacity-100'
+                  className={`px-2.5 py-1 rounded-lg font-black text-white btn-3d-emerald cursor-pointer ${
+                    filterPart === 'PART_2' ? 'ring-2 ring-emerald-300' : 'opacity-90 hover:opacity-100'
                   }`}
-                  title="Chuyển nhanh tới các câu hỏi Phần II (Đúng / Sai a, b, c, d)"
+                  title="Chuyển nhanh tới Phần II (Đúng / Sai a, b, c, d)"
                 >
-                  <span className="text-xs font-black text-emerald-950 uppercase">PHẦN II:</span>
-                  <span className="text-sm font-black text-emerald-700 font-mono">{part2Count} câu</span>
+                  PHẦN II: {part2Count}
                 </button>
 
-                {/* Nút chuyển nhanh PHẦN III (Vàng cam) */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1674,180 +1668,31 @@ export default function App() {
                       }, 60);
                     }
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl part-stat-box-3 flex items-center gap-1.5 cursor-pointer transition-all ${
-                    filterPart === 'PART_3'
-                      ? 'ring-3 ring-amber-500 scale-105'
-                      : 'hover:scale-102 opacity-95 hover:opacity-100'
+                  className={`px-2.5 py-1 rounded-lg font-black text-white btn-3d-amber cursor-pointer ${
+                    filterPart === 'PART_3' ? 'ring-2 ring-amber-300' : 'opacity-90 hover:opacity-100'
                   }`}
-                  title="Chuyển nhanh tới các câu hỏi Phần III (Trả lời ngắn)"
+                  title="Chuyển nhanh tới Phần III (Trả lời ngắn)"
                 >
-                  <span className="text-xs font-black text-amber-950 uppercase">PHẦN III:</span>
-                  <span className="text-sm font-black text-amber-700 font-mono">{part3Count} câu</span>
-                </button>
-              </div>
-
-              {/* Cụm Phải: KHUNG CẢNH BÁO CÂU HỎI CHƯA HỢP LỆ TRỰC TIẾP TRÊN THANH CÔNG CỤ */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {validationIssues.length === 0 ? (
-                  <div className="px-3.5 py-1.5 rounded-xl bg-emerald-100/95 border-2 border-emerald-400 text-emerald-950 text-xs font-black flex items-center gap-1.5 shadow-2xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                    <span>Đề hợp lệ 100% (0 câu lỗi · Đủ 4 đáp án)</span>
-                  </div>
-                ) : (
-                  <div className="px-3 py-1.5 rounded-xl bg-rose-100/95 border-2 border-rose-400 text-rose-950 text-xs font-black flex flex-wrap items-center gap-2 shadow-sm">
-                    <span className="flex items-center gap-1 text-rose-800">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                      <span>Cảnh báo: {validationIssues.length} câu chưa hợp lệ:</span>
-                    </span>
-
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {validationIssues.slice(0, 4).map((issue) => (
-                        <button
-                          key={issue.id}
-                          type="button"
-                          onClick={() => handleScrollToQuestion(issue.questionId)}
-                          className="px-2 py-0.5 rounded-lg bg-white hover:bg-rose-50 text-rose-700 border border-rose-300 font-mono text-[11px] font-black cursor-pointer"
-                          title={`${issue.message} — Bấm để cuộn tới sửa ngay`}
-                        >
-                          Câu {issue.questionIndex} (
-                          {issue.part === 'PART_1'
-                            ? 'P.I'
-                            : issue.part === 'PART_2'
-                            ? 'P.II'
-                            : 'P.III'}
-                          )
-                        </button>
-                      ))}
-                      {validationIssues.length > 4 && (
-                        <span className="text-[11px] font-bold text-rose-800">
-                          +{validationIssues.length - 4} câu
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleQuickFixAllErrors}
-                      className="px-2.5 py-1 rounded-lg text-[11px] font-black text-white btn-3d-rose flex items-center gap-1 cursor-pointer"
-                      title="Tự động điền và chuẩn hóa toàn bộ các câu chưa hợp lệ"
-                    >
-                      <Wand2 className="w-3 h-3" />
-                      <span>Sửa tất cả</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* TẦNG 2: CÁC NÚT TÁC VỤ CHÍNH & XUẤT ĐỀ WORD / ZIP (BỐ TRÍ ĐỒNG ĐỀU, ĐẸP MẮT) */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-sky-200/90">
-              {/* Nhóm Trái: Nạp đề, Đề mẫu, Tách dính chùm, Lưu, Trộn đề */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessing}
-                  className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Tải lên đề thi Word (.docx) hoặc PDF (.pdf)"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Tải Word / PDF</span>
+                  PHẦN III: {part3Count}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleLoadSampleExam(true)}
-                  className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-cyan flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Đề Mẫu 18-4-6</span>
-                </button>
+                <span className="text-slate-300 mx-0.5 hidden sm:inline">|</span>
 
-                <button
-                  type="button"
-                  onClick={handleNormalizeAndDeClumpAllQuestions}
-                  className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-orange flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Tự động tách các câu hỏi/đáp án dính chùm và ép chuẩn đủ 4 phương án"
-                >
-                  <Wand2 className="w-3.5 h-3.5" />
-                  <span>Tách Dính Chùm &amp; Ép 4 Đáp Án</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveEdits}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-extrabold text-white flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                    hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
-                  }`}
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  <span>Lưu Chỉnh Sửa</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleRunShuffle}
-                  disabled={!canShuffle || isProcessing}
-                  className="px-4 py-2 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                >
-                  <Shuffle className="w-3.5 h-3.5" />
-                  <span>Trộn Đề ({config.numVariants} Mã)</span>
-                </button>
-              </div>
-
-              {/* Nhóm Phải: Tải Đề Gốc Có Lời Giải, Đề Gốc Không Lời Giải & Tải Bộ Đề ZIP */}
-              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={handleDownloadMasterWithSolutions}
-                  disabled={isProcessing}
-                  className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-indigo flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Tải Đề Gốc Có Lời Giải (.docx)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadCleanedMaster}
-                  disabled={isProcessing}
-                  className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Tải Đề Gốc Không Lời Giải (.docx)</span>
-                </button>
-
-                {shuffledVariants.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadZipBundle}
-                    disabled={isProcessing}
-                    className="px-3.5 py-2 rounded-xl text-xs font-black text-white btn-3d-purple flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  >
-                    <FileArchive className="w-3.5 h-3.5" />
-                    <span>Tải Bộ Đề &amp; Đáp Án (.zip)</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* TẦNG 3 (TÍCH HỢP TỪ HÌNH 2 LÊN): CHẾ ĐỘ KHUNG THẺ 3D / TRANG GIẤY WORD A4 + CỠ CHỮ + BỘ KÝ HIỆU KHOA HỌC */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={() => {
                     setActiveRightTab('LIVE_EDITOR');
                     setEditorViewMode('CARDS_3D');
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2.5 py-1 rounded-lg font-extrabold text-white btn-3d-sky flex items-center gap-1 cursor-pointer ${
                     activeRightTab === 'LIVE_EDITOR' && editorViewMode === 'CARDS_3D'
-                      ? 'btn-3d-primary text-white ring-2 ring-blue-300'
-                      : 'bg-white text-slate-700 border border-sky-300 hover:bg-sky-50'
+                      ? 'ring-2 ring-sky-300'
+                      : 'opacity-80 hover:opacity-100'
                   }`}
+                  title="Chế độ xem và chỉnh sửa từng thẻ câu hỏi 3D trực quan"
                 >
-                  <Layers className="w-3.5 h-3.5" />
-                  <span>Khung Thẻ Câu Hỏi 3D</span>
+                  <Layers className="w-3.5 h-3.5 shrink-0" />
+                  <span>Thẻ Câu Hỏi 3D</span>
                 </button>
 
                 <button
@@ -1857,22 +1702,157 @@ export default function App() {
                     setWordRawDocumentText(serializeQuestionsToWordRawText(questions));
                     setEditorViewMode('WORD_A4_PAGE');
                   }}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2.5 py-1 rounded-lg font-extrabold text-white btn-3d-violet flex items-center gap-1 cursor-pointer ${
                     activeRightTab === 'LIVE_EDITOR' && editorViewMode === 'WORD_A4_PAGE'
-                      ? 'btn-3d-indigo text-white ring-2 ring-indigo-300'
-                      : 'bg-white text-slate-700 border border-sky-300 hover:bg-sky-50'
+                      ? 'ring-2 ring-violet-300'
+                      : 'opacity-80 hover:opacity-100'
                   }`}
+                  title="Chế độ soạn thảo trực tiếp trên trang giấy Word A4"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  <span>Trang Giấy Word A4 Trực Tiếp</span>
+                  <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Trang Word A4</span>
+                </button>
+              </div>
+
+              {/* Cụm Phải: Các nút tác vụ chính (Mỗi nút 1 màu riêng biệt, bỏ nút tải đề gốc không lời giải) */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessing}
+                  className="px-2.5 py-1 rounded-lg font-extrabold text-white btn-3d-primary flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                  title="Tải lên đề thi Word (.docx) hoặc PDF (.pdf)"
+                >
+                  <Upload className="w-3.5 h-3.5 shrink-0" />
+                  <span>Tải Word / PDF</span>
                 </button>
 
-                <span className="text-slate-300 hidden sm:inline">|</span>
+                <button
+                  type="button"
+                  onClick={() => handleLoadSampleExam(true)}
+                  className="px-2.5 py-1 rounded-lg font-extrabold text-white btn-3d-cyan flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                  title="Nạp đề mẫu chuẩn cấu trúc 18-4-6"
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>Đề Mẫu 18-4-6</span>
+                </button>
 
+                <button
+                  type="button"
+                  onClick={handleNormalizeAndDeClumpAllQuestions}
+                  className="px-2.5 py-1 rounded-lg font-extrabold text-white btn-3d-orange flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                  title="Tự động tách các câu hỏi/đáp án dính chùm và ép chuẩn đủ 4 phương án"
+                >
+                  <Wand2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Tách Dính Chùm &amp; 4 ĐA</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveEdits}
+                  className={`px-2.5 py-1 rounded-lg font-extrabold text-white flex items-center gap-1 whitespace-nowrap cursor-pointer ${
+                    hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
+                  }`}
+                  title="Lưu toàn bộ nội dung vừa chỉnh sửa"
+                >
+                  <Save className="w-3.5 h-3.5 shrink-0" />
+                  <span>Lưu Sửa</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleRunShuffle}
+                  disabled={!canShuffle || isProcessing}
+                  className="px-2.5 py-1 rounded-lg font-black text-white btn-3d-rose flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                  title="Trộn hoán vị các mã đề thi"
+                >
+                  <Shuffle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Trộn Đề ({config.numVariants} Mã)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadMasterWithSolutions}
+                  disabled={isProcessing}
+                  className="px-2.5 py-1 rounded-lg font-extrabold text-white btn-3d-indigo flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                  title="Tải đề gốc kèm lời giải chi tiết (.docx)"
+                >
+                  <Download className="w-3.5 h-3.5 shrink-0" />
+                  <span>Tải Đề Gốc Có Lời Giải (.docx)</span>
+                </button>
+
+                {shuffledVariants.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadZipBundle}
+                    disabled={isProcessing}
+                    className="px-2.5 py-1 rounded-lg font-black text-white btn-3d-purple flex items-center gap-1 whitespace-nowrap cursor-pointer"
+                    title="Tải trọn bộ đề thi đã trộn và bảng đáp án (.zip)"
+                  >
+                    <FileArchive className="w-3.5 h-3.5 shrink-0" />
+                    <span>Tải Bộ Đề (.zip)</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* HÀNG 2: KHUNG CẢNH BÁO CÂU HỎI CHƯA HỢP LỆ + CÔNG CỤ CỠ CHỮ, KÝ HIỆU KHOA HỌC & TÊN TỆP XUẤT */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              {/* Cụm Trái: Khung cảnh báo câu hỏi chưa hợp lệ */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {validationIssues.length === 0 ? (
+                  <div className="px-2.5 py-0.5 rounded-lg bg-emerald-50 border border-emerald-400 text-emerald-950 font-black flex items-center gap-1.5 shadow-2xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Đề hợp lệ 100% (0 câu lỗi · Đủ 4 đáp án)</span>
+                  </div>
+                ) : (
+                  <div className="px-2.5 py-0.5 rounded-lg bg-rose-50 border border-rose-500 text-rose-950 flex flex-wrap items-center gap-1.5 shadow-xs">
+                    <div className="flex items-center gap-1 font-black text-rose-700">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
+                      <span>Cảnh báo ({validationIssues.length} câu lỗi):</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 flex-wrap max-w-[380px] overflow-x-auto no-scrollbar">
+                      {validationIssues.slice(0, 6).map((iss, idx) => (
+                        <button
+                          key={`sticky-iss-${iss.questionId}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setActiveRightTab('LIVE_EDITOR');
+                            handleScrollToQuestion(iss.questionId);
+                          }}
+                          className="px-2 py-0.5 rounded bg-white hover:bg-rose-600 hover:text-white text-rose-800 border border-rose-300 font-black transition-colors cursor-pointer whitespace-nowrap"
+                          title={`${iss.message} — Bấm để nhảy tới sửa ngay`}
+                        >
+                          Câu {iss.questionIndex}
+                        </button>
+                      ))}
+                      {validationIssues.length > 6 && (
+                        <span className="font-bold text-rose-700">
+                          +{validationIssues.length - 6}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleNormalizeAndDeClumpAllQuestions}
+                      className="px-2 py-0.5 rounded bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-2xs whitespace-nowrap"
+                      title="Tự động sửa lỗi dính chùm và ép đủ 4 phương án cho toàn bộ câu lỗi"
+                    >
+                      <Wand2 className="w-3.5 h-3.5" />
+                      <span>Sửa tất cả</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Cụm Phải: Chọn cỡ chữ + Chèn nhanh ký hiệu khoa học + Tên tệp xuất ra */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <select
                   value={wordFontSizePt}
                   onChange={(e) => setWordFontSizePt(Number(e.target.value))}
-                  className="px-2.5 py-1.5 rounded-xl bg-white border border-sky-300 text-xs font-mono font-bold text-slate-900 cursor-pointer"
+                  className="px-2 py-0.5 rounded-lg bg-white border border-sky-300 font-mono font-bold text-slate-900 cursor-pointer"
                   title="Chọn cỡ chữ hiển thị"
                 >
                   <option value={11}>Times 11pt</option>
@@ -1888,7 +1868,7 @@ export default function App() {
                         key={sym}
                         type="button"
                         onClick={() => handleInsertScientificSymbol(sym)}
-                        className="w-7 h-7 rounded-lg bg-white hover:bg-blue-50 border border-sky-300 font-mono text-xs font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                        className="px-1.5 py-0.5 rounded-md bg-white hover:bg-blue-50 border border-sky-300 font-mono font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
                         title={`Chèn nhanh ký hiệu ${sym} vào câu hỏi đang chọn`}
                       >
                         {sym}
@@ -1896,14 +1876,14 @@ export default function App() {
                     )
                   )}
                 </div>
-              </div>
 
-              <span
-                className="text-[11px] font-mono font-bold text-emerald-950 bg-emerald-100/90 px-2.5 py-1 rounded-lg border border-emerald-300 truncate max-w-[340px]"
-                title={`Tên tệp xuất ra: ${buildStandardExportFileName(config, 'docx')}`}
-              >
-                Tệp xuất: {buildStandardExportFileName(config, 'docx')}
-              </span>
+                <span
+                  className="font-mono font-bold text-emerald-950 bg-emerald-100/90 px-2 py-0.5 rounded-lg border border-emerald-300 truncate max-w-[280px] hidden xl:inline-block"
+                  title={`Tên tệp xuất ra: ${buildStandardExportFileName(config, 'docx')}`}
+                >
+                  {buildStandardExportFileName(config, 'docx')}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -2866,7 +2846,7 @@ export default function App() {
                   </p>
                 </div>
                 <button
-                  onClick={handleDownloadCleanedMaster}
+                  onClick={handleDownloadMasterWithSolutions}
                   className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5"
                 >
                   <Download className="w-4 h-4" />
@@ -3659,22 +3639,22 @@ export default function App() {
         }}
       />
 
-      {/* ================= CHÂN TRANG CỐ ĐỊNH: CHỈ CHẠY LOGO NHẤP NHÁY, TÊN TÁC GIẢ ĐỨNG YÊN ================= */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-4 sm:px-6 py-2.5 text-white">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3">
-          {/* Cụm Trái: Logo 3D Nhấp Nháy + Tên trang web EduMix 2025 */}
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl logo-3d-badge animate-logo-blink flex items-center justify-center text-white shrink-0">
-              <GraduationCap className="w-5 h-5" />
+      {/* ================= CHÂN TRANG CỐ ĐỊNH: CHỈ CHẠY LOGO NHẤP NHÁY, TÊN TÁC GIẢ ĐỨNG YÊN (ĐỒNG NHẤT CỠ CHỮ 12PT) ================= */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-4 sm:px-6 py-1.5 text-white">
+        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-2">
+          {/* Cụm Trái: Logo 3D Nhấp Nháy + Tên trang web EduMix 2025 (12pt) */}
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg logo-3d-badge animate-logo-blink flex items-center justify-center text-white shrink-0">
+              <GraduationCap className="w-4 h-4" />
             </div>
-            <span className="text-base sm:text-lg font-black tracking-tight animate-edumix-gradient">
+            <span className="font-black tracking-tight animate-edumix-gradient" style={{ fontSize: '12pt' }}>
               EduMix 2025
             </span>
           </div>
 
-          {/* Cụm Phải: Tên Tác Giả Đứng Yên, Rõ Nét, Không Ký Tự Thừa */}
+          {/* Cụm Phải: Tên Tác Giả Đứng Yên, Rõ Nét, Đồng Nhất Cỡ Chữ 12pt */}
           <div className="flex items-center">
-            <span className="text-xs sm:text-sm md:text-base font-black tracking-wide uppercase text-amber-300">
+            <span className="font-black tracking-wide uppercase text-amber-300" style={{ fontSize: '12pt' }}>
               Tác giả: Hồ Tấn Khải — Trường THPT Mang Thít
             </span>
           </div>
