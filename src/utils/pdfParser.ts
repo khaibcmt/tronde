@@ -5,9 +5,10 @@ import {
   parseRawTextToExamQuestions,
 } from './docxParser';
 
-// Cấu hình worker cho pdfjs-dist an toàn
+// Cấu hình worker cho pdfjs-dist đồng bộ phiên bản
 try {
   const pdfjsAny = pdfjsLib as unknown as {
+    version?: string;
     GlobalWorkerOptions?: { workerSrc?: string };
   };
   if (
@@ -15,7 +16,8 @@ try {
     pdfjsAny.GlobalWorkerOptions &&
     !pdfjsAny.GlobalWorkerOptions.workerSrc
   ) {
-    pdfjsAny.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs`;
+    const ver = pdfjsAny.version || '5.4.296';
+    pdfjsAny.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${ver}/build/pdf.worker.min.mjs`;
   }
 } catch {
   // Bỏ qua nếu môi trường không cho phép gán worker

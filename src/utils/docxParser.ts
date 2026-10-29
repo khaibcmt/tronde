@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import mammoth from 'mammoth';
 import {
   ExamImageAttachment,
   ExamQuestion,
@@ -708,7 +709,7 @@ function splitClumpedParagraphIntoLogicalParagraphs(
 
   // Chỉ tách giữa dòng khi thực sự là tiêu đề "PHẦN I/II/III/IV" hoặc "Câu 1." / "Bài 1." (tránh tách nhầm chữ "phần 1", "câu 1" viết thường trong thân câu)
   const splitRegex =
-    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?=(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)\b|(?:[A-ZIVX]+\s*[.:\-]\s*)?TỰ\s+LUẬN\b|(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question)\s*\d+\s*(?:\([^)]{1,25}\)|\[[^\]]{1,25}\])?\s*[.:\-–—)])))/g;
+    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?=(?:(?:PHẦN|Phần)\s+(?:I|II|III|IV|1|2|3|4)\b|(?:[A-ZIVX]+\s*[.:\-]\s*)?(?:TỰ\s+LUẬN|Tự\s+luận)\b|(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\s*(?:[.:\-–—)]*\s*(?:\([^)]{1,25}\)|\[[^\]]{1,25}\]))?\s*(?:[.:\-–—)]+|\t+|\s{2,}))))/g;
 
   const splitIndices: number[] = [0];
   let match: RegExpExecArray | null;
@@ -756,6 +757,202 @@ function splitClumpedParagraphIntoLogicalParagraphs(
   return subParagraphs.length > 0 ? subParagraphs : [para];
 }
 
+function decodeXmlEntities(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Bộ bóc tách XML bằng Regex thuần (Pure-Regex XML Fallback):
+ * Miễn nhiễm 100% với lỗi <parsererror> của DOMParser khi file Word có namespace lạ (WPS Office, PDF2Word, McMIX...)
+ * Vẫn giữ nguyên nhận diện gạch chân (<w:u>) và tô màu đỏ (<w:color>)!
+ */
+function extractParagraphsFromDocxXmlRegex(xmlString: string): ParsedParagraph[] {
+  const withoutFallback = xmlString
+    .replace(/^\uFEFF/, '')
+    .replace(/<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi, '');
+
+  const paragraphs: ParsedParagraph[] = [];
+  const pRegex = /<(?:\w+:)?p(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?p>/gi;
+
+  let pMatch: RegExpExecArray | null;
+  while ((pMatch = pRegex.exec(withoutFallback)) !== null) {
+    const pInner = pMatch[1];
+    const isAutoNumbered = /<(?:\w+:)?numPr\b/i.test(pInner);
+
+    let paraUnderline = false;
+    let paraRed = false;
+    const pPrMatch = pInner.match(/<(?:\w+:)?pPr\b[^>]*>([\s\S]*?)<\/(?:\w+:)?pPr>/i);
+    if (pPrMatch) {
+      const pRPrMatch = pPrMatch[1].match(/<(?:\w+:)?rPr\b[^>]*>([\s\S]*?)<\/(?:\w+:)?rPr>/i);
+      if (pRPrMatch) {
+        paraUnderline = /<(?:\w+:)?u\b(?![^>]*\bval\s*=\s*["'](?:none|false|0)["'])/i.test(pRPrMatch[1]);
+        paraRed = /<(?:\w+:)?color\b[^>]*\bval\s*=\s*["']#?(?:FF0000|C00000|ED1C24|EE0000|CC0000|RED|[C-F][0-9A-F][0-3][0-9A-F][0-3][0-9A-F])["']/i.test(
+          pRPrMatch[1]
+        );
+      }
+    }
+
+    const runs: ParsedRun[] = [];
+    const rRegex = /<(?:\w+:)?r(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?r>/gi;
+    let rMatch: RegExpExecArray | null;
+
+    while ((rMatch = rRegex.exec(pInner)) !== null) {
+      const rInner = rMatch[1];
+      const rPrMatch = rInner.match(/<(?:\w+:)?rPr\b[^>]*>([\s\S]*?)<\/(?:\w+:)?rPr>/i);
+      const rPrContent = rPrMatch ? rPrMatch[1] : '';
+
+      const isUnderline =
+        paraUnderline ||
+        /<(?:\w+:)?u\b(?![^>]*\bval\s*=\s*["'](?:none|false|0)["'])/i.test(rPrContent);
+      const isRed =
+        paraRed ||
+        /<(?:\w+:)?color\b[^>]*\bval\s*=\s*["']#?(?:FF0000|C00000|ED1C24|EE0000|CC0000|RED|[C-F][0-9A-F][0-3][0-9A-F][0-3][0-9A-F])["']/i.test(
+          rPrContent
+        );
+      const isBold = /<(?:\w+:)?b\b(?![^>]*\bval\s*=\s*["'](?:false|0)["'])/i.test(rPrContent);
+
+      let runText = '';
+      const tokenRegex =
+        /<(?:\w+:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?t>|<(?:\w+:)?(tab|br|cr|noBreakHyphen)\b[^>]*\/?>/gi;
+      let tMatch: RegExpExecArray | null;
+      while ((tMatch = tokenRegex.exec(rInner)) !== null) {
+        if (tMatch[1] !== undefined) {
+          runText += normalizeVietnameseExamText(decodeXmlEntities(tMatch[1]));
+        } else if (tMatch[2]) {
+          const kind = tMatch[2].toLowerCase();
+          if (kind === 'tab') runText += '\t';
+          else if (kind === 'br' || kind === 'cr') runText += '\n';
+          else if (kind === 'nobreakhyphen') runText += '-';
+        }
+      }
+
+      if (runText) {
+        runs.push({
+          text: runText,
+          isUnderline,
+          isRed,
+          isBold,
+          hasFormula: false,
+        });
+      }
+    }
+
+    const markedRuns = injectFormattingMarkersIntoRuns(runs);
+    const fullText = normalizeVietnameseExamText(markedRuns.map((r) => r.text).join('')).trim();
+    if (fullText) {
+      const rawPara: ParsedParagraph = {
+        fullText,
+        runs: markedRuns,
+        hasUnderline: markedRuns.some((r) => r.isUnderline && r.text.trim().length > 0),
+        hasRed: markedRuns.some((r) => r.isRed && r.text.trim().length > 0),
+        hasFormula: false,
+        isAutoNumbered,
+        images: [],
+      };
+      paragraphs.push(...splitClumpedParagraphIntoLogicalParagraphs(rawPara));
+    }
+  }
+
+  return mergeStandaloneTableHeadersAndOptions(paragraphs);
+}
+
+/**
+ * Ghép các ô tiêu đề câu hỏi ("Câu 1", "Câu 1. (NB)") hoặc ô nhãn đáp án ("A.", "B.", "a)", "b)")
+ * đứng riêng lẻ trong Bảng Word (Cột 1 là nhãn, Cột 2 là nội dung)
+ */
+function mergeStandaloneTableHeadersAndOptions(
+  rawExtractedParagraphs: ParsedParagraph[]
+): ParsedParagraph[] {
+  const mergedResult: ParsedParagraph[] = [];
+  for (let i = 0; i < rawExtractedParagraphs.length; i++) {
+    const curr = rawExtractedParagraphs[i];
+    const cleanCurr = curr.fullText.trim();
+
+    const standaloneHeaderMatch = cleanCurr.match(
+      /^(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question)\s*(\d+|[IVX]+)\s*[.:\-–—)]*\s*(?:\([^)]{1,25}\)|\[[^\]]{1,25}\])?\s*[.:\-–—)]*$/i
+    );
+    if (
+      standaloneHeaderMatch &&
+      i + 1 < rawExtractedParagraphs.length &&
+      !/^(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)|(?:Câu|Bài|Question)\s*\d+)/i.test(
+        rawExtractedParagraphs[i + 1].fullText
+      )
+    ) {
+      const nextPara = rawExtractedParagraphs[i + 1];
+      const prefixText = `${cleanCurr.replace(/[.:\-–—)]+$/, '')}. `;
+      const combinedRuns: ParsedRun[] = [
+        {
+          text: prefixText,
+          isUnderline: false,
+          isRed: false,
+          isBold: true,
+          hasFormula: false,
+        },
+        ...nextPara.runs,
+      ];
+      mergedResult.push({
+        ...nextPara,
+        fullText: `${prefixText}${nextPara.fullText}`.trim(),
+        runs: combinedRuns,
+        images: [...curr.images, ...nextPara.images],
+      });
+      i++;
+      continue;
+    }
+
+    // Ghép ô nhãn phương án đứng riêng lẻ trong bảng Word: Cột 1 là "A." / "*A." / "a)", Cột 2 là nội dung đáp án
+    const standaloneOptMatch = cleanCurr.match(/^([*#]?\s*[A-Da-d])\s*([.:)\-–—])?$/);
+    if (
+      standaloneOptMatch &&
+      i + 1 < rawExtractedParagraphs.length &&
+      !/^(?:PHẦN\s+|(?:Câu|Bài|Question)\s*\d+|[*#]?\s*[A-Da-d]\s*[.:)\-–—])/i.test(
+        rawExtractedParagraphs[i + 1].fullText.trim()
+      )
+    ) {
+      const nextPara = rawExtractedParagraphs[i + 1];
+      const rawLetter = standaloneOptMatch[1].trim();
+      const rawSep =
+        standaloneOptMatch[2] || (/[a-d]/.test(rawLetter.slice(-1)) ? ')' : '.');
+      const isHighlighted = curr.hasUnderline || curr.hasRed || rawLetter.startsWith('*') || rawLetter.startsWith('#');
+      const normalizedLetter = rawLetter.replace(/^[*#]\s*/, '');
+      const prefixStr = `${isHighlighted ? '*' : ''}${normalizedLetter}${rawSep} `;
+
+      const combinedRuns: ParsedRun[] = [
+        {
+          text: prefixStr,
+          isUnderline: curr.hasUnderline || isHighlighted,
+          isRed: curr.hasRed || isHighlighted,
+          isBold: true,
+          hasFormula: false,
+        },
+        ...nextPara.runs,
+      ];
+      mergedResult.push({
+        ...nextPara,
+        fullText: `${prefixStr}${nextPara.fullText}`.trim(),
+        runs: combinedRuns,
+        hasUnderline: isHighlighted || nextPara.hasUnderline,
+        hasRed: isHighlighted || nextPara.hasRed,
+        images: [...curr.images, ...nextPara.images],
+      });
+      i++;
+      continue;
+    }
+
+    mergedResult.push(curr);
+  }
+
+  return mergedResult;
+}
+
 /**
  * Bóc tách cây XML của file Word (.docx) thành danh sách các đoạn văn kèm:
  * - Gạch chân / Tô đỏ
@@ -769,7 +966,11 @@ function extractParagraphsFromDocxXml(
   mediaMap: Map<string, { dataUrl: string; fileName: string }>,
   numberingCtx?: DocxNumberingContext
 ): ParsedParagraph[] {
-  const cleanXml = xmlString.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  const cleanXml = xmlString
+    .replace(/^\uFEFF/, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi, '');
+
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(cleanXml, 'application/xml');
 
@@ -780,6 +981,14 @@ function extractParagraphsFromDocxXml(
       if (getLocalTagName(allElements[i]) === 'p') {
         pNodes.push(allElements[i]);
       }
+    }
+  }
+
+  // Nếu DOMParser gặp lỗi <parsererror> (do file Word thiếu khai báo namespace từ WPS/PDF2Word) -> Chuyển ngay sang bộ đọc Regex XML
+  if (pNodes.length === 0 || xmlDoc.getElementsByTagName('parsererror').length > 0) {
+    const regexParas = extractParagraphsFromDocxXmlRegex(cleanXml);
+    if (regexParas.length > 0) {
+      return regexParas;
     }
   }
 
@@ -844,7 +1053,7 @@ function extractParagraphsFromDocxXml(
     const paragraphImages = extractImagesFromElement(p, mediaMap);
     const paraLevelProps = inspectRunProperties(paraRPrNode);
 
-    // Đệ quy duyệt qua mọi thẻ bao bên trong <w:p> (bao gồm w:r, w:fldSimple, w:sdt, w:ins, w:hyperlink, w:customXml, mc:AlternateContent...)
+    // Đệ quy duyệt qua mọi thẻ bao bên trong <w:p> (không đi xuyên vào <w:p>, <w:tbl> hoặc <w:txbxContent> con để tránh gộp trùng Textbox)
     const collectRunsFromContainer = (container: Element) => {
       const cNodes = container.childNodes;
       for (let j = 0; j < cNodes.length; j++) {
@@ -857,7 +1066,10 @@ function extractParagraphsFromDocxXml(
           localTag === 'rpr' ||
           localTag === 'del' ||
           localTag === 'movefrom' ||
-          localTag === 'fallback'
+          localTag === 'fallback' ||
+          localTag === 'p' ||
+          localTag === 'tbl' ||
+          localTag === 'txbxcontent'
         ) {
           continue;
         }
@@ -884,6 +1096,8 @@ function extractParagraphsFromDocxXml(
               text += '\t';
             } else if (rTag === 'br' || rTag === 'cr') {
               text += '\n';
+            } else if (rTag === 'nobreakhyphen') {
+              text += '-';
             } else if (rTag === 'instrtext') {
               const instr = (rChild.textContent || '').trim();
               if (/^(?:SEQ|AUTONUM)/i.test(instr)) {
@@ -987,6 +1201,18 @@ function extractParagraphsFromDocxXml(
             hasFormula: false,
           });
           isAutoNumbered = false;
+        } else if (
+          lvlInfo.numFmt === 'decimal' &&
+          !/^(?:Câu|Bài|Question|\d+\s*[.:)])/i.test(joinedPreview) &&
+          !/^[*#]?[A-Da-d]\s*[.:)\-–—]/.test(joinedPreview)
+        ) {
+          runs.unshift({
+            text: `Câu ${currentCount}. `,
+            isUnderline: false,
+            isRed: false,
+            isBold: true,
+            hasFormula: false,
+          });
         }
       }
     }
@@ -1027,45 +1253,7 @@ function extractParagraphsFromDocxXml(
     }
   }
 
-  // Ghép các ô tiêu đề câu hỏi đứng riêng lẻ trong Bảng Word (VD: Cột 1 là "Câu 1" hoặc "Câu 1.", Cột 2 là nội dung câu hỏi)
-  const mergedResult: ParsedParagraph[] = [];
-  for (let i = 0; i < rawExtractedParagraphs.length; i++) {
-    const curr = rawExtractedParagraphs[i];
-    const standaloneHeaderMatch = curr.fullText.match(
-      /^(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question)\s*(\d+|[IVX]+)\s*(?:\([^)]{1,25}\)|\[[^\]]{1,25}\])?\s*[.:\-–—)]*$/i
-    );
-    if (
-      standaloneHeaderMatch &&
-      i + 1 < rawExtractedParagraphs.length &&
-      !/^(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)|(?:Câu|Bài|Question)\s*\d+)/i.test(
-        rawExtractedParagraphs[i + 1].fullText
-      )
-    ) {
-      const nextPara = rawExtractedParagraphs[i + 1];
-      const prefixText = `${curr.fullText.replace(/[.:\-–—)]+$/, '')}. `;
-      const combinedRuns: ParsedRun[] = [
-        {
-          text: prefixText,
-          isUnderline: false,
-          isRed: false,
-          isBold: true,
-          hasFormula: false,
-        },
-        ...nextPara.runs,
-      ];
-      mergedResult.push({
-        ...nextPara,
-        fullText: `${prefixText}${nextPara.fullText}`.trim(),
-        runs: combinedRuns,
-        images: [...curr.images, ...nextPara.images],
-      });
-      i++;
-    } else {
-      mergedResult.push(curr);
-    }
-  }
-
-  return mergedResult;
+  return mergeStandaloneTableHeadersAndOptions(rawExtractedParagraphs);
 }
 
 /**
@@ -1690,7 +1878,7 @@ async function loadMediaRelationships(
 function isAdministrativeExamHeader(text: string): boolean {
   const clean = text.trim();
   if (!clean) return true;
-  return /^(?:SỞ\s+GD|UBND\s+|PHÒNG\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|BỘ\s+GIÁO\s+DỤC|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|ĐỀ\s+THI\b|ĐỀ\s+THAM\s+KHẢO|MÔN\s*[:.]|Môn\s+thi\s*[:.]|Thời\s+gian\s+làm\s+bài|Họ\s+và\s+tên|Họ,\s+tên\s+thí\s+sinh|Số\s+báo\s+danh|Mã\s+đề\s*(?:thi)?\s*[:.]|Đề\s+thi\s+gồm\s+có|Không\s+kể\s+thời\s+gian|-----\s*HẾT\s*-----|\(Đề\s+gồm)/i.test(
+  return /^(?:SỞ\s+GD|UBND\s+|PHÒNG\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|BỘ\s+GIÁO\s+DỤC|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|ĐỀ\s+THI\b|ĐỀ\s+THAM\s+KHẢO|MÔN\s*[:.]|Môn\s+thi\s*[:.]|Thời\s+gian\s+làm\s+bài|Họ\s+và\s+tên|Họ,\s+tên\s+thí\s+sinh|Số\s+báo\s+danh|Mã\s+đề\s*(?:thi)?\s*[:.]|Đề\s+thi\s+gồm\s+có|Không\s+kể\s+thời\s+gian|-----\s*HẾT\s*-----|\(Đề\s+gồm|Thí\s+sinh\s+trả\s+lời\s+từ\s+câu|Mỗi\s+câu\s+hỏi\s+thí\s+sinh\s+chỉ\s+chọn|Trong\s+mỗi\s+ý\s+a\)\s*,\s*b\)\s*,\s*c\)\s*,\s*d\))/i.test(
     clean
   );
 }
@@ -1756,14 +1944,25 @@ export function buildQuestionsFromParsedParagraphs(
   const pushCurrentQuestion = () => {
     if (!currentQuestion) return;
 
-    // Nếu câu hỏi đang ở PART_1 nhưng lại không có phương án A,B,C,D mà có đủ 4 ý Đúng/Sai a), b), c), d) -> tự động chuyển sang PART_2
+    // Nếu câu hỏi đang ở PART_1 nhưng hoàn toàn không có phương án A,B,C,D mà lại có đủ 4 ý a), b), c), d) -> chuyển câu này sang PART_2
     if (
       currentQuestion.part === 'PART_1' &&
-      (!currentQuestion.options || currentQuestion.options.length === 0) &&
-      currentQuestion.subItems &&
-      currentQuestion.subItems.length >= 2
+      (!currentQuestion.options || currentQuestion.options.length === 0)
     ) {
-      currentQuestion.part = 'PART_2';
+      const combinedCheck = [
+        currentQuestion.stemText,
+        ...(currentQuestion.subItems || []).map((s) => `${s.originalLabel}) ${s.text}`),
+      ].join(' ');
+      const hasFourUpperABCD = Boolean(
+        findOrderedFourMarkers(combinedCheck, ['A', 'B', 'C', 'D'], true)
+      );
+      const hasFourLowerAbcd = Boolean(
+        findOrderedFourMarkers(combinedCheck, ['a', 'b', 'c', 'd'], true)
+      );
+
+      if (!hasFourUpperABCD && (hasFourLowerAbcd || (currentQuestion.subItems && currentQuestion.subItems.length >= 3))) {
+        currentQuestion.part = 'PART_2';
+      }
     }
 
     if (currentQuestion.part === 'PART_1') {
@@ -1790,7 +1989,7 @@ export function buildQuestionsFromParsedParagraphs(
   };
 
   const optionRegexSource =
-    /(?:^|[\s\t.;:?!)"'”’\],-]|(?<=[a-zà-ỹ0-9%°]))([*#]?\s*([A-D])\s*[.:)\-–—])\s*([^\t\n]+?)(?=(?:[\s\t.;:?!)"'”’\],-]+[*#]?\s*[A-D]\s*[.:)\-–—]|$))/g;
+    /(?:^|[\s\t.;:?!)"'”’\],-]|(?<=[a-zà-ỹ0-9%°]))([*#]?\s*([A-D])\s*[.:)\-–—])\s*([^\t\n]+?)(?=(?:[\s\t.;:?!)"'”’\],-]+[*#]?\s*[A-D]\s*[.:)\-–—]|(?<=[a-zà-ỹ0-9%°])[*#]?\s*[A-D]\s*[.:)\-–—]|$))/g;
   const subRegexSource =
     /(?:^|[\s\t.;:?!)"'”’\],-])([*#]?\s*([a-d])\s*[).:\-–—])\s*([^\t\n]+?)(?=(?:[\s\t.;:?!)"'”’\],-]+[*#]?\s*[a-d]\s*[).:\-–—]|$))/g;
 
@@ -1812,8 +2011,11 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
     if (
-      /^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedHeaderPrefix) &&
-      !/PHẦN\s+(II|III|IV)/i.test(strippedHeaderPrefix)
+      (/^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedHeaderPrefix) &&
+        !/PHẦN\s+(II|III|IV)/i.test(strippedHeaderPrefix)) ||
+      /^(?:PHẦN\s*(?:I|1)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+nhiều\s+phương\s+án\s+lựa\s+chọn/i.test(
+        strippedHeaderPrefix
+      )
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
@@ -1821,25 +2023,37 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
     if (
-      /^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedHeaderPrefix) &&
-      !/PHẦN\s+(III|IV)/i.test(strippedHeaderPrefix)
+      (/^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedHeaderPrefix) &&
+        !/PHẦN\s+(III|IV)/i.test(strippedHeaderPrefix)) ||
+      /^(?:PHẦN\s*(?:II|2)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+đúng\s*[\/\-–—\s]*sai/i.test(
+        strippedHeaderPrefix
+      )
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
       currentPart = 'PART_2';
       continue;
     }
-    if (/^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedHeaderPrefix)) {
+    if (
+      /^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedHeaderPrefix) ||
+      /^(?:PHẦN\s*(?:III|3)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+trả\s+lời\s+ngắn/i.test(
+        strippedHeaderPrefix
+      )
+    ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
       currentPart = 'PART_3';
       continue;
     }
 
+    if (isAdministrativeExamHeader(text)) {
+      continue;
+    }
+
     // 2. Nhận diện bắt đầu một câu hỏi mới:
-    // Hỗ trợ: "Câu 1.", "Câu 1:", "Câu hỏi 1:", "Câu số 1.", "Bài 1:", "Question 1:", "[NB] Câu 1:", "Câu 1 (0,25 điểm):", "1. Nội dung..."
+    // Hỗ trợ: "Câu 1.", "Câu 1:", "Câu 1. (NB):", "Câu hỏi 1:", "Câu số 1.", "Bài 1:", "Question 1:", "[NB] Câu 1:", "Câu 1 (0,25 điểm):", "1. Nội dung..."
     const explicitQMatch = text.match(
-      /^(?:[*#•+\-–—\s]|\[(?:NB|TH|VD|VDC|[^\]]{1,12})\]|\((?:NB|TH|VD|VDC|[^)]{1,12})\))*(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*(\d+|[IVX]+)\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])?\s*[.:\-–—)]*\s*(.*)$/i
+      /^(?:[*#•+\-–—\s]|\[(?:NB|TH|VD|VDC|[^\]]{1,12})\]|\((?:NB|TH|VD|VDC|[^)]{1,12})\))*(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*(\d+|[IVX]+)\s*[.:\-–—)]*\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])?\s*[.:\-–—)]*\s*(.*)$/i
     );
 
     const currentHasCompleteOptions =
@@ -1910,9 +2124,6 @@ export function buildQuestionsFromParsedParagraphs(
     // Nếu chưa có currentQuestion (ví dụ file Word bị mất chữ "Câu 1" do macro/field)
     if (!currentQuestion) {
       if (optMatches.length > 0 || subMatches.length > 0) {
-        if (subMatches.length > 0 && optMatches.length === 0 && currentPart === 'PART_1') {
-          currentPart = 'PART_2';
-        }
         if (pendingStemParagraphs.length > 0) {
           const firstPending = pendingStemParagraphs[0];
           const combinedPendingText = pendingStemParagraphs.map((p) => p.fullText).join(' ');
@@ -1959,19 +2170,6 @@ export function buildQuestionsFromParsedParagraphs(
     if (para.images.length > 0) {
       currentQuestion.hasImage = true;
       currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
-    }
-
-    // Nếu đang ở PART_1 nhưng phát hiện các dòng bắt đầu bằng a), b), c), d) (khi giáo viên quên gõ tiêu đề PHẦN II)
-    if (
-      currentQuestion.part === 'PART_1' &&
-      (!currentQuestion.options || currentQuestion.options.length === 0) &&
-      subMatches.length > 0 &&
-      /^\s*[*#]?[a-d]\s*\)/.test(text)
-    ) {
-      currentPart = 'PART_2';
-      currentQuestion.part = 'PART_2';
-      currentQuestion.options = undefined;
-      currentQuestion.subItems = [];
     }
 
     // 3. Xử lý nội dung bên trong câu hỏi tùy theo từng Phần
@@ -2264,7 +2462,7 @@ export function parseClipboardHtmlToExamQuestions(
     }
 
     if (rawParas.length > 0) {
-      return buildQuestionsFromParsedParagraphs(rawParas, resetPerPart);
+      return buildQuestionsFromParsedParagraphs(mergeStandaloneTableHeadersAndOptions(rawParas), resetPerPart);
     }
   } catch {
     // Fallback sang plain text nếu HTML không hợp lệ
@@ -2323,65 +2521,164 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
 }
 
 /**
- * Phân tích File Word (.docx / .doc / văn bản) theo cấu trúc chuẩn THPT 2025
- * Hỗ trợ nhận diện toàn diện:
- * - Tách tự động các câu hỏi và phương án A, B, C, D / a), b), c), d) bị dính chùm
- * - Giải mã tự động Numbering / Multilevel List từ word/numbering.xml & word/styles.xml
- * - Chuẩn hóa bảng mã Unicode Tổ hợp (NFD -> NFC) và tiêu đề VNI/TCVN3
- * - Bắt buộc chuẩn hóa đúng 4 đáp án cho mọi câu ở Phần I và Phần II (không thiếu, không dư)
- * - Ảnh minh họa, sơ đồ sinh học/hóa học/vật lý (<w:drawing>, <w:pict>)
- * - Công thức toán học (OMML <m:oMath> -> LaTeX)
+ * Trích xuất văn bản tiếng Việt từ tệp nhị phân Word 97-2003 (.doc OLE2) hoặc RTF
+ */
+function extractTextFromLegacyDocBuffer(arrayBuffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(arrayBuffer);
+
+  // 1. Kiểm tra định dạng RTF ({\rtf1...)
+  const asciiHeader = new TextDecoder('ascii').decode(bytes.slice(0, 64));
+  if (asciiHeader.trimStart().startsWith('{\\rtf')) {
+    const rawRtf = new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+    return rawRtf
+      .replace(/\\par\b|\\line\b/g, '\n')
+      .replace(/\\tab\b/g, '\t')
+      .replace(/\\u(-?\d+)\??/g, (_, code) => {
+        const num = parseInt(code, 10);
+        return String.fromCharCode(num < 0 ? num + 65536 : num);
+      })
+      .replace(/\\'[0-9a-fA-F]{2}/g, '')
+      .replace(/\\[a-zA-Z]+\d*\s?/g, '')
+      .replace(/[{}]/g, '');
+  }
+
+  // 2. Quét luồng văn bản UTF-16LE (chuẩn lưu trữ tiếng Việt của Word 97-2003 .doc)
+  const utf16Chunks: string[] = [];
+  let currentChars: number[] = [];
+
+  const isPrintableVnChar = (code: number): boolean => {
+    if (code === 0x09 || code === 0x0a || code === 0x0d) return true;
+    if (code >= 0x20 && code <= 0x7e) return true;
+    if (code >= 0x00c0 && code <= 0x024f) return true;
+    if (code >= 0x1e00 && code <= 0x1eff) return true;
+    if (code >= 0x2010 && code <= 0x22ff) return true;
+    return false;
+  };
+
+  for (let i = 0; i + 1 < bytes.length; i += 2) {
+    const code = bytes[i] | (bytes[i + 1] << 8);
+    if (isPrintableVnChar(code)) {
+      currentChars.push(code === 0x0d ? 0x0a : code);
+    } else {
+      if (currentChars.length >= 16) {
+        const chunk = String.fromCharCode(...currentChars);
+        if (/(?:Câu|PHẦN|Bài|[A-D]\s*[.:)])/i.test(chunk)) {
+          utf16Chunks.push(chunk);
+        }
+      }
+      currentChars = [];
+    }
+  }
+  if (currentChars.length >= 16) {
+    const chunk = String.fromCharCode(...currentChars);
+    if (/(?:Câu|PHẦN|Bài|[A-D]\s*[.:)])/i.test(chunk)) {
+      utf16Chunks.push(chunk);
+    }
+  }
+
+  if (utf16Chunks.length > 0) {
+    return utf16Chunks.join('\n');
+  }
+
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+}
+
+/**
+ * Phân tích File Word (.docx / .doc / văn bản) theo cấu trúc chuẩn THPT 2025 (Đa tầng chống lỗi 100%):
+ * - Tầng 1: OpenXML DOMParser (nhận diện gạch chân <w:u>, tô đỏ <w:color>, auto-numbering, bảng biểu, OMML, hình ảnh)
+ * - Tầng 2: Pure-Regex XML Parser (chống lỗi <parsererror> khi tệp Word có namespace lạ từ WPS / PDF2Word)
+ * - Tầng 3: Mammoth HTML & RawText Extractor (giữ nguyên thẻ <u> gạch chân và nội dung mọi định dạng .docx)
+ * - Tầng 4: Bộ giải mã .doc (Word 97-2003 UTF-16LE), RTF và HTML
  */
 export async function parseDocxExamFile(
   file: File,
   resetPerPart = true
 ): Promise<ExamQuestion[]> {
+  const arrayBuffer = await file.arrayBuffer();
+
+  // TẦNG 1 & 2: Đọc cấu trúc OpenXML (.docx) qua JSZip
   try {
-    const arrayBuffer = await file.arrayBuffer();
     const zip = await JSZip.loadAsync(arrayBuffer);
     const docXmlFile =
       zip.file('word/document.xml') ||
-      zip.file(/^word\/document.*\.xml$/i)[0];
+      zip.file(/^word[\\/]document.*\.xml$/i)[0];
 
-    if (!docXmlFile) {
-      throw new Error('Không tìm thấy word/document.xml');
+    if (docXmlFile) {
+      const [mediaMap, numberingCtx, xmlString] = await Promise.all([
+        loadMediaRelationships(zip),
+        loadDocxNumberingContext(zip),
+        docXmlFile.async('string'),
+      ]);
+
+      const paragraphs = extractParagraphsFromDocxXml(xmlString, mediaMap, numberingCtx);
+      const parsedQuestions = buildQuestionsFromParsedParagraphs(paragraphs, resetPerPart);
+
+      if (parsedQuestions.length > 0) {
+        return parsedQuestions;
+      }
+
+      const regexParagraphs = extractParagraphsFromDocxXmlRegex(xmlString);
+      const regexQuestions = buildQuestionsFromParsedParagraphs(regexParagraphs, resetPerPart);
+      if (regexQuestions.length > 0) {
+        return regexQuestions;
+      }
     }
+  } catch {
+    // Chuyển sang tầng Mammoth / Legacy .doc nếu không phải chuẩn ZIP thông thường
+  }
 
-    const [mediaMap, numberingCtx, xmlString] = await Promise.all([
-      loadMediaRelationships(zip),
-      loadDocxNumberingContext(zip),
-      docXmlFile.async('string'),
+  // TẦNG 3: Sử dụng Mammoth.js (Trích xuất HTML có giữ thẻ <u> gạch chân + Raw Text)
+  try {
+    const [htmlResult, rawTextResult] = await Promise.all([
+      mammoth.convertToHtml(
+        { arrayBuffer },
+        {
+          styleMap: ['u => u', 'b => b', 'i => i'],
+        }
+      ),
+      mammoth.extractRawText({ arrayBuffer }),
     ]);
 
-    const paragraphs = extractParagraphsFromDocxXml(xmlString, mediaMap, numberingCtx);
-    const parsedQuestions = buildQuestionsFromParsedParagraphs(paragraphs, resetPerPart);
+    const htmlStr = htmlResult.value || '';
+    const plainStr = rawTextResult.value || '';
 
-    if (parsedQuestions.length > 0) {
-      return parsedQuestions;
+    if (htmlStr.trim() || plainStr.trim()) {
+      const fromMammoth = parseClipboardHtmlToExamQuestions(
+        htmlStr,
+        plainStr,
+        resetPerPart
+      );
+      if (fromMammoth.length > 0) {
+        return fromMammoth;
+      }
     }
-
-    // Dự phòng nếu paragraphs ghép lại có thể phân tích qua bộ đọc văn bản thô
-    const rawJoined = paragraphs.map((p) => p.fullText).join('\n');
-    if (rawJoined.trim()) {
-      return parseRawTextToExamQuestions(rawJoined, resetPerPart);
-    }
-
-    return [];
   } catch {
-    // Dự phòng trường hợp giáo viên tải tệp .doc (định dạng HTML/Text/RTF) hoặc tệp văn bản đổi đuôi .docx
-    try {
-      const rawText = await file.text();
-      if (/<html|<body|<p\b|<div\b/i.test(rawText)) {
-        return parseClipboardHtmlToExamQuestions(rawText, rawText, resetPerPart);
-      }
-      if (rawText && rawText.trim().length > 0) {
-        return parseRawTextToExamQuestions(rawText, resetPerPart);
-      }
-    } catch {
-      // Ignore fallback error
-    }
-    throw new Error(
-      'Tệp tải lên không đúng định dạng Word (.docx). Nếu tệp đang ở định dạng Word 97-2003 (.doc), vui lòng chọn Save As -> Word Document (.docx) hoặc Copy & Dán trực tiếp nội dung vào khung Trang Word A4.'
-    );
+    // Chuyển sang tầng 4 nếu Mammoth không đọc được
   }
+
+  // TẦNG 4: Đọc tệp Word 97-2003 (.doc OLE2 UTF-16LE), RTF, HTML hoặc Văn bản thuần
+  try {
+    const rawText = await file.text();
+    if (/<html|<body|<p\b|<div\b|<table\b/i.test(rawText)) {
+      const fromHtml = parseClipboardHtmlToExamQuestions(rawText, rawText, resetPerPart);
+      if (fromHtml.length > 0) return fromHtml;
+    }
+
+    const legacyExtracted = extractTextFromLegacyDocBuffer(arrayBuffer);
+    if (legacyExtracted && legacyExtracted.trim().length > 0) {
+      const fromLegacy = parseRawTextToExamQuestions(legacyExtracted, resetPerPart);
+      if (fromLegacy.length > 0) return fromLegacy;
+    }
+
+    if (rawText && rawText.trim().length > 0) {
+      const fromPlain = parseRawTextToExamQuestions(rawText, resetPerPart);
+      if (fromPlain.length > 0) return fromPlain;
+    }
+  } catch {
+    // Bỏ qua lỗi đọc dự phòng
+  }
+
+  throw new Error(
+    'Không thể đọc nội dung tệp. Nếu tệp đang ở định dạng Word 97-2003 (.doc) bị mã hóa, vui lòng lưu lại dưới dạng Word (.docx) hoặc Copy & Dán (Ctrl+V) trực tiếp vào khung Trang Word A4.'
+  );
 }

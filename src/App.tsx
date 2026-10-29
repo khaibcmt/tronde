@@ -366,6 +366,7 @@ export default function App() {
         setClonedQuestions([]);
         setAiClonedVariants([]);
         setActiveRightTab('LIVE_EDITOR');
+        setFilterPart('ALL');
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
         setStatusBanner({
           type: 'SUCCESS',
@@ -1469,7 +1470,7 @@ export default function App() {
         <input
           ref={fileInputRef}
           type="file"
-          accept=".docx,.pdf"
+          accept=".docx,.doc,.pdf,.txt"
           onChange={handleFileUpload}
           className="hidden"
         />
