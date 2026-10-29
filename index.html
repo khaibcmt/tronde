@@ -27,7 +27,7 @@ window.addEventListener('keydown', function(e) {
 });
 window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 setInterval(function() {
-    if (!document.body.innerText.includes('Hồ Tấn Khải') || !document.body.innerText.includes('Mang Thít')) {
+    if (!document.body.innerText.includes('Hồ Tấn Khải') && !document.body.innerText.includes('Mang Thít')) {
         document.body.innerHTML = '<h1 style="color:red;text-align:center;margin-top:20vh;">Trang web đã bị thay đổi thông tin bản quyền!</h1>';
     }
 }, 2000);
