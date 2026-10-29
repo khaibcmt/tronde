@@ -342,9 +342,14 @@ export default function App() {
         file.name.toLowerCase().endsWith('.pdf') ||
         file.type === 'application/pdf';
 
-      const parsed = isPdf
+      const rawParsed = isPdf
         ? await parsePdfExamFile(file, config.resetNumberingPerPart)
         : await parseDocxExamFile(file, config.resetNumberingPerPart);
+
+      const parsed = normalizeAllQuestionsStrictFourOptions(
+        rawParsed,
+        config.resetNumberingPerPart
+      );
 
       if (parsed.length === 0) {
         setStatusBanner({
@@ -370,7 +375,7 @@ export default function App() {
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
         setStatusBanner({
           type: 'SUCCESS',
-          text: `Đã phân tích thông minh & tách câu dính chùm tệp "${file.name}" (${parsed.length} câu hỏi chuẩn 4 đáp án${
+          text: `Đã phân tích thông minh & chuẩn hóa tự động tệp "${file.name}" (${parsed.length} câu hỏi chuẩn 4 đáp án${
             totalImages > 0 ? `, nhận diện ${totalImages} sơ đồ/hình ảnh` : ''
           }${formulaCount > 0 ? `, ${formulaCount} câu có công thức` : ''}).`,
         });
@@ -421,26 +426,14 @@ export default function App() {
     });
   };
 
-  // ================= HANDLER: TÁCH CÂU DÍNH CHÙM & ÉP CHUẨN ĐỦ 4 ĐÁP ÁN =================
-  const handleNormalizeAndDeClumpAllQuestions = () => {
-    const normalized = normalizeAllQuestionsStrictFourOptions(
-      questions,
-      config.resetNumberingPerPart
-    );
-    setQuestions(normalized);
-    setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
-    setHasUnsavedChanges(false);
-    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
-    setStatusBanner({
-      type: 'SUCCESS',
-      text: 'Đã tự động tách các câu hỏi/đáp án dính chùm và ép chuẩn bắt buộc đủ 4 phương án cho mọi câu ở Phần I (A, B, C, D) và Phần II (a, b, c, d)!',
-    });
-  };
-
   // Đồng bộ từ trình soạn thảo trang giấy Word A4 sang danh sách câu hỏi chuẩn 4 đáp án & Tự luận
   const handleSyncFromWordA4Editor = () => {
-    const parsedFromWord = parseRawTextToExamQuestions(
+    const rawFromWord = parseRawTextToExamQuestions(
       wordRawDocumentText,
+      config.resetNumberingPerPart
+    );
+    const parsedFromWord = normalizeAllQuestionsStrictFourOptions(
+      rawFromWord,
       config.resetNumberingPerPart
     );
     if (parsedFromWord.length === 0) {
@@ -473,9 +466,13 @@ export default function App() {
         /color\s*:/i.test(htmlData) ||
         /<font\b/i.test(htmlData))
     ) {
-      const parsedFromHtml = parseClipboardHtmlToExamQuestions(
+      const rawFromHtml = parseClipboardHtmlToExamQuestions(
         htmlData,
         plainData,
+        config.resetNumberingPerPart
+      );
+      const parsedFromHtml = normalizeAllQuestionsStrictFourOptions(
+        rawFromHtml,
         config.resetNumberingPerPart
       );
       if (parsedFromHtml.length > 0) {
@@ -1939,12 +1936,12 @@ export default function App() {
 
               {/* Nhóm 2: Các nút tác vụ chính (Mỗi nút 1 màu riêng biệt) */}
               <div className="space-y-1.5 pb-2 border-b border-sky-200/90">
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-3 gap-1.5">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}
-                    className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-primary flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    className="px-2 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-primary flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer"
                   >
                     <Upload className="w-3.5 h-3.5 shrink-0" />
                     <span>Tải Word / PDF</span>
@@ -1953,7 +1950,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => handleLoadSampleExam(true)}
-                    className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    className="px-2 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 shrink-0" />
                     <span>Đề Mẫu 18-4-6</span>
@@ -1961,17 +1958,8 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={handleNormalizeAndDeClumpAllQuestions}
-                    className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-orange flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  >
-                    <Wand2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Tách Dính Chùm &amp; 4 ĐA</span>
-                  </button>
-
-                  <button
-                    type="button"
                     onClick={handleSaveEdits}
-                    className={`px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    className={`px-2 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
                       hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
                     }`}
                   >
@@ -2031,7 +2019,7 @@ export default function App() {
                       </div>
                       <button
                         type="button"
-                        onClick={handleNormalizeAndDeClumpAllQuestions}
+                        onClick={handleQuickFixAllErrors}
                         className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-2xs whitespace-nowrap"
                       >
                         <Wand2 className="w-3 h-3" />

@@ -212,8 +212,23 @@ export function validateExamQuestions(
 }
 
 /**
- * Kiểm tra xem một node <w:rPr> có thuộc tính gạch chân (<w:u>) hay tô màu đỏ (<w:color>) không
+ * Kiểm tra mã màu Hex có phải là tông màu Đỏ (Red / Dark Red / Crimson / Scarlet) trong Word hay không
  */
+function isRedHexColor(rawHex: string): boolean {
+  const clean = rawHex.replace(/^#/, '').toUpperCase().trim();
+  if (!clean || clean === 'AUTO' || clean === '000000') return false;
+  if (RED_COLOR_HEXES.has(clean)) return true;
+  if (/^[0-9A-F]{6}$/.test(clean)) {
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    if (r >= 150 && g <= 95 && b <= 95 && r > g * 1.8 && r > b * 1.8) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Tiền xử lý mảng runs của một đoạn văn:
  * Khi phát hiện ký tự đầu của ý a), b), c), d) hoặc A., B., C., D. (dù chỉ gạch chân/tô đỏ mỗi chữ cái 'a',
@@ -226,7 +241,8 @@ function injectFormattingMarkersIntoRuns(runs: ParsedRun[]): ParsedRun[] {
   if (!fullText.trim()) return runs;
 
   // Tìm tất cả các vị trí xuất hiện nhãn a), b), c), d) hoặc A., B., C., D.
-  const prefixRegex = /(?:^|[\s\t\n.;:?!)"'”’\],-])([a-dA-D])(\s*[).:\-–—]\s*)/g;
+  // Không dùng dấu gạch ngang '-' làm dấu phân cách để tránh nhầm với kiểu hình A-B- hoặc liên kết A-T
+  const prefixRegex = /(?:^|[\s\t\n.;:?!])([a-dA-D])(\s*[).:]\s*)/g;
   const markPositions = new Set<number>();
 
   let m: RegExpExecArray | null;
@@ -325,13 +341,7 @@ function inspectRunProperties(rPr: Element | null, paraRPr?: Element | null): {
           isUnderline = true;
         }
       } else if (tag === 'color') {
-        const rawColor = val.replace(/^#/, '').toUpperCase();
-        if (RED_COLOR_HEXES.has(rawColor)) {
-          isRed = true;
-        } else if (
-          /^[C-F][0-9A-F]0000$/i.test(rawColor) ||
-          /^[C-F][0-9A-F][0-3][0-9A-F][0-3][0-9A-F]$/i.test(rawColor)
-        ) {
+        if (isRedHexColor(val)) {
           isRed = true;
         }
       } else if (tag === 'b') {
@@ -1330,6 +1340,7 @@ interface MarkerMatch {
 /**
  * Tìm chuỗi vị trí 4 mốc tuần tự (A -> B -> C -> D) hoặc (a -> b -> c -> d) trong một khối văn bản bị dính chùm
  * Hỗ trợ cả trường hợp dính sát vào dấu chấm/chữ phía trước: "...câu hỏi?A. Đáp án 1.B. Đáp án 2.C. Đáp án 3.D. Đáp án 4"
+ * Tuyệt đối không dùng dấu '-' làm dấu phân cách để không cắt nhầm kiểu hình A-B- hoặc liên kết A-T, G-C
  */
 function findOrderedFourMarkers(
   text: string,
@@ -1337,15 +1348,17 @@ function findOrderedFourMarkers(
   caseSensitive: boolean
 ): [MarkerMatch, MarkerMatch, MarkerMatch, MarkerMatch] | null {
   const candidatesBySlot: MarkerMatch[][] = [[], [], [], []];
+  const isLowerTarget = targetLabels[0] === 'a';
 
   for (let slot = 0; slot < 4; slot++) {
     const lbl = targetLabels[slot];
     const flags = caseSensitive ? 'g' : 'gi';
-    // Cho phép đứng đầu chuỗi, hoặc sau khoảng trắng/tab/xuống dòng, hoặc dính liền sau dấu câu (. ? ! ; : ) ] " ') hoặc chữ thường/số
-    const regex = new RegExp(
-      `(?:^|[\\s\\t\\n.;:?!)"'”’\\],-]|(?<=[a-zà-ỹ0-9%°]))([*#]?\\s*(${lbl})\\s*[.:)\\-–—])\\s*`,
-      flags
-    );
+    // Với ý a), b), c), d) ở Phần II: Không cho phép đứng ngay sau chữ cái hoặc dấu '(' để tránh bắt nhầm kiểu gen (aa), (bb), (ab)
+    const boundaryPattern = isLowerTarget
+      ? `(?:^|[\\s\\t\\n.;:?!])([*#]?\\s*(${lbl})\\s*[).:])\\s+`
+      : `(?:^|[\\s\\t\\n.;:?!)"'”’\\]]|(?<=[a-zà-ỹ0-9%°]))([*#]?\\s*(${lbl})\\s*[.:)])\\s*`;
+
+    const regex = new RegExp(boundaryPattern, flags);
 
     let m: RegExpExecArray | null;
     while ((m = regex.exec(text)) !== null) {
@@ -1399,7 +1412,7 @@ function findOrderedFourMarkers(
 /**
  * THUẬT TOÁN BẮT BUỘC CHUẨN HÓA ĐÚNG 4 PHƯƠNG ÁN A, B, C, D CHO PHẦN I
  * - Xử lý triệt để câu hỏi và đáp án dính chùm, dài không tách biệt nhau
- * - Đảm bảo 100% mỗi câu Phần I có ĐÚNG 4 phương án A, B, C, D (không thiếu, không dư)
+ * - Nếu câu hỏi đã có sẵn 4 phương án độc lập sạch sẽ thì giữ nguyên 100% nội dung và trạng thái gạch chân/tô đỏ
  */
 export function enforceStrictFourOptionsPart1(
   question: ExamQuestion,
@@ -1409,183 +1422,229 @@ export function enforceStrictFourOptionsPart1(
 
   const existingOpts = question.options || [];
   const rawJoinedRuns = questionRuns.map((r) => r.text).join('');
+  const labels: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
 
-  // Ghép toàn bộ văn bản của câu hỏi (cả stemText và các phương án đang có) để kiểm tra xem có bị dính chùm không
-  const combinedText = [
-    question.stemText,
-    ...existingOpts.map((o) => `${o.originalLabel}. ${o.text}`),
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  // 1. Thử bóc tách bộ 4 mốc tuần tự A -> B -> C -> D từ chuỗi tổng hợp
-  const orderedFour = findOrderedFourMarkers(
-    combinedText,
-    ['A', 'B', 'C', 'D'],
-    true
-  ) || findOrderedFourMarkers(combinedText, ['A', 'B', 'C', 'D'], false);
+  // Kiểm tra xem câu hỏi đã có đủ 4 phương án A, B, C, D tách biệt sạch sẽ chưa
+  const stemHasClumpedFour = Boolean(
+    findOrderedFourMarkers(question.stemText, ['A', 'B', 'C', 'D'], true)
+  );
+  const anyOptionHasClumpedNext = existingOpts.some((o) =>
+    /(?:\t+|\s{2,}|[.;?!]\s*)[*#]?\s*[B-D]\s*[.:)]\s+\S/.test(o.text)
+  );
 
   let finalStem = question.stemText.trim();
   let finalOptions: OptionPart1[] = [];
 
-  if (orderedFour) {
-    const [mA, mB, mC, mD] = orderedFour;
-    const extractedStem = combinedText.slice(0, mA.markerStart).trim();
-    if (extractedStem) {
-      finalStem = extractedStem;
-    }
-
-    const rawSegments: { label: 'A' | 'B' | 'C' | 'D'; text: string; fullSeg: string; start: number; starred: boolean }[] = [
-      {
-        label: 'A',
-        text: combinedText.slice(mA.contentStart, mB.markerStart).trim(),
-        fullSeg: combinedText.slice(mA.markerStart, mB.markerStart),
-        start: mA.markerStart,
-        starred: mA.isStarred,
-      },
-      {
-        label: 'B',
-        text: combinedText.slice(mB.contentStart, mC.markerStart).trim(),
-        fullSeg: combinedText.slice(mB.markerStart, mC.markerStart),
-        start: mB.markerStart,
-        starred: mB.isStarred,
-      },
-      {
-        label: 'C',
-        text: combinedText.slice(mC.contentStart, mD.markerStart).trim(),
-        fullSeg: combinedText.slice(mC.markerStart, mD.markerStart),
-        start: mC.markerStart,
-        starred: mC.isStarred,
-      },
-      {
-        label: 'D',
-        text: combinedText.slice(mD.contentStart).trim(),
-        fullSeg: combinedText.slice(mD.markerStart),
-        start: mD.markerStart,
-        starred: mD.isStarred,
-      },
-    ];
-
-    finalOptions = rawSegments.map((seg) => {
-      // Kiểm tra xem phương án này trước đó đã có trạng thái đúng/gạch chân/đỏ chưa
-      const prevOpt = existingOpts.find((o) => o.originalLabel === seg.label);
-      const hl =
-        questionRuns.length > 0
-          ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text, seg.start, seg.fullSeg)
-          : { isUnderline: false, isRed: false };
-
-      let cleanOptText = seg.text;
-      let explicitCorrect = seg.starred;
-      if (/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i.test(cleanOptText)) {
+  if (
+    existingOpts.length === 4 &&
+    existingOpts.every((o) => o.text.trim().length > 0) &&
+    !stemHasClumpedFour &&
+    !anyOptionHasClumpedNext
+  ) {
+    finalOptions = existingOpts.map((o, idx) => {
+      const lbl = labels[idx];
+      let cleanText = o.text.trim();
+      let explicitCorrect = false;
+      if (/^[*#]\s*/.test(cleanText)) {
         explicitCorrect = true;
-        cleanOptText = cleanOptText.replace(/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i, '').trim();
+        cleanText = cleanText.replace(/^[*#]\s*/, '').trim();
       }
-
-      const isUnderline = Boolean(prevOpt?.isUnderline || hl.isUnderline || explicitCorrect);
-      const isRed = Boolean(prevOpt?.isRed || hl.isRed || explicitCorrect);
-      const isCorrect = Boolean(prevOpt?.isCorrect || isUnderline || isRed || explicitCorrect);
-
+      if (/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i.test(cleanText)) {
+        explicitCorrect = true;
+        cleanText = cleanText.replace(/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i, '').trim();
+      }
+      const isUnderline = Boolean(o.isUnderline || explicitCorrect);
+      const isRed = Boolean(o.isRed || explicitCorrect);
+      const isCorrect = Boolean(o.isCorrect || isUnderline || isRed || explicitCorrect);
       return {
-        id: prevOpt?.id || `${question.id}-opt-${seg.label}`,
-        originalLabel: seg.label,
-        currentLabel: seg.label,
-        text: cleanOptText || `Phương án ${seg.label}`,
+        ...o,
+        id: o.id || `${question.id}-opt-${lbl}`,
+        originalLabel: lbl,
+        currentLabel: o.currentLabel || lbl,
+        text: cleanText,
         isUnderline,
         isRed,
         isCorrect,
       };
     });
   } else {
-    // 2. Nếu không tìm thấy mốc A-B-C-D chuẩn (ví dụ chỉ có 2-3 mốc hoặc viết cách nhau bằng dấu chấm phẩy / xuống dòng)
-    const labels: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
+    // Ghép toàn bộ văn bản của câu hỏi (cả stemText và các phương án đang có) để tách dính chùm
+    const combinedText = [
+      question.stemText,
+      ...existingOpts.map(
+        (o) => `${o.isCorrect || o.isUnderline || o.isRed ? '*' : ''}${o.originalLabel}. ${o.text}`
+      ),
+    ]
+      .filter(Boolean)
+      .join(' ');
 
-    // Tách thêm các phương án bị gộp trong từng option hiện có
-    const expandedPool: { text: string; isCorrect: boolean; isUnderline: boolean; isRed: boolean }[] = [];
-    for (const opt of existingOpts) {
-      const subParts = opt.text
-        .split(/(?:\t+|\s{3,}|\n+|(?<=[.;])\s*(?=[A-D]\s*[.:)]))/g)
-        .map((s) => s.replace(/^[A-D]\s*[.:)]\s*/i, '').trim())
-        .filter(Boolean);
+    const orderedFour =
+      findOrderedFourMarkers(combinedText, ['A', 'B', 'C', 'D'], true) ||
+      findOrderedFourMarkers(combinedText, ['A', 'B', 'C', 'D'], false);
 
-      if (subParts.length > 1) {
-        subParts.forEach((sp, idx) => {
-          expandedPool.push({
-            text: sp,
-            isCorrect: idx === 0 ? opt.isCorrect : false,
-            isUnderline: idx === 0 ? opt.isUnderline : false,
-            isRed: idx === 0 ? opt.isRed : false,
-          });
-        });
-      } else {
-        expandedPool.push({
-          text: opt.text.trim(),
-          isCorrect: opt.isCorrect,
-          isUnderline: opt.isUnderline,
-          isRed: opt.isRed,
-        });
+    if (orderedFour) {
+      const [mA, mB, mC, mD] = orderedFour;
+      const extractedStem = combinedText.slice(0, mA.markerStart).trim();
+      if (extractedStem) {
+        finalStem = extractedStem;
       }
-    }
 
-    // Nếu vẫn chưa có phương án nào và stemText có dấu chấm hỏi '?' hoặc ':' theo sau bởi các mệnh đề
-    if (expandedPool.length === 0) {
-      const qMarkIdx = Math.max(finalStem.lastIndexOf('?'), finalStem.lastIndexOf(':'));
-      if (qMarkIdx > 10 && qMarkIdx < finalStem.length - 8) {
-        const tail = finalStem.slice(qMarkIdx + 1).trim();
-        const tailParts = tail
-          .split(/(?:;|\t+|\n+|\.\s+)/)
-          .map((s) => s.trim())
+      const rawSegments: {
+        label: 'A' | 'B' | 'C' | 'D';
+        text: string;
+        fullSeg: string;
+        start: number;
+        starred: boolean;
+      }[] = [
+        {
+          label: 'A',
+          text: combinedText.slice(mA.contentStart, mB.markerStart).trim(),
+          fullSeg: combinedText.slice(mA.markerStart, mB.markerStart),
+          start: mA.markerStart,
+          starred: mA.isStarred,
+        },
+        {
+          label: 'B',
+          text: combinedText.slice(mB.contentStart, mC.markerStart).trim(),
+          fullSeg: combinedText.slice(mB.markerStart, mC.markerStart),
+          start: mB.markerStart,
+          starred: mB.isStarred,
+        },
+        {
+          label: 'C',
+          text: combinedText.slice(mC.contentStart, mD.markerStart).trim(),
+          fullSeg: combinedText.slice(mC.markerStart, mD.markerStart),
+          start: mC.markerStart,
+          starred: mC.isStarred,
+        },
+        {
+          label: 'D',
+          text: combinedText.slice(mD.contentStart).trim(),
+          fullSeg: combinedText.slice(mD.markerStart),
+          start: mD.markerStart,
+          starred: mD.isStarred,
+        },
+      ];
+
+      finalOptions = rawSegments.map((seg) => {
+        const prevOpt = existingOpts.find((o) => o.originalLabel === seg.label);
+        const hl =
+          questionRuns.length > 0
+            ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text, seg.start, seg.fullSeg)
+            : { isUnderline: false, isRed: false };
+
+        let cleanOptText = seg.text;
+        let explicitCorrect = seg.starred;
+        if (/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i.test(cleanOptText)) {
+          explicitCorrect = true;
+          cleanOptText = cleanOptText.replace(/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i, '').trim();
+        }
+
+        const isUnderline = Boolean(prevOpt?.isUnderline || hl.isUnderline || explicitCorrect);
+        const isRed = Boolean(prevOpt?.isRed || hl.isRed || explicitCorrect);
+        const isCorrect = Boolean(prevOpt?.isCorrect || isUnderline || isRed || explicitCorrect);
+
+        return {
+          id: prevOpt?.id || `${question.id}-opt-${seg.label}`,
+          originalLabel: seg.label,
+          currentLabel: seg.label,
+          text: cleanOptText || `Phương án ${seg.label}`,
+          isUnderline,
+          isRed,
+          isCorrect,
+        };
+      });
+    } else {
+      // Tách thêm các phương án bị gộp trong từng option hiện có
+      const expandedPool: {
+        text: string;
+        isCorrect: boolean;
+        isUnderline: boolean;
+        isRed: boolean;
+      }[] = [];
+      for (const opt of existingOpts) {
+        const subParts = opt.text
+          .split(/(?:\t+|\s{3,}|\n+|(?<=[.;])\s*(?=[A-D]\s*[.:)]))/g)
+          .map((s) => s.replace(/^[*#]?\s*[A-D]\s*[.:)]\s*/i, '').trim())
           .filter(Boolean);
-        if (tailParts.length >= 2) {
-          finalStem = finalStem.slice(0, qMarkIdx + 1).trim();
-          tailParts.forEach((tp, idx) => {
+
+        if (subParts.length > 1) {
+          subParts.forEach((sp, idx) => {
             expandedPool.push({
-              text: tp,
-              isCorrect: idx === 0,
-              isUnderline: idx === 0,
-              isRed: idx === 0,
+              text: sp,
+              isCorrect: idx === 0 ? opt.isCorrect : false,
+              isUnderline: idx === 0 ? opt.isUnderline : false,
+              isRed: idx === 0 ? opt.isRed : false,
             });
+          });
+        } else {
+          expandedPool.push({
+            text: opt.text.trim(),
+            isCorrect: opt.isCorrect,
+            isUnderline: opt.isUnderline,
+            isRed: opt.isRed,
           });
         }
       }
-    }
 
-    // Chuẩn hóa đúng 4 vị trí A, B, C, D (cắt bỏ phần dư > 4, bù phần thiếu < 4)
-    const fallbackDistractors = [
-      'Phương án bổ sung A (Cần kiểm tra lại nội dung).',
-      'Phương án bổ sung B (Tất cả các đặc điểm trên).',
-      'Phương án bổ sung C (Cả hai nhận định trên đều đúng).',
-      'Phương án bổ sung D (Không có phương án nào ở trên đúng).',
-    ];
+      if (expandedPool.length === 0) {
+        const qMarkIdx = Math.max(finalStem.lastIndexOf('?'), finalStem.lastIndexOf(':'));
+        if (qMarkIdx > 10 && qMarkIdx < finalStem.length - 8) {
+          const tail = finalStem.slice(qMarkIdx + 1).trim();
+          const tailParts = tail
+            .split(/(?:;|\t+|\n+|\.\s+)/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (tailParts.length >= 2) {
+            finalStem = finalStem.slice(0, qMarkIdx + 1).trim();
+            tailParts.forEach((tp, idx) => {
+              expandedPool.push({
+                text: tp,
+                isCorrect: idx === 0,
+                isUnderline: idx === 0,
+                isRed: idx === 0,
+              });
+            });
+          }
+        }
+      }
 
-    finalOptions = labels.map((lbl, idx) => {
-      const item = expandedPool[idx];
-      if (item && item.text) {
+      const fallbackDistractors = [
+        'Phương án bổ sung A (Cần kiểm tra lại nội dung).',
+        'Phương án bổ sung B (Tất cả các đặc điểm trên).',
+        'Phương án bổ sung C (Cả hai nhận định trên đều đúng).',
+        'Phương án bổ sung D (Không có phương án nào ở trên đúng).',
+      ];
+
+      finalOptions = labels.map((lbl, idx) => {
+        const item = expandedPool[idx];
+        if (item && item.text) {
+          return {
+            id: `${question.id}-opt-${lbl}`,
+            originalLabel: lbl,
+            currentLabel: lbl,
+            text: item.text,
+            isUnderline: item.isUnderline,
+            isRed: item.isRed,
+            isCorrect: item.isCorrect,
+          };
+        }
         return {
           id: `${question.id}-opt-${lbl}`,
           originalLabel: lbl,
           currentLabel: lbl,
-          text: item.text,
-          isUnderline: item.isUnderline,
-          isRed: item.isRed,
-          isCorrect: item.isCorrect,
+          text: fallbackDistractors[idx],
+          isUnderline: false,
+          isRed: false,
+          isCorrect: false,
         };
-      }
-      return {
-        id: `${question.id}-opt-${lbl}`,
-        originalLabel: lbl,
-        currentLabel: lbl,
-        text: fallbackDistractors[idx],
-        isUnderline: false,
-        isRed: false,
-        isCorrect: false,
-      };
-    });
+      });
+    }
   }
 
   // Đảm bảo mỗi câu Phần I có ĐÚNG 1 đáp án đúng (nếu chưa có đáp án đúng nào hoặc có nhiều hơn 1)
   const correctList = finalOptions.filter((o) => o.isCorrect);
   if (correctList.length === 0 && finalOptions.length === 4) {
-    // Kiểm tra xem trong stemText có ghi "(Đáp án: B)" không
     const keyInStem = finalStem.match(/(?:Đáp\s*án|ĐS)\s*[:=]\s*([A-D])\b/i);
     const targetLabel = keyInStem ? (keyInStem[1].toUpperCase() as 'A' | 'B' | 'C' | 'D') : 'A';
     if (keyInStem) {
@@ -1597,7 +1656,6 @@ export function enforceStrictFourOptionsPart1(
         : o
     );
   } else if (correctList.length > 1) {
-    // Chỉ giữ lại đáp án đúng đầu tiên để không bị lỗi thừa đáp án
     let foundFirst = false;
     finalOptions = finalOptions.map((o) => {
       if (o.isCorrect) {
@@ -1622,7 +1680,7 @@ export function enforceStrictFourOptionsPart1(
 /**
  * THUẬT TOÁN BẮT BUỘC CHUẨN HÓA ĐÚNG 4 LỆNH HỎI a), b), c), d) CHO PHẦN II (ĐÚNG / SAI)
  * - Xử lý triệt để các ý a), b), c), d) viết liền nhau trên 1 dòng hoặc dính chùm vào thân câu hỏi
- * - Đảm bảo 100% mỗi câu Phần II có ĐÚNG 4 ý a), b), c), d) (không thiếu, không dư)
+ * - Nếu đã có đủ 4 ý a, b, c, d tách biệt sạch sẽ thì giữ nguyên 100% nội dung và trạng thái Đúng/Sai
  */
 export function enforceStrictFourSubItemsPart2(
   question: ExamQuestion,
@@ -1632,70 +1690,32 @@ export function enforceStrictFourSubItemsPart2(
 
   const existingSubs = question.subItems || [];
   const rawJoinedRuns = questionRuns.map((r) => r.text).join('');
+  const labels: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
 
-  const combinedText = [
-    question.stemText,
-    ...existingSubs.map((s) => `${s.originalLabel}) ${s.text}`),
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  // 1. Tìm bộ 4 mốc tuần tự a -> b -> c -> d trong văn bản tổng hợp
-  const orderedFour =
-    findOrderedFourMarkers(combinedText, ['a', 'b', 'c', 'd'], true) ||
-    findOrderedFourMarkers(combinedText, ['a', 'b', 'c', 'd'], false);
+  const stemHasClumpedFour = Boolean(
+    findOrderedFourMarkers(question.stemText, ['a', 'b', 'c', 'd'], true)
+  );
+  const anySubHasClumpedNext = existingSubs.some((s) =>
+    /(?:\t+|\s{2,}|[.;?!]\s*)[*#]?\s*[b-d]\s*[).:]\s+\S/.test(s.text)
+  );
 
   let finalStem = question.stemText.trim();
   let finalSubs: SubItemPart2[] = [];
 
-  if (orderedFour) {
-    const [mA, mB, mC, mD] = orderedFour;
-    const extractedStem = combinedText.slice(0, mA.markerStart).trim();
-    if (extractedStem) {
-      finalStem = extractedStem;
-    }
-
-    const rawSegments: { label: 'a' | 'b' | 'c' | 'd'; text: string; fullSeg: string; start: number; starred: boolean }[] = [
-      {
-        label: 'a',
-        text: combinedText.slice(mA.contentStart, mB.markerStart).trim(),
-        fullSeg: combinedText.slice(mA.markerStart, mB.markerStart),
-        start: mA.markerStart,
-        starred: mA.isStarred,
-      },
-      {
-        label: 'b',
-        text: combinedText.slice(mB.contentStart, mC.markerStart).trim(),
-        fullSeg: combinedText.slice(mB.markerStart, mC.markerStart),
-        start: mB.markerStart,
-        starred: mB.isStarred,
-      },
-      {
-        label: 'c',
-        text: combinedText.slice(mC.contentStart, mD.markerStart).trim(),
-        fullSeg: combinedText.slice(mC.markerStart, mD.markerStart),
-        start: mC.markerStart,
-        starred: mC.isStarred,
-      },
-      {
-        label: 'd',
-        text: combinedText.slice(mD.contentStart).trim(),
-        fullSeg: combinedText.slice(mD.markerStart),
-        start: mD.markerStart,
-        starred: mD.isStarred,
-      },
-    ];
-
-    finalSubs = rawSegments.map((seg) => {
-      const prevSub = existingSubs.find((s) => s.originalLabel === seg.label);
-      const hl =
-        questionRuns.length > 0
-          ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text, seg.start, seg.fullSeg)
-          : { isUnderline: false, isRed: false };
-
-      let cleanSubText = seg.text;
-      let explicitTrue: boolean | null = seg.starred ? true : null;
-
+  if (
+    existingSubs.length === 4 &&
+    existingSubs.every((s) => s.text.trim().length > 0) &&
+    !stemHasClumpedFour &&
+    !anySubHasClumpedNext
+  ) {
+    finalSubs = existingSubs.map((s, idx) => {
+      const lbl = labels[idx];
+      let cleanSubText = s.text.trim();
+      let explicitTrue: boolean | null = null;
+      if (/^[*#]\s*/.test(cleanSubText)) {
+        explicitTrue = true;
+        cleanSubText = cleanSubText.replace(/^[*#]\s*/, '').trim();
+      }
       if (/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i.test(cleanSubText)) {
         explicitTrue = true;
         cleanSubText = cleanSubText
@@ -1707,88 +1727,190 @@ export function enforceStrictFourSubItemsPart2(
           .replace(/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i, '')
           .trim();
       }
-
-      const isUnderline = Boolean(prevSub?.isUnderline || hl.isUnderline || explicitTrue === true);
-      const isRed = Boolean(prevSub?.isRed || hl.isRed || explicitTrue === true);
+      const isUnderline = Boolean(s.isUnderline || explicitTrue === true);
+      const isRed = Boolean(s.isRed || explicitTrue === true);
       const isTrue =
-        explicitTrue !== null
-          ? explicitTrue
-          : Boolean(prevSub?.isTrue || isUnderline || isRed);
+        explicitTrue !== null ? explicitTrue : Boolean(s.isTrue || isUnderline || isRed);
 
       return {
-        id: prevSub?.id || `${question.id}-sub-${seg.label}`,
-        originalLabel: seg.label,
-        currentLabel: seg.label,
-        text: cleanSubText || `Phát biểu nhận định ý ${seg.label}).`,
+        ...s,
+        id: s.id || `${question.id}-sub-${lbl}`,
+        originalLabel: lbl,
+        currentLabel: s.currentLabel || lbl,
+        text: cleanSubText,
         isUnderline,
         isRed,
         isTrue,
       };
     });
   } else {
-    const labels: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
-    const expandedPool: { text: string; isTrue: boolean; isUnderline: boolean; isRed: boolean }[] = [];
+    const combinedText = [
+      question.stemText,
+      ...existingSubs.map(
+        (s) => `${s.isTrue || s.isUnderline || s.isRed ? '*' : ''}${s.originalLabel}) ${s.text}`
+      ),
+    ]
+      .filter(Boolean)
+      .join(' ');
 
-    for (const sub of existingSubs) {
-      const subParts = sub.text
-        .split(/(?:\t+|\n+|(?<=[.;])\s*(?=[a-d]\s*[).:]))/gi)
-        .map((s) => s.replace(/^[a-d]\s*[).:]\s*/i, '').trim())
-        .filter(Boolean);
+    const orderedFour =
+      findOrderedFourMarkers(combinedText, ['a', 'b', 'c', 'd'], true) ||
+      findOrderedFourMarkers(combinedText, ['a', 'b', 'c', 'd'], false);
 
-      if (subParts.length > 1) {
-        subParts.forEach((sp) => {
+    if (orderedFour) {
+      const [mA, mB, mC, mD] = orderedFour;
+      const extractedStem = combinedText.slice(0, mA.markerStart).trim();
+      if (extractedStem) {
+        finalStem = extractedStem;
+      }
+
+      const rawSegments: {
+        label: 'a' | 'b' | 'c' | 'd';
+        text: string;
+        fullSeg: string;
+        start: number;
+        starred: boolean;
+      }[] = [
+        {
+          label: 'a',
+          text: combinedText.slice(mA.contentStart, mB.markerStart).trim(),
+          fullSeg: combinedText.slice(mA.markerStart, mB.markerStart),
+          start: mA.markerStart,
+          starred: mA.isStarred,
+        },
+        {
+          label: 'b',
+          text: combinedText.slice(mB.contentStart, mC.markerStart).trim(),
+          fullSeg: combinedText.slice(mB.markerStart, mC.markerStart),
+          start: mB.markerStart,
+          starred: mB.isStarred,
+        },
+        {
+          label: 'c',
+          text: combinedText.slice(mC.contentStart, mD.markerStart).trim(),
+          fullSeg: combinedText.slice(mC.markerStart, mD.markerStart),
+          start: mC.markerStart,
+          starred: mC.isStarred,
+        },
+        {
+          label: 'd',
+          text: combinedText.slice(mD.contentStart).trim(),
+          fullSeg: combinedText.slice(mD.markerStart),
+          start: mD.markerStart,
+          starred: mD.isStarred,
+        },
+      ];
+
+      finalSubs = rawSegments.map((seg) => {
+        const prevSub = existingSubs.find((s) => s.originalLabel === seg.label);
+        const hl =
+          questionRuns.length > 0
+            ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text, seg.start, seg.fullSeg)
+            : { isUnderline: false, isRed: false };
+
+        let cleanSubText = seg.text;
+        let explicitTrue: boolean | null = seg.starred ? true : null;
+
+        if (/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i.test(cleanSubText)) {
+          explicitTrue = true;
+          cleanSubText = cleanSubText
+            .replace(/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i, '')
+            .trim();
+        } else if (/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i.test(cleanSubText)) {
+          explicitTrue = false;
+          cleanSubText = cleanSubText
+            .replace(/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i, '')
+            .trim();
+        }
+
+        const isUnderline = Boolean(prevSub?.isUnderline || hl.isUnderline || explicitTrue === true);
+        const isRed = Boolean(prevSub?.isRed || hl.isRed || explicitTrue === true);
+        const isTrue =
+          explicitTrue !== null
+            ? explicitTrue
+            : Boolean(prevSub?.isTrue || isUnderline || isRed);
+
+        return {
+          id: prevSub?.id || `${question.id}-sub-${seg.label}`,
+          originalLabel: seg.label,
+          currentLabel: seg.label,
+          text: cleanSubText || `Phát biểu nhận định ý ${seg.label}).`,
+          isUnderline,
+          isRed,
+          isTrue,
+        };
+      });
+    } else {
+      const expandedPool: {
+        text: string;
+        isTrue: boolean;
+        isUnderline: boolean;
+        isRed: boolean;
+      }[] = [];
+
+      for (const sub of existingSubs) {
+        const subParts = sub.text
+          .split(/(?:\t+|\n+|(?<=[.;])\s*(?=[a-d]\s*[).:]))/gi)
+          .map((s) => s.replace(/^[*#]?\s*[a-d]\s*[).:]\s*/i, '').trim())
+          .filter(Boolean);
+
+        if (subParts.length > 1) {
+          subParts.forEach((sp) => {
+            expandedPool.push({
+              text: sp,
+              isTrue: sub.isTrue,
+              isUnderline: sub.isUnderline,
+              isRed: sub.isRed,
+            });
+          });
+        } else {
           expandedPool.push({
-            text: sp,
+            text: sub.text.trim(),
             isTrue: sub.isTrue,
             isUnderline: sub.isUnderline,
             isRed: sub.isRed,
           });
-        });
-      } else {
-        expandedPool.push({
-          text: sub.text.trim(),
-          isTrue: sub.isTrue,
-          isUnderline: sub.isUnderline,
-          isRed: sub.isRed,
-        });
+        }
       }
-    }
 
-    const defaultStatements = [
-      'Nhận định a) phù hợp với quy luật sinh học trong thí nghiệm trên.',
-      'Nhận định b) phản ánh mối quan hệ giữa các đại lượng trong bài toán.',
-      'Nhận định c) khi thay đổi điều kiện môi trường thì tỉ lệ kiểu hình thay đổi.',
-      'Nhận định d) kết quả thu được tuân theo định luật di truyền thực nghiệm.',
-    ];
+      const defaultStatements = [
+        'Nhận định a) phù hợp với quy luật sinh học trong thí nghiệm trên.',
+        'Nhận định b) phản ánh mối quan hệ giữa các đại lượng trong bài toán.',
+        'Nhận định c) khi thay đổi điều kiện môi trường thì tỉ lệ kiểu hình thay đổi.',
+        'Nhận định d) kết quả thu được tuân theo định luật di truyền thực nghiệm.',
+      ];
 
-    finalSubs = labels.map((lbl, idx) => {
-      const item = expandedPool[idx];
-      if (item && item.text) {
+      finalSubs = labels.map((lbl, idx) => {
+        const item = expandedPool[idx];
+        if (item && item.text) {
+          return {
+            id: `${question.id}-sub-${lbl}`,
+            originalLabel: lbl,
+            currentLabel: lbl,
+            text: item.text,
+            isUnderline: item.isUnderline,
+            isRed: item.isRed,
+            isTrue: item.isTrue,
+          };
+        }
         return {
           id: `${question.id}-sub-${lbl}`,
           originalLabel: lbl,
           currentLabel: lbl,
-          text: item.text,
-          isUnderline: item.isUnderline,
-          isRed: item.isRed,
-          isTrue: item.isTrue,
+          text: defaultStatements[idx],
+          isUnderline: idx % 2 === 0,
+          isRed: idx % 2 === 0,
+          isTrue: idx % 2 === 0,
         };
-      }
-      return {
-        id: `${question.id}-sub-${lbl}`,
-        originalLabel: lbl,
-        currentLabel: lbl,
-        text: defaultStatements[idx],
-        isUnderline: idx % 2 === 0,
-        isRed: idx % 2 === 0,
-        isTrue: idx % 2 === 0,
-      };
-    });
+      });
+    }
   }
 
   return {
     ...question,
-    stemText: finalStem || `Cho dữ kiện khoa học ở Câu ${question.displayIndex}, xét tính đúng/sai của các phát biểu sau:`,
+    stemText:
+      finalStem ||
+      `Cho dữ kiện khoa học ở Câu ${question.displayIndex}, xét tính đúng/sai của các phát biểu sau:`,
     subItems: finalSubs,
   };
 }
@@ -1883,6 +2005,216 @@ function isAdministrativeExamHeader(text: string): boolean {
   );
 }
 
+interface ExtractedLineItem {
+  label: string;
+  text: string;
+  fullSegment: string;
+  markerStart: number;
+  isStarred: boolean;
+}
+
+/**
+ * Bóc tách tuần tự các phương án A, B, C, D trong một dòng văn bản của Phần I
+ * Chống tách nhầm các từ như "Vitamin A.", "Nhóm máu B.", "Gen A." nằm bên trong nội dung đáp án
+ */
+function extractSequentialOptionsFromLine(
+  lineText: string
+): { leadingStem: string; items: ExtractedLineItem[] } {
+  const orderedFour = findOrderedFourMarkers(lineText, ['A', 'B', 'C', 'D'], true);
+  if (orderedFour) {
+    const [mA, mB, mC, mD] = orderedFour;
+    return {
+      leadingStem: lineText.slice(0, mA.markerStart).trim(),
+      items: [
+        {
+          label: 'A',
+          text: lineText.slice(mA.contentStart, mB.markerStart).trim(),
+          fullSegment: lineText.slice(mA.markerStart, mB.markerStart),
+          markerStart: mA.markerStart,
+          isStarred: mA.isStarred,
+        },
+        {
+          label: 'B',
+          text: lineText.slice(mB.contentStart, mC.markerStart).trim(),
+          fullSegment: lineText.slice(mB.markerStart, mC.markerStart),
+          markerStart: mB.markerStart,
+          isStarred: mB.isStarred,
+        },
+        {
+          label: 'C',
+          text: lineText.slice(mC.contentStart, mD.markerStart).trim(),
+          fullSegment: lineText.slice(mC.markerStart, mD.markerStart),
+          markerStart: mC.markerStart,
+          isStarred: mC.isStarred,
+        },
+        {
+          label: 'D',
+          text: lineText.slice(mD.contentStart).trim(),
+          fullSegment: lineText.slice(mD.markerStart),
+          markerStart: mD.markerStart,
+          isStarred: mD.isStarred,
+        },
+      ],
+    };
+  }
+
+  // Trường hợp dòng bắt đầu bằng 1 phương án A., B., C., D. (hoặc có 2 phương án trên 1 dòng chia bằng tab / khoảng trắng)
+  const startMatch = lineText.match(/^\s*([*#]?\s*([A-D])\s*[.:)])\s+/);
+  if (!startMatch) {
+    return { leadingStem: '', items: [] };
+  }
+
+  const candidateRegex = /(?:^|\t+|\s{2,}|(?<=[.;?!])\s+)([*#]?\s*([A-D])\s*[.:)])\s+/g;
+  const acceptedMarkers: {
+    label: string;
+    markerStart: number;
+    contentStart: number;
+    isStarred: boolean;
+  }[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = candidateRegex.exec(lineText)) !== null) {
+    const fullM = m[0];
+    const markerGrp = m[1];
+    const lbl = m[2].toUpperCase();
+    const offset = fullM.indexOf(markerGrp);
+    const markerStart = m.index + (offset >= 0 ? offset : 0);
+    const contentStart = m.index + fullM.length;
+    const isStarred = markerGrp.startsWith('*') || markerGrp.startsWith('#');
+
+    if (acceptedMarkers.length === 0) {
+      acceptedMarkers.push({ label: lbl, markerStart, contentStart, isStarred });
+    } else {
+      const prevLbl = acceptedMarkers[acceptedMarkers.length - 1].label;
+      // Chỉ chấp nhận tách thêm phương án trên cùng dòng nếu chữ cái tăng dần (VD: A -> B, C -> D, A -> C, B -> D)
+      if (lbl.charCodeAt(0) > prevLbl.charCodeAt(0)) {
+        acceptedMarkers.push({ label: lbl, markerStart, contentStart, isStarred });
+      }
+    }
+
+    if (m.index === candidateRegex.lastIndex) {
+      candidateRegex.lastIndex++;
+    }
+  }
+
+  const items: ExtractedLineItem[] = acceptedMarkers.map((mk, idx) => {
+    const nextStart =
+      idx + 1 < acceptedMarkers.length ? acceptedMarkers[idx + 1].markerStart : lineText.length;
+    return {
+      label: mk.label,
+      text: lineText.slice(mk.contentStart, nextStart).trim(),
+      fullSegment: lineText.slice(mk.markerStart, nextStart),
+      markerStart: mk.markerStart,
+      isStarred: mk.isStarred,
+    };
+  });
+
+  return {
+    leadingStem: acceptedMarkers.length > 0 ? lineText.slice(0, acceptedMarkers[0].markerStart).trim() : '',
+    items,
+  };
+}
+
+/**
+ * Bóc tách tuần tự các ý a), b), c), d) trong một dòng văn bản của Phần II (Đúng/Sai)
+ * Chống tách nhầm các ký hiệu kiểu gen (aa), (bb), (ab) hoặc hình a) nằm bên trong câu
+ */
+function extractSequentialSubItemsFromLine(
+  lineText: string
+): { leadingStem: string; items: ExtractedLineItem[] } {
+  const orderedFour = findOrderedFourMarkers(lineText, ['a', 'b', 'c', 'd'], true);
+  if (orderedFour) {
+    const [mA, mB, mC, mD] = orderedFour;
+    return {
+      leadingStem: lineText.slice(0, mA.markerStart).trim(),
+      items: [
+        {
+          label: 'a',
+          text: lineText.slice(mA.contentStart, mB.markerStart).trim(),
+          fullSegment: lineText.slice(mA.markerStart, mB.markerStart),
+          markerStart: mA.markerStart,
+          isStarred: mA.isStarred,
+        },
+        {
+          label: 'b',
+          text: lineText.slice(mB.contentStart, mC.markerStart).trim(),
+          fullSegment: lineText.slice(mB.markerStart, mC.markerStart),
+          markerStart: mB.markerStart,
+          isStarred: mB.isStarred,
+        },
+        {
+          label: 'c',
+          text: lineText.slice(mC.contentStart, mD.markerStart).trim(),
+          fullSegment: lineText.slice(mC.markerStart, mD.markerStart),
+          markerStart: mC.markerStart,
+          isStarred: mC.isStarred,
+        },
+        {
+          label: 'd',
+          text: lineText.slice(mD.contentStart).trim(),
+          fullSegment: lineText.slice(mD.markerStart),
+          markerStart: mD.markerStart,
+          isStarred: mD.isStarred,
+        },
+      ],
+    };
+  }
+
+  const startMatch = lineText.match(/^\s*([*#]?\s*([a-d])\s*[).:])\s+/);
+  if (!startMatch) {
+    return { leadingStem: '', items: [] };
+  }
+
+  const candidateRegex = /(?:^|\t+|\s{2,}|(?<=[.;?!])\s+)([*#]?\s*([a-d])\s*[).:])\s+/g;
+  const acceptedMarkers: {
+    label: string;
+    markerStart: number;
+    contentStart: number;
+    isStarred: boolean;
+  }[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = candidateRegex.exec(lineText)) !== null) {
+    const fullM = m[0];
+    const markerGrp = m[1];
+    const lbl = m[2].toLowerCase();
+    const offset = fullM.indexOf(markerGrp);
+    const markerStart = m.index + (offset >= 0 ? offset : 0);
+    const contentStart = m.index + fullM.length;
+    const isStarred = markerGrp.startsWith('*') || markerGrp.startsWith('#');
+
+    if (acceptedMarkers.length === 0) {
+      acceptedMarkers.push({ label: lbl, markerStart, contentStart, isStarred });
+    } else {
+      const prevLbl = acceptedMarkers[acceptedMarkers.length - 1].label;
+      if (lbl.charCodeAt(0) > prevLbl.charCodeAt(0)) {
+        acceptedMarkers.push({ label: lbl, markerStart, contentStart, isStarred });
+      }
+    }
+
+    if (m.index === candidateRegex.lastIndex) {
+      candidateRegex.lastIndex++;
+    }
+  }
+
+  const items: ExtractedLineItem[] = acceptedMarkers.map((mk, idx) => {
+    const nextStart =
+      idx + 1 < acceptedMarkers.length ? acceptedMarkers[idx + 1].markerStart : lineText.length;
+    return {
+      label: mk.label,
+      text: lineText.slice(mk.contentStart, nextStart).trim(),
+      fullSegment: lineText.slice(mk.markerStart, nextStart),
+      markerStart: mk.markerStart,
+      isStarred: mk.isStarred,
+    };
+  });
+
+  return {
+    leadingStem: acceptedMarkers.length > 0 ? lineText.slice(0, acceptedMarkers[0].markerStart).trim() : '',
+    items,
+  };
+}
+
 /**
  * Phân tích danh sách ParsedParagraph thành danh sách ExamQuestion chuẩn 3-4 phần
  * (Dùng chung cho cả bộ đọc .docx, .pdf và Trình soạn thảo văn bản Word trực tiếp)
@@ -1897,6 +2229,8 @@ export function buildQuestionsFromParsedParagraphs(
   let currentQuestionRuns: ParsedRun[] = [];
   let pendingStemParagraphs: ParsedParagraph[] = [];
   let globalIndex = 1;
+  let inTrailingAnswerKeySection = false;
+  const trailingAnswerKeyPart1 = new Map<number, 'A' | 'B' | 'C' | 'D'>();
 
   const startNewQuestionFromPara = (para: ParsedParagraph, customStemText?: string) => {
     const stemContent = (customStemText !== undefined ? customStemText : para.fullText).trim();
@@ -1960,7 +2294,10 @@ export function buildQuestionsFromParsedParagraphs(
         findOrderedFourMarkers(combinedCheck, ['a', 'b', 'c', 'd'], true)
       );
 
-      if (!hasFourUpperABCD && (hasFourLowerAbcd || (currentQuestion.subItems && currentQuestion.subItems.length >= 3))) {
+      if (
+        !hasFourUpperABCD &&
+        (hasFourLowerAbcd || (currentQuestion.subItems && currentQuestion.subItems.length >= 3))
+      ) {
         currentQuestion.part = 'PART_2';
       }
     }
@@ -1988,15 +2325,38 @@ export function buildQuestionsFromParsedParagraphs(
     currentQuestionRuns = [];
   };
 
-  const optionRegexSource =
-    /(?:^|[\s\t.;:?!)"'”’\],-]|(?<=[a-zà-ỹ0-9%°]))([*#]?\s*([A-D])\s*[.:)\-–—])\s*([^\t\n]+?)(?=(?:[\s\t.;:?!)"'”’\],-]+[*#]?\s*[A-D]\s*[.:)\-–—]|(?<=[a-zà-ỹ0-9%°])[*#]?\s*[A-D]\s*[.:)\-–—]|$))/g;
-  const subRegexSource =
-    /(?:^|[\s\t.;:?!)"'”’\],-])([*#]?\s*([a-d])\s*[).:\-–—])\s*([^\t\n]+?)(?=(?:[\s\t.;:?!)"'”’\],-]+[*#]?\s*[a-d]\s*[).:\-–—]|$))/g;
-
   for (const para of paragraphs) {
     const text = normalizeVietnameseExamText(para.fullText).trim();
     if (!text && para.images.length === 0) continue;
     const rawJoined = normalizeVietnameseExamText(para.runs.map((r) => r.text).join(''));
+
+    // Nhận diện mục BẢNG ĐÁP ÁN / ĐÁP ÁN & HƯỚNG DẪN GIẢI ở cuối đề thi (sau khi đã đọc xong các câu hỏi)
+    if (
+      questions.length >= 1 &&
+      /^(?:BẢNG\s+ĐÁP\s+ÁN|ĐÁP\s+ÁN\s+VÀ\s+HƯỚNG\s+DẪN|HƯỚNG\s+DẪN\s+CHẤM\s+VÀ\s+ĐÁP\s+ÁN|ĐÁP\s+ÁN\s+THAM\s+KHẢO|-----\s*HẾT\s*-----)/i.test(
+        text
+      )
+    ) {
+      pushCurrentQuestion();
+      if (!/-----\s*HẾT\s*-----/i.test(text)) {
+        inTrailingAnswerKeySection = true;
+      }
+      continue;
+    }
+
+    if (inTrailingAnswerKeySection) {
+      // Quét các cặp đáp án dạng "1.A", "1-A", "1: A", "Câu 1: A" trong Bảng đáp án cuối đề
+      const pairRegex = /(?:Câu\s*)?(\d{1,3})\s*[.:\-–—)\s]\s*([A-D])\b/gi;
+      let pm: RegExpExecArray | null;
+      while ((pm = pairRegex.exec(text)) !== null) {
+        const qNum = parseInt(pm[1], 10);
+        const ansLetter = pm[2].toUpperCase() as 'A' | 'B' | 'C' | 'D';
+        if (qNum >= 1 && qNum <= 200 && !trailingAnswerKeyPart1.has(qNum)) {
+          trailingAnswerKeyPart1.set(qNum, ansLetter);
+        }
+      }
+      continue;
+    }
 
     // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III và PHẦN IV (TỰ LUẬN)
     const strippedHeaderPrefix = text.replace(/^[*#•\-–—\s]+/, '');
@@ -2051,7 +2411,6 @@ export function buildQuestionsFromParsedParagraphs(
     }
 
     // 2. Nhận diện bắt đầu một câu hỏi mới:
-    // Hỗ trợ: "Câu 1.", "Câu 1:", "Câu 1. (NB):", "Câu hỏi 1:", "Câu số 1.", "Bài 1:", "Question 1:", "[NB] Câu 1:", "Câu 1 (0,25 điểm):", "1. Nội dung..."
     const explicitQMatch = text.match(
       /^(?:[*#•+\-–—\s]|\[(?:NB|TH|VD|VDC|[^\]]{1,12})\]|\((?:NB|TH|VD|VDC|[^)]{1,12})\))*(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*(\d+|[IVX]+)\s*[.:\-–—)]*\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])?\s*[.:\-–—)]*\s*(.*)$/i
     );
@@ -2061,12 +2420,12 @@ export function buildQuestionsFromParsedParagraphs(
       (currentPart === 'PART_2' && (currentQuestion?.subItems?.length || 0) >= 4) ||
       (currentPart === 'PART_3' && Boolean(currentQuestion?.shortAnswer));
 
-    // Hỗ trợ câu đánh số "1. ...", "2. ...", "1) ..." không có chữ "Câu"
+    // Hỗ trợ câu đánh số "1. ...", "2. ...", "1) ..." không có chữ "Câu" (Chỉ kích hoạt khi chưa có câu hỏi đang mở hoặc câu hỏi trước đã đủ 4 phương án)
     const numberedNoPrefixMatch =
       !explicitQMatch &&
-      (!currentQuestion || currentHasCompleteOptions || currentPart === 'PART_3' || currentPart === 'PART_4') &&
-      !/^\s*[*#]?[A-Da-d]\s*[.:)\-–—]/.test(text)
-        ? text.match(/^\s*(?:Câu\s*)?(\d{1,3})\s*[.):]\s+([A-ZÀ-Ỹa-zà-ỹ(“"'\d].*)$/)
+      (!currentQuestion || currentHasCompleteOptions) &&
+      !/^\s*[*#]?[A-Da-d]\s*[.:)]/.test(text)
+        ? text.match(/^\s*(\d{1,3})\s*[.):]\s+([A-ZÀ-Ỹa-zà-ỹ(“"'\d].*)$/)
         : null;
 
     const qMatch = explicitQMatch || numberedNoPrefixMatch;
@@ -2099,20 +2458,22 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
 
-    // Kiểm tra xem đoạn văn hiện tại có chứa phương án A, B, C, D hoặc ý a), b), c), d) không
-    const optMatches =
-      currentPart === 'PART_1' ? [...text.matchAll(new RegExp(optionRegexSource.source, 'g'))] : [];
-    const subMatches =
-      currentPart === 'PART_2' || (currentPart === 'PART_1' && optMatches.length === 0)
-        ? [...text.matchAll(new RegExp(subRegexSource.source, 'g'))]
-        : [];
+    // Kiểm tra xem đoạn văn hiện tại có chứa phương án A, B, C, D hoặc ý a), b), c), d) theo đúng thứ tự không
+    const optExtraction =
+      currentPart === 'PART_1'
+        ? extractSequentialOptionsFromLine(text)
+        : { leadingStem: '', items: [] };
+    const subExtraction =
+      currentPart === 'PART_2' || (currentPart === 'PART_1' && optExtraction.items.length === 0)
+        ? extractSequentialSubItemsFromLine(text)
+        : { leadingStem: '', items: [] };
 
     // Nếu câu hỏi hiện tại đã đủ 4 phương án A,B,C,D (hoặc 4 ý a,b,c,d) mà gặp đoạn văn mới không phải là phương án hay lời giải -> tự động mở câu hỏi mới!
     if (
       currentQuestion &&
       currentHasCompleteOptions &&
-      optMatches.length === 0 &&
-      subMatches.length === 0 &&
+      optExtraction.items.length === 0 &&
+      subExtraction.items.length === 0 &&
       !/^(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn)/i.test(text) &&
       !isAdministrativeExamHeader(text)
     ) {
@@ -2123,7 +2484,7 @@ export function buildQuestionsFromParsedParagraphs(
 
     // Nếu chưa có currentQuestion (ví dụ file Word bị mất chữ "Câu 1" do macro/field)
     if (!currentQuestion) {
-      if (optMatches.length > 0 || subMatches.length > 0) {
+      if (optExtraction.items.length > 0 || subExtraction.items.length > 0) {
         if (pendingStemParagraphs.length > 0) {
           const firstPending = pendingStemParagraphs[0];
           const combinedPendingText = pendingStemParagraphs.map((p) => p.fullText).join(' ');
@@ -2174,68 +2535,106 @@ export function buildQuestionsFromParsedParagraphs(
 
     // 3. Xử lý nội dung bên trong câu hỏi tùy theo từng Phần
     if (currentQuestion.part === 'PART_1') {
-      if (optMatches.length > 0) {
-        const firstMatchIdx = optMatches[0].index ?? 0;
-        if (firstMatchIdx > 0) {
-          const leadingStem = text.slice(0, firstMatchIdx).trim();
-          if (leadingStem) {
-            currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + leadingStem;
-          }
+      if (optExtraction.items.length > 0) {
+        if (optExtraction.leadingStem) {
+          currentQuestion.stemText +=
+            (currentQuestion.stemText ? ' ' : '') + optExtraction.leadingStem;
         }
-        for (const m of optMatches) {
-          const markerRaw = m[1] || '';
-          const isStarred = markerRaw.startsWith('*') || markerRaw.startsWith('#');
-          const label = m[2].toUpperCase() as 'A' | 'B' | 'C' | 'D';
-          const optText = m[3].trim();
-          const fullSegment = m[0];
-          const hl = checkRangeHighlight(para.runs, rawJoined, optText, m.index || 0, fullSegment);
-          const isCorrect = isStarred || hl.isUnderline || hl.isRed;
+        for (const item of optExtraction.items) {
+          const label = item.label as 'A' | 'B' | 'C' | 'D';
+          const hl = checkRangeHighlight(
+            para.runs,
+            rawJoined,
+            item.text,
+            item.markerStart,
+            item.fullSegment
+          );
+          const isCorrect = item.isStarred || hl.isUnderline || hl.isRed;
 
           currentQuestion.options = currentQuestion.options || [];
           currentQuestion.options.push({
             id: `${currentQuestion.id}-opt-${label}-${currentQuestion.options.length}`,
             originalLabel: label,
             currentLabel: label,
-            text: optText,
-            isUnderline: hl.isUnderline || isStarred,
-            isRed: hl.isRed || isStarred,
+            text: item.text,
+            isUnderline: hl.isUnderline || item.isStarred,
+            isRed: hl.isRed || item.isStarred,
             isCorrect,
           });
         }
+      } else if (subExtraction.items.length > 0 && (!currentQuestion.options || currentQuestion.options.length === 0)) {
+        // Câu hỏi Đúng/Sai (a, b, c, d) nhưng trong đề không có dòng tiêu đề "PHẦN II"
+        currentQuestion.part = 'PART_2';
+        currentQuestion.options = undefined;
+        currentQuestion.subItems = [];
+        if (subExtraction.leadingStem) {
+          currentQuestion.stemText +=
+            (currentQuestion.stemText ? ' ' : '') + subExtraction.leadingStem;
+        }
+        for (const item of subExtraction.items) {
+          const label = item.label as 'a' | 'b' | 'c' | 'd';
+          const hl = checkRangeHighlight(
+            para.runs,
+            rawJoined,
+            item.text,
+            item.markerStart,
+            item.fullSegment
+          );
+          const isTrue = item.isStarred || hl.isUnderline || hl.isRed;
+          currentQuestion.subItems.push({
+            id: `${currentQuestion.id}-sub-${label}-${currentQuestion.subItems.length}`,
+            originalLabel: label,
+            currentLabel: label,
+            text: item.text,
+            isUnderline: hl.isUnderline || item.isStarred,
+            isRed: hl.isRed || item.isStarred,
+            isTrue,
+          });
+        }
       } else {
-        currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+        const expMatch = text.match(/^(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*giải)?)\s*[:=]\s*(.+)$/i);
+        if (expMatch) {
+          currentQuestion.explanation = expMatch[1].trim();
+        } else {
+          currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+        }
       }
     } else if (currentQuestion.part === 'PART_2') {
-      const p2Matches = [...text.matchAll(new RegExp(subRegexSource.source, 'gi'))];
-      if (p2Matches.length > 0) {
-        const firstMatchIdx = p2Matches[0].index ?? 0;
-        if (firstMatchIdx > 0) {
-          const leadingStem = text.slice(0, firstMatchIdx).trim();
-          if (leadingStem) {
-            currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + leadingStem;
-          }
+      const p2Extraction = extractSequentialSubItemsFromLine(text);
+      if (p2Extraction.items.length > 0) {
+        if (p2Extraction.leadingStem) {
+          currentQuestion.stemText +=
+            (currentQuestion.stemText ? ' ' : '') + p2Extraction.leadingStem;
         }
-        for (const m of p2Matches) {
-          const markerRaw = m[1] || '';
-          const isStarred = markerRaw.startsWith('*') || markerRaw.startsWith('#');
-          const label = m[2].toLowerCase() as 'a' | 'b' | 'c' | 'd';
-          const subText = m[3].trim();
-          const hl = checkRangeHighlight(para.runs, rawJoined, subText, m.index || 0, m[0]);
-          const isTrue = isStarred || hl.isUnderline || hl.isRed;
+        for (const item of p2Extraction.items) {
+          const label = item.label as 'a' | 'b' | 'c' | 'd';
+          const hl = checkRangeHighlight(
+            para.runs,
+            rawJoined,
+            item.text,
+            item.markerStart,
+            item.fullSegment
+          );
+          const isTrue = item.isStarred || hl.isUnderline || hl.isRed;
 
           currentQuestion.subItems = currentQuestion.subItems || [];
           currentQuestion.subItems.push({
             id: `${currentQuestion.id}-sub-${label}-${currentQuestion.subItems.length}`,
             originalLabel: label,
             currentLabel: label,
-            text: subText,
-            isUnderline: hl.isUnderline || isStarred,
-            isRed: hl.isRed || isStarred,
+            text: item.text,
+            isUnderline: hl.isUnderline || item.isStarred,
+            isRed: hl.isRed || item.isStarred,
             isTrue,
           });
         }
       } else {
-        currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+        const expMatch = text.match(/^(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*giải)?)\s*[:=]\s*(.+)$/i);
+        if (expMatch) {
+          currentQuestion.explanation = expMatch[1].trim();
+        } else {
+          currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+        }
       }
     } else if (currentQuestion.part === 'PART_3') {
       const ansKeyword = text.match(/(?:Đáp\s*án|Đáp\s*số|ĐS|Kết\s*quả)\s*[:=]\s*([-\d.,]+)/i);
@@ -2266,6 +2665,25 @@ export function buildQuestionsFromParsedParagraphs(
   }
 
   pushCurrentQuestion();
+
+  // Nếu tệp có BẢNG ĐÁP ÁN ở cuối đề (1.A 2.B 3.C...), tự động áp dụng đáp án đúng cho các câu Phần I
+  if (trailingAnswerKeyPart1.size > 0) {
+    let p1Idx = 0;
+    for (const q of questions) {
+      if (q.part === 'PART_1' && q.options && q.options.length === 4) {
+        p1Idx++;
+        const mappedAns = trailingAnswerKeyPart1.get(p1Idx);
+        if (mappedAns) {
+          q.options = q.options.map((o) => ({
+            ...o,
+            isCorrect: o.originalLabel === mappedAns,
+            isUnderline: o.originalLabel === mappedAns,
+            isRed: o.originalLabel === mappedAns,
+          }));
+        }
+      }
+    }
+  }
 
   // Cơ chế dự phòng cuối cùng (Zero-Failure Fallback):
   // Nếu tệp Word có nội dung đoạn văn nhưng hoàn toàn không theo chuẩn Câu 1 / A. B. C. D. thông thường,
