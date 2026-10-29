@@ -1241,11 +1241,11 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col text-slate-900 pb-28">
-      {/* ================= KHỐI ĐIỀU KHIỂN CỐ ĐỊNH TRÊN CÙNG ================= */}
-      <div className="sticky top-0 z-30 bg-sky-50/95 backdrop-blur-md border-b-2 border-sky-300 shadow-md">
+    <div className="min-h-screen flex flex-col text-slate-900 pb-11">
+      {/* ================= KHỐI TIÊU ĐỀ & THANH ĐIỀU HƯỚNG CỐ ĐỊNH TRÊN CÙNG ================= */}
+      <div className="sticky top-0 z-30 bg-sky-50/95 backdrop-blur-md border-b-2 border-sky-300 shadow-sm">
         {/* ================= HEADER: DÒNG 1 (LOGO LỚN NỔI BẬT + TÁC GIẢ) & DÒNG 2 (THANH NÚT CHỨC NĂNG NẰM DƯỚI LOGO KHÔNG BỊ VỠ/MẤT KHUNG) ================= */}
-        <header className="max-w-[1440px] w-full mx-auto px-3 sm:px-6 pt-2 pb-2.5 border-b border-sky-200 bg-white/95 space-y-2">
+        <header className="max-w-[1600px] w-full mx-auto px-3 sm:px-5 pt-1.5 pb-2 bg-white/95 space-y-1.5">
           {/* DÒNG 1: LOGO TRANG WEB CỠ CHỮ LỚN NỔI BẬT + TÊN TÁC GIẢ + NHÃN TỆP XUẤT */}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <a
@@ -1434,644 +1434,10 @@ export default function App() {
           </div>
         </header>
 
-        {/* ================= TẦNG 2 & 3: KHỐI THÔNG TIN ĐỀ CẦN TRỘN + THANH CÔNG CỤ SOẠN THẢO HỢP NHẤT ================= */}
-        <div className="max-w-[1440px] w-full mx-auto px-3 sm:px-6 py-2 space-y-2">
-          {/* Input ẩn phục vụ tải tệp Word / PDF */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".docx,.pdf"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-
-          {/* KHỐI THÔNG TIN ĐỀ CẦN TRỘN (Gọn gàng 1 hàng 8 ô, có thể thu gọn) */}
-          {!isConfigCollapsed && (
-            <div className="px-3 py-2 rounded-2xl bg-white/95 border-2 border-sky-300 shadow-xs space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-12 gap-2 items-end">
-                {/* 1. Sở / Phòng GD&ĐT */}
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
-                    1. Sở / Phòng GD&amp;ĐT:
-                  </label>
-                  <input
-                    type="text"
-                    value={config.departmentName}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, departmentName: e.target.value }))
-                    }
-                    placeholder="SỞ GD&ĐT VĨNH LONG"
-                    className="w-full px-2.5 py-1.5 text-xs sm:text-sm font-bold text-slate-900 bg-sky-50/70 border border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
-                  />
-                </div>
-
-                {/* 2. Trường / Đơn vị */}
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
-                    2. Trường / Đơn vị:
-                  </label>
-                  <input
-                    type="text"
-                    value={config.schoolName}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, schoolName: e.target.value }))
-                    }
-                    placeholder="TRƯỜNG THPT MANG THÍT"
-                    className="w-full px-2.5 py-1.5 text-xs sm:text-sm font-bold text-slate-900 bg-sky-50/70 border border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
-                  />
-                </div>
-
-                {/* 3. Kỳ kiểm tra */}
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] font-extrabold text-blue-950 uppercase truncate mb-0.5">
-                    3. Kỳ kiểm tra:
-                  </label>
-                  <select
-                    value={config.examTitle}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, examTitle: e.target.value }))
-                    }
-                    className="w-full px-2 py-1.5 text-xs sm:text-sm font-black text-blue-950 bg-blue-50/80 border border-blue-400 rounded-xl focus:outline-none focus:border-blue-700 cursor-pointer"
-                  >
-                    <option value="KIỂM TRA GIỮA KÌ I">KIỂM TRA GIỮA KÌ I</option>
-                    <option value="KIỂM TRA GIỮA KÌ II">KIỂM TRA GIỮA KÌ II</option>
-                    <option value="KIỂM TRA CUỐI KÌ I">KIỂM TRA CUỐI KÌ I</option>
-                    <option value="KIỂM TRA CUỐI KÌ II">KIỂM TRA CUỐI KÌ II</option>
-                    <option value="KIỂM TRA ÔN TẬP">KIỂM TRA ÔN TẬP</option>
-                    <option value="KỲ THI TỐT NGHIỆP THPT">KỲ THI TỐT NGHIỆP THPT</option>
-                  </select>
-                </div>
-
-                {/* 4. Môn thi (12 môn THPT) */}
-                <div className="lg:col-span-2">
-                  <label className="block text-[11px] font-extrabold text-emerald-950 uppercase truncate mb-0.5">
-                    4. Môn thi (12 môn THPT):
-                  </label>
-                  <select
-                    value={config.subjectName}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const minsMap: Record<string, number> = {
-                        'TOÁN HỌC': 90,
-                        'NGỮ VĂN': 120,
-                        'SINH HỌC': 50,
-                        'VẬT LÍ': 50,
-                        'HÓA HỌC': 50,
-                        'TIẾNG ANH': 50,
-                        'LỊCH SỬ': 50,
-                        'ĐỊA LÍ': 50,
-                        'GD KINH TẾ & PHÁP LUẬT': 50,
-                        'TIN HỌC': 50,
-                        'CÔNG NGHỆ CÔNG NGHIỆP': 50,
-                        'CÔNG NGHỆ NÔNG NGHIỆP': 50,
-                      };
-                      setConfig((prev) => ({
-                        ...prev,
-                        subjectName: val,
-                        durationMinutes: minsMap[val] || prev.durationMinutes,
-                      }));
-                    }}
-                    className="w-full px-2 py-1.5 text-xs sm:text-sm font-black text-emerald-950 bg-emerald-50/80 border border-emerald-400 rounded-xl focus:outline-none focus:border-emerald-700 cursor-pointer"
-                  >
-                    <option value="SINH HỌC">SINH HỌC</option>
-                    <option value="TOÁN HỌC">TOÁN HỌC</option>
-                    <option value="VẬT LÍ">VẬT LÍ</option>
-                    <option value="HÓA HỌC">HÓA HỌC</option>
-                    <option value="NGỮ VĂN">NGỮ VĂN</option>
-                    <option value="TIẾNG ANH">TIẾNG ANH</option>
-                    <option value="LỊCH SỬ">LỊCH SỬ</option>
-                    <option value="ĐỊA LÍ">ĐỊA LÍ</option>
-                    <option value="GD KINH TẾ & PHÁP LUẬT">GD KINH TẾ &amp; PHÁP LUẬT</option>
-                    <option value="TIN HỌC">TIN HỌC</option>
-                    <option value="CÔNG NGHỆ CÔNG NGHIỆP">CÔNG NGHỆ CÔNG NGHIỆP</option>
-                    <option value="CÔNG NGHỆ NÔNG NGHIỆP">CÔNG NGHỆ NÔNG NGHIỆP</option>
-                  </select>
-                </div>
-
-                {/* 5. Lớp */}
-                <div className="lg:col-span-1">
-                  <label className="block text-[11px] font-extrabold text-purple-950 uppercase truncate mb-0.5">
-                    5. Lớp:
-                  </label>
-                  <select
-                    value={config.gradeLevel || 'Lớp 12'}
-                    onChange={(e) =>
-                      setConfig((prev) => ({ ...prev, gradeLevel: e.target.value }))
-                    }
-                    className="w-full px-2 py-1.5 text-xs sm:text-sm font-black text-purple-950 bg-purple-50/80 border border-purple-300 rounded-xl focus:outline-none cursor-pointer"
-                  >
-                    <option value="Lớp 12">Lớp 12</option>
-                    <option value="Lớp 11">Lớp 11</option>
-                    <option value="Lớp 10">Lớp 10</option>
-                  </select>
-                </div>
-
-                {/* 6. Phút */}
-                <div className="lg:col-span-1">
-                  <label className="block text-[11px] font-extrabold text-rose-950 uppercase truncate mb-0.5">
-                    6. Phút:
-                  </label>
-                  <input
-                    type="number"
-                    min={15}
-                    max={300}
-                    value={config.durationMinutes}
-                    onChange={(e) =>
-                      setConfig((prev) => ({
-                        ...prev,
-                        durationMinutes: Number(e.target.value) || 50,
-                      }))
-                    }
-                    className="w-full px-2 py-1.5 text-xs sm:text-sm font-mono font-black text-rose-700 bg-rose-50/60 border border-rose-300 rounded-xl text-center focus:outline-none"
-                  />
-                </div>
-
-                {/* 7. Số đề */}
-                <div className="lg:col-span-1">
-                  <label className="block text-[11px] font-extrabold text-indigo-950 uppercase truncate mb-0.5">
-                    7. Số đề:
-                  </label>
-                  <select
-                    value={config.numVariants}
-                    onChange={(e) => {
-                      const newCount = Number(e.target.value);
-                      setConfig((prev) => {
-                        const base = prev.examCodeDigits === 3 ? 101 : 1001;
-                        const existing = prev.customCodes || [];
-                        const updatedCodes = Array.from({ length: newCount }, (_, i) =>
-                          existing[i]?.trim() ? existing[i] : String(base + i)
-                        );
-                        return {
-                          ...prev,
-                          numVariants: newCount,
-                          customCodes: updatedCodes,
-                        };
-                      });
-                    }}
-                    className="w-full px-2 py-1.5 text-xs sm:text-sm font-mono font-black text-indigo-950 bg-indigo-50/80 border border-indigo-300 rounded-xl focus:outline-none cursor-pointer"
-                  >
-                    <option value={4}>4 đề</option>
-                    <option value={8}>8 đề</option>
-                    <option value={12}>12 đề</option>
-                    <option value={24}>24 đề</option>
-                  </select>
-                </div>
-
-                {/* 8. Sửa mã */}
-                <div className="lg:col-span-1">
-                  <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
-                    8. Mã đề:
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowCustomCodeEditor((prev) => !prev)}
-                    className="w-full px-2 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-violet flex items-center justify-center gap-1 cursor-pointer"
-                    title="Điều chỉnh mã đề (101, 102...) và tùy chọn dàn trang, mã QR"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Sửa mã</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Khung mở rộng khi bấm [Sửa mã]: Cho phép sửa từng mã đề 101, 102... và tùy chỉnh Dàn trang / QR */}
-              {showCustomCodeEditor && (
-                <div className="pt-2 border-t border-sky-200 grid grid-cols-1 lg:grid-cols-12 gap-2.5 items-center bg-sky-50/70 p-2.5 rounded-xl text-xs">
-                  <div className="lg:col-span-7 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-sky-950">
-                        Nhập mã đề tùy ý ({config.numVariants} mã đề):
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={config.examCodeDigits}
-                          onChange={(e) => {
-                            const newDigits = Number(e.target.value) as 3 | 4;
-                            setConfig((prev) => {
-                              const base = newDigits === 3 ? 101 : 1001;
-                              return {
-                                ...prev,
-                                examCodeDigits: newDigits,
-                                customCodes: Array.from(
-                                  { length: prev.numVariants },
-                                  (_, i) => String(base + i)
-                                ),
-                              };
-                            });
-                          }}
-                          className="px-2 py-0.5 font-bold bg-white border border-sky-300 rounded-md"
-                        >
-                          <option value={3}>Hệ 3 số (101...)</option>
-                          <option value={4}>Hệ 4 số (1001...)</option>
-                        </select>
-                        <button
-                          type="button"
-                          onClick={handleResetDefaultCodes}
-                          className="font-bold text-blue-700 hover:underline cursor-pointer"
-                        >
-                          Mặc định
-                        </button>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5">
-                      {Array.from({ length: config.numVariants }, (_, idx) => {
-                        const val =
-                          config.customCodes?.[idx] ??
-                          String(config.examCodeDigits === 3 ? 101 + idx : 1001 + idx);
-                        return (
-                          <input
-                            key={`code-input-${idx}`}
-                            type="text"
-                            value={val}
-                            onChange={(e) => handleUpdateCustomCode(idx, e.target.value)}
-                            className="px-2 py-1 font-black font-mono text-center text-blue-950 bg-white border border-sky-300 rounded-md focus:outline-none focus:border-blue-600"
-                            maxLength={10}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <div>
-                      <span className="font-bold text-slate-700 block mb-0.5">Chia cột đáp án Phần I:</span>
-                      <select
-                        value={config.layoutOverride}
-                        onChange={(e) =>
-                          setConfig((prev) => ({
-                            ...prev,
-                            layoutOverride: e.target.value as LayoutMode,
-                          }))
-                        }
-                        className="w-full px-2 py-1 font-bold bg-white border border-sky-300 rounded-md"
-                      >
-                        <option value="AUTO">Tự động co dãn (Auto)</option>
-                        <option value="1_ROW_4_COL">Luôn chia 4 cột ngang</option>
-                        <option value="2_ROW_2_COL">Luôn chia 2 cột × 2 hàng</option>
-                        <option value="4_ROW_1_COL">Luôn xếp 1 cột dọc</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <span className="font-bold text-slate-700 block mb-0.5">Chuẩn mã QR Chấm thi:</span>
-                      <select
-                        value={config.qrFormat}
-                        onChange={(e) =>
-                          setConfig((prev) => ({
-                            ...prev,
-                            qrFormat: e.target.value as QRAppFormat,
-                          }))
-                        }
-                        className="w-full px-2 py-1 font-bold bg-white border border-sky-300 rounded-md"
-                      >
-                        <option value="QM2025">QM2025 (Chuẩn 3 Phần)</option>
-                        <option value="TNMAKER">TNMaker</option>
-                        <option value="AZOTA">Azota 2025</option>
-                        <option value="STANDARD_2025">Standard 2025</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ================= THANH CÔNG CỤ HỢP NHẤT GỌN ĐẸP 2 HÀNG (CỠ CHỮ TỰ ĐỘNG CO GIÃN, KHÔNG BỊ VỠ/MẤT KHUNG NÚT BẤM) ================= */}
-          <div className="px-3 py-2 rounded-2xl toolbar-3d space-y-2">
-            {/* HÀNG 1: CHUYỂN NHANH 3 PHẦN + CHẾ ĐỘ XEM (THẺ 3D / WORD A4) + CÁC NÚT TÁC VỤ CHÍNH (MỖI NÚT 1 MÀU KHÁC NHAU) */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-200/90">
-              {/* Cụm Trái: Chuyển nhanh 3 Phần + Chuyển chế độ Thẻ 3D / Trang Word A4 */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    setFilterPart('ALL');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-slate cursor-pointer ${
-                    filterPart === 'ALL' ? 'ring-2 ring-slate-400' : 'opacity-90 hover:opacity-100'
-                  }`}
-                  title="Hiển thị toàn bộ câu hỏi của cả 3 phần"
-                >
-                  Tất cả: {questions.length} câu
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    setFilterPart('PART_1');
-                    const firstP1 = questions.find((q) => q.part === 'PART_1');
-                    if (firstP1) {
-                      setTimeout(() => {
-                        questionRefs.current[firstP1.id]?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'center',
-                        });
-                      }, 60);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-primary cursor-pointer ${
-                    filterPart === 'PART_1' ? 'ring-2 ring-blue-300' : 'opacity-95 hover:opacity-100'
-                  }`}
-                  title="Chuyển nhanh tới Phần I (Trắc nghiệm 4 lựa chọn A, B, C, D)"
-                >
-                  PHẦN I: {part1Count} câu
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    setFilterPart('PART_2');
-                    const firstP2 = questions.find((q) => q.part === 'PART_2');
-                    if (firstP2) {
-                      setTimeout(() => {
-                        questionRefs.current[firstP2.id]?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'center',
-                        });
-                      }, 60);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-emerald cursor-pointer ${
-                    filterPart === 'PART_2' ? 'ring-2 ring-emerald-300' : 'opacity-95 hover:opacity-100'
-                  }`}
-                  title="Chuyển nhanh tới Phần II (Đúng / Sai a, b, c, d)"
-                >
-                  PHẦN II: {part2Count} câu
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    setFilterPart('PART_3');
-                    const firstP3 = questions.find((q) => q.part === 'PART_3');
-                    if (firstP3) {
-                      setTimeout(() => {
-                        questionRefs.current[firstP3.id]?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'center',
-                        });
-                      }, 60);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-amber cursor-pointer ${
-                    filterPart === 'PART_3' ? 'ring-2 ring-amber-300' : 'opacity-95 hover:opacity-100'
-                  }`}
-                  title="Chuyển nhanh tới Phần III (Trả lời ngắn)"
-                >
-                  PHẦN III: {part3Count} câu
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    if (part4Count === 0) {
-                      handleAddEssayQuestion();
-                      return;
-                    }
-                    setFilterPart('PART_4');
-                    const firstP4 = questions.find((q) => q.part === 'PART_4');
-                    if (firstP4) {
-                      setTimeout(() => {
-                        questionRefs.current[firstP4.id]?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'center',
-                        });
-                      }, 60);
-                    }
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-fuchsia cursor-pointer ${
-                    filterPart === 'PART_4' ? 'ring-2 ring-fuchsia-300' : 'opacity-95 hover:opacity-100'
-                  }`}
-                  title="Chuyển nhanh tới Phần IV (Tự luận) hoặc bấm để thêm câu hỏi Tự luận"
-                >
-                  PHẦN {essayPartRomanLabel} (Tự luận): {part4Count} câu
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleAddEssayQuestion}
-                  className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-purple flex items-center gap-1 cursor-pointer"
-                  title="Thêm nhanh 1 câu hỏi Tự luận (Giữ nguyên vị trí cố định khi trộn đề)"
-                >
-                  <Plus className="w-3.5 h-3.5 shrink-0" />
-                  <span>+ Tự Luận</span>
-                </button>
-
-                <span className="text-slate-300 mx-0.5 hidden sm:inline">|</span>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    setEditorViewMode('CARDS_3D');
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-sky flex items-center gap-1.5 cursor-pointer ${
-                    activeRightTab === 'LIVE_EDITOR' && editorViewMode === 'CARDS_3D'
-                      ? 'ring-2 ring-sky-300'
-                      : 'opacity-85 hover:opacity-100'
-                  }`}
-                  title="Chế độ xem và chỉnh sửa từng thẻ câu hỏi 3D trực quan"
-                >
-                  <Layers className="w-3.5 h-3.5 shrink-0" />
-                  <span>Thẻ Câu Hỏi 3D</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveRightTab('LIVE_EDITOR');
-                    setWordRawDocumentText(serializeQuestionsToWordRawText(questions));
-                    setEditorViewMode('WORD_A4_PAGE');
-                  }}
-                  className={`px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-violet flex items-center gap-1.5 cursor-pointer ${
-                    activeRightTab === 'LIVE_EDITOR' && editorViewMode === 'WORD_A4_PAGE'
-                      ? 'ring-2 ring-violet-300'
-                      : 'opacity-85 hover:opacity-100'
-                  }`}
-                  title="Chế độ soạn thảo trực tiếp trên trang giấy Word A4"
-                >
-                  <Edit3 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Trang Word A4</span>
-                </button>
-              </div>
-
-              {/* Cụm Phải: Các nút tác vụ chính (Mỗi nút 1 màu riêng biệt, tự động co giãn không bị mất khung) */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessing}
-                  className="px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-primary flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Tải lên đề thi Word (.docx) hoặc PDF (.pdf)"
-                >
-                  <Upload className="w-3.5 h-3.5 shrink-0" />
-                  <span>Tải Word / PDF</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleLoadSampleExam(true)}
-                  className="px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Nạp đề mẫu chuẩn cấu trúc 18-4-6"
-                >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                  <span>Đề Mẫu 18-4-6</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleNormalizeAndDeClumpAllQuestions}
-                  className="px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-orange flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Tự động tách các câu hỏi/đáp án dính chùm và ép chuẩn đủ 4 phương án"
-                >
-                  <Wand2 className="w-3.5 h-3.5 shrink-0" />
-                  <span>Tách Dính Chùm &amp; 4 ĐA</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSaveEdits}
-                  className={`px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                    hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
-                  }`}
-                  title="Lưu toàn bộ nội dung vừa chỉnh sửa"
-                >
-                  <Save className="w-3.5 h-3.5 shrink-0" />
-                  <span>Lưu Sửa</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleRunShuffle}
-                  disabled={!canShuffle || isProcessing}
-                  className="px-3.5 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Trộn hoán vị các mã đề thi"
-                >
-                  <Shuffle className="w-3.5 h-3.5 shrink-0" />
-                  <span>Trộn Đề ({config.numVariants} Mã)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadMasterWithSolutions}
-                  disabled={isProcessing}
-                  className="px-3 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-indigo flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  title="Tải đề gốc kèm lời giải chi tiết (.docx)"
-                >
-                  <Download className="w-3.5 h-3.5 shrink-0" />
-                  <span>Tải Đề Gốc Có Lời Giải (.docx)</span>
-                </button>
-
-                {shuffledVariants.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadZipBundle}
-                    disabled={isProcessing}
-                    className="px-3 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
-                    title="Tải trọn bộ đề thi đã trộn và bảng đáp án (.zip)"
-                  >
-                    <FileArchive className="w-3.5 h-3.5 shrink-0" />
-                    <span>Tải Bộ Đề (.zip)</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* HÀNG 2: KHUNG CẢNH BÁO CÂU HỎI CHƯA HỢP LỆ + CÔNG CỤ CỠ CHỮ & KÝ HIỆU KHOA HỌC */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              {/* Cụm Trái: Khung cảnh báo câu hỏi chưa hợp lệ */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {validationIssues.length === 0 ? (
-                  <div className="px-3 py-1 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-950 text-xs font-black flex items-center gap-1.5 shadow-2xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Đề hợp lệ 100% (0 câu lỗi · Đủ 4 đáp án)</span>
-                  </div>
-                ) : (
-                  <div className="px-3 py-1 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-950 flex flex-wrap items-center gap-1.5 shadow-xs text-xs">
-                    <div className="flex items-center gap-1 font-black text-rose-700">
-                      <AlertTriangle className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
-                      <span>Cảnh báo ({validationIssues.length} câu chưa hợp lệ):</span>
-                    </div>
-
-                    <div className="flex items-center gap-1 flex-wrap">
-                      {validationIssues.slice(0, 6).map((iss, idx) => (
-                        <button
-                          key={`sticky-iss-${iss.questionId}-${idx}`}
-                          type="button"
-                          onClick={() => {
-                            setActiveRightTab('LIVE_EDITOR');
-                            handleScrollToQuestion(iss.questionId);
-                          }}
-                          className="px-2 py-0.5 rounded-lg bg-white hover:bg-rose-600 hover:text-white text-rose-800 border border-rose-300 font-black transition-colors cursor-pointer whitespace-nowrap"
-                          title={`${iss.message} — Bấm để nhảy tới sửa ngay`}
-                        >
-                          Câu {iss.questionIndex}
-                        </button>
-                      ))}
-                      {validationIssues.length > 6 && (
-                        <span className="font-bold text-rose-700">
-                          +{validationIssues.length - 6} câu
-                        </span>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleNormalizeAndDeClumpAllQuestions}
-                      className="px-2.5 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-2xs whitespace-nowrap"
-                      title="Tự động sửa lỗi dính chùm và ép đủ 4 phương án cho toàn bộ câu lỗi"
-                    >
-                      <Wand2 className="w-3.5 h-3.5" />
-                      <span>Sửa tất cả</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Cụm Phải: Chọn cỡ chữ + Chèn nhanh ký hiệu khoa học */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <select
-                  value={wordFontSizePt}
-                  onChange={(e) => setWordFontSizePt(Number(e.target.value))}
-                  className="px-2.5 py-1 rounded-xl bg-white border border-sky-300 text-xs font-mono font-bold text-slate-900 cursor-pointer"
-                  title="Chọn cỡ chữ hiển thị"
-                >
-                  <option value={11}>Times 11pt</option>
-                  <option value={12}>Times 12pt</option>
-                  <option value={13}>Times 13pt</option>
-                  <option value={14}>Times 14pt</option>
-                </select>
-
-                <div className="flex items-center gap-1 flex-wrap">
-                  {['→', '⇄', 'Δ', 'α', 'β', '♂', '♀', '±', '°C', '²', '₁', '₂'].map(
-                    (sym) => (
-                      <button
-                        key={sym}
-                        type="button"
-                        onClick={() => handleInsertScientificSymbol(sym)}
-                        className="w-7 h-7 rounded-lg bg-white hover:bg-blue-50 border border-sky-300 text-xs font-mono font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
-                        title={`Chèn nhanh ký hiệu ${sym} vào câu hỏi đang chọn`}
-                      >
-                        {sym}
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Thanh thông báo trạng thái (Status Banner) */}
         {statusBanner && (
           <div
-            className={`px-6 py-2 border-t text-xs font-bold flex items-center justify-between gap-4 ${
+            className={`px-4 py-1.5 border-t text-xs font-bold flex items-center justify-between gap-4 ${
               statusBanner.type === 'SUCCESS'
                 ? 'bg-emerald-100/95 border-emerald-400 text-emerald-950'
                 : statusBanner.type === 'ERROR'
@@ -2097,9 +1463,641 @@ export default function App() {
         )}
       </div>
 
-      {/* ================= 4.3. PHẦN THÔNG TIN & NỘI DUNG CỦA ĐỀ CẦN TRỘN (1 KHỐI TỪ TRÊN XUỐNG RỘNG RÃI, ĐẸP MẮT) ================= */}
-      <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-5 space-y-5">
-        <section className="w-full space-y-4">
+      {/* ================= BỐ CỤC CHIA 2 CỘT: BÊN TRÁI (1/3 KHUNG HÌNH - THÔNG TIN & THANH CÔNG CỤ) | BÊN PHẢI (2/3 KHUNG HÌNH - MÀN HÌNH HIỂN THỊ ĐỀ) ================= */}
+      <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-5 py-3">
+        {/* Input ẩn phục vụ tải tệp Word / PDF */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".docx,.pdf"
+          onChange={handleFileUpload}
+          className="hidden"
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          {/* ================= CỘT TRÁI (CHIẾM 1/3 KHUNG HÌNH = 4/12 CỘT): THÔNG TIN ĐỀ & THANH CÔNG CỤ ĐIỀU KHIỂN ================= */}
+          <aside className="lg:col-span-4 lg:sticky lg:top-[96px] lg:max-h-[calc(100vh-132px)] lg:overflow-y-auto space-y-2.5 pr-0.5">
+            {/* KHỐI 1: THÔNG TIN ĐỀ CẦN TRỘN (1 -> 8) */}
+            {!isConfigCollapsed && (
+              <div className="p-3 rounded-2xl bg-white/95 border-2 border-sky-300 shadow-xs space-y-2">
+                <div className="grid grid-cols-2 gap-2 items-end">
+                  {/* 1. Sở / Phòng GD&ĐT */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
+                      1. Sở / Phòng GD&amp;ĐT:
+                    </label>
+                    <input
+                      type="text"
+                      value={config.departmentName}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, departmentName: e.target.value }))
+                      }
+                      placeholder="SỞ GD&ĐT VĨNH LONG"
+                      className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-900 bg-sky-50/70 border border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
+                    />
+                  </div>
+
+                  {/* 2. Trường / Đơn vị */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
+                      2. Trường / Đơn vị:
+                    </label>
+                    <input
+                      type="text"
+                      value={config.schoolName}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, schoolName: e.target.value }))
+                      }
+                      placeholder="TRƯỜNG THPT MANG THÍT"
+                      className="w-full px-2.5 py-1.5 text-xs font-bold text-slate-900 bg-sky-50/70 border border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
+                    />
+                  </div>
+
+                  {/* 3. Kỳ kiểm tra */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-blue-950 uppercase truncate mb-0.5">
+                      3. Kỳ kiểm tra:
+                    </label>
+                    <select
+                      value={config.examTitle}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, examTitle: e.target.value }))
+                      }
+                      className="w-full px-2 py-1.5 text-xs font-black text-blue-950 bg-blue-50/80 border border-blue-400 rounded-xl focus:outline-none focus:border-blue-700 cursor-pointer"
+                    >
+                      <option value="KIỂM TRA GIỮA KÌ I">KIỂM TRA GIỮA KÌ I</option>
+                      <option value="KIỂM TRA GIỮA KÌ II">KIỂM TRA GIỮA KÌ II</option>
+                      <option value="KIỂM TRA CUỐI KÌ I">KIỂM TRA CUỐI KÌ I</option>
+                      <option value="KIỂM TRA CUỐI KÌ II">KIỂM TRA CUỐI KÌ II</option>
+                      <option value="KIỂM TRA ÔN TẬP">KIỂM TRA ÔN TẬP</option>
+                      <option value="KỲ THI TỐT NGHIỆP THPT">KỲ THI TỐT NGHIỆP THPT</option>
+                    </select>
+                  </div>
+
+                  {/* 4. Môn thi (12 môn THPT) */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-emerald-950 uppercase truncate mb-0.5">
+                      4. Môn thi (12 môn THPT):
+                    </label>
+                    <select
+                      value={config.subjectName}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const minsMap: Record<string, number> = {
+                          'TOÁN HỌC': 90,
+                          'NGỮ VĂN': 120,
+                          'SINH HỌC': 50,
+                          'VẬT LÍ': 50,
+                          'HÓA HỌC': 50,
+                          'TIẾNG ANH': 50,
+                          'LỊCH SỬ': 50,
+                          'ĐỊA LÍ': 50,
+                          'GD KINH TẾ & PHÁP LUẬT': 50,
+                          'TIN HỌC': 50,
+                          'CÔNG NGHỆ CÔNG NGHIỆP': 50,
+                          'CÔNG NGHỆ NÔNG NGHIỆP': 50,
+                        };
+                        setConfig((prev) => ({
+                          ...prev,
+                          subjectName: val,
+                          durationMinutes: minsMap[val] || prev.durationMinutes,
+                        }));
+                      }}
+                      className="w-full px-2 py-1.5 text-xs font-black text-emerald-950 bg-emerald-50/80 border border-emerald-400 rounded-xl focus:outline-none focus:border-emerald-700 cursor-pointer"
+                    >
+                      <option value="SINH HỌC">SINH HỌC</option>
+                      <option value="TOÁN HỌC">TOÁN HỌC</option>
+                      <option value="VẬT LÍ">VẬT LÍ</option>
+                      <option value="HÓA HỌC">HÓA HỌC</option>
+                      <option value="NGỮ VĂN">NGỮ VĂN</option>
+                      <option value="TIẾNG ANH">TIẾNG ANH</option>
+                      <option value="LỊCH SỬ">LỊCH SỬ</option>
+                      <option value="ĐỊA LÍ">ĐỊA LÍ</option>
+                      <option value="GD KINH TẾ & PHÁP LUẬT">GD KINH TẾ &amp; PHÁP LUẬT</option>
+                      <option value="TIN HỌC">TIN HỌC</option>
+                      <option value="CÔNG NGHỆ CÔNG NGHIỆP">CÔNG NGHỆ CÔNG NGHIỆP</option>
+                      <option value="CÔNG NGHỆ NÔNG NGHIỆP">CÔNG NGHỆ NÔNG NGHIỆP</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Hàng 5 - 6 - 7 - 8: Lớp, Phút, Số đề, Mã đề */}
+                <div className="grid grid-cols-4 gap-1.5 items-end pt-0.5">
+                  {/* 5. Lớp */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-purple-950 uppercase truncate mb-0.5">
+                      5. Lớp:
+                    </label>
+                    <select
+                      value={config.gradeLevel || 'Lớp 12'}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, gradeLevel: e.target.value }))
+                      }
+                      className="w-full px-1.5 py-1.5 text-xs font-black text-purple-950 bg-purple-50/80 border border-purple-300 rounded-xl focus:outline-none cursor-pointer"
+                    >
+                      <option value="Lớp 12">Lớp 12</option>
+                      <option value="Lớp 11">Lớp 11</option>
+                      <option value="Lớp 10">Lớp 10</option>
+                    </select>
+                  </div>
+
+                  {/* 6. Phút */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-rose-950 uppercase truncate mb-0.5">
+                      6. Phút:
+                    </label>
+                    <input
+                      type="number"
+                      min={15}
+                      max={300}
+                      value={config.durationMinutes}
+                      onChange={(e) =>
+                        setConfig((prev) => ({
+                          ...prev,
+                          durationMinutes: Number(e.target.value) || 50,
+                        }))
+                      }
+                      className="w-full px-1.5 py-1.5 text-xs font-mono font-black text-rose-700 bg-rose-50/60 border border-rose-300 rounded-xl text-center focus:outline-none"
+                    />
+                  </div>
+
+                  {/* 7. Số đề */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-indigo-950 uppercase truncate mb-0.5">
+                      7. Số đề:
+                    </label>
+                    <select
+                      value={config.numVariants}
+                      onChange={(e) => {
+                        const newCount = Number(e.target.value);
+                        setConfig((prev) => {
+                          const base = prev.examCodeDigits === 3 ? 101 : 1001;
+                          const existing = prev.customCodes || [];
+                          const updatedCodes = Array.from({ length: newCount }, (_, i) =>
+                            existing[i]?.trim() ? existing[i] : String(base + i)
+                          );
+                          return {
+                            ...prev,
+                            numVariants: newCount,
+                            customCodes: updatedCodes,
+                          };
+                        });
+                      }}
+                      className="w-full px-1.5 py-1.5 text-xs font-mono font-black text-indigo-950 bg-indigo-50/80 border border-indigo-300 rounded-xl focus:outline-none cursor-pointer"
+                    >
+                      <option value={4}>4 đề</option>
+                      <option value={8}>8 đề</option>
+                      <option value={12}>12 đề</option>
+                      <option value={24}>24 đề</option>
+                    </select>
+                  </div>
+
+                  {/* 8. Sửa mã */}
+                  <div>
+                    <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
+                      8. Mã đề:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomCodeEditor((prev) => !prev)}
+                      className="w-full px-2 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-violet flex items-center justify-center gap-1 cursor-pointer"
+                      title="Điều chỉnh mã đề (101, 102...) và tùy chọn dàn trang, mã QR"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                      <span>Sửa mã</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Khung mở rộng khi bấm [Sửa mã]: Cho phép sửa từng mã đề 101, 102... và tùy chỉnh Dàn trang / QR */}
+                {showCustomCodeEditor && (
+                  <div className="pt-2 border-t border-sky-200 space-y-2 bg-sky-50/70 p-2.5 rounded-xl text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="font-black text-sky-950">
+                          Mã đề ({config.numVariants} mã):
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={config.examCodeDigits}
+                            onChange={(e) => {
+                              const newDigits = Number(e.target.value) as 3 | 4;
+                              setConfig((prev) => {
+                                const base = newDigits === 3 ? 101 : 1001;
+                                return {
+                                  ...prev,
+                                  examCodeDigits: newDigits,
+                                  customCodes: Array.from(
+                                    { length: prev.numVariants },
+                                    (_, i) => String(base + i)
+                                  ),
+                                };
+                              });
+                            }}
+                            className="px-1.5 py-0.5 font-bold bg-white border border-sky-300 rounded-md"
+                          >
+                            <option value={3}>3 số (101...)</option>
+                            <option value={4}>4 số (1001...)</option>
+                          </select>
+                          <button
+                            type="button"
+                            onClick={handleResetDefaultCodes}
+                            className="font-bold text-blue-700 hover:underline cursor-pointer"
+                          >
+                            Mặc định
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {Array.from({ length: config.numVariants }, (_, idx) => {
+                          const val =
+                            config.customCodes?.[idx] ??
+                            String(config.examCodeDigits === 3 ? 101 + idx : 1001 + idx);
+                          return (
+                            <input
+                              key={`code-input-${idx}`}
+                              type="text"
+                              value={val}
+                              onChange={(e) => handleUpdateCustomCode(idx, e.target.value)}
+                              className="px-2 py-1 font-black font-mono text-center text-blue-950 bg-white border border-sky-300 rounded-md focus:outline-none focus:border-blue-600"
+                              maxLength={10}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="font-bold text-slate-700 block mb-0.5">Chia cột Phần I:</span>
+                        <select
+                          value={config.layoutOverride}
+                          onChange={(e) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              layoutOverride: e.target.value as LayoutMode,
+                            }))
+                          }
+                          className="w-full px-1.5 py-1 font-bold bg-white border border-sky-300 rounded-md"
+                        >
+                          <option value="AUTO">Tự động (Auto)</option>
+                          <option value="1_ROW_4_COL">4 cột ngang</option>
+                          <option value="2_ROW_2_COL">2 cột × 2 hàng</option>
+                          <option value="4_ROW_1_COL">1 cột dọc</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <span className="font-bold text-slate-700 block mb-0.5">Chuẩn mã QR:</span>
+                        <select
+                          value={config.qrFormat}
+                          onChange={(e) =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              qrFormat: e.target.value as QRAppFormat,
+                            }))
+                          }
+                          className="w-full px-1.5 py-1 font-bold bg-white border border-sky-300 rounded-md"
+                        >
+                          <option value="QM2025">QM2025 (Chuẩn)</option>
+                          <option value="TNMAKER">TNMaker</option>
+                          <option value="AZOTA">Azota 2025</option>
+                          <option value="STANDARD_2025">Standard 2025</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* KHỐI 2: THANH CÔNG CỤ SOẠN THẢO, CHUYỂN NHANH PHẦN & TRỘN ĐỀ (NẰM BÊN TRÁI 1/3 KHUNG HÌNH) */}
+            <div className="p-3 rounded-2xl toolbar-3d space-y-2.5">
+              {/* Nhóm 1: Chuyển nhanh các Phần của đề */}
+              <div className="space-y-1.5 pb-2 border-b border-sky-200/90">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-black text-sky-950 uppercase tracking-wide">
+                    Chuyển nhanh phần câu hỏi:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddEssayQuestion}
+                    className="px-2.5 py-1 rounded-lg font-extrabold text-white btn-auto-scale btn-3d-purple flex items-center gap-1 cursor-pointer"
+                    title="Thêm nhanh 1 câu hỏi Tự luận (Giữ nguyên vị trí cố định khi trộn đề)"
+                  >
+                    <Plus className="w-3.5 h-3.5 shrink-0" />
+                    <span>+ Tự Luận</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setFilterPart('ALL');
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-slate cursor-pointer ${
+                      filterPart === 'ALL' ? 'ring-2 ring-slate-400' : 'opacity-90 hover:opacity-100'
+                    }`}
+                    title="Hiển thị toàn bộ câu hỏi của đề"
+                  >
+                    Tất cả: {questions.length} câu
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setFilterPart('PART_1');
+                      const firstP1 = questions.find((q) => q.part === 'PART_1');
+                      if (firstP1) {
+                        setTimeout(() => {
+                          questionRefs.current[firstP1.id]?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                          });
+                        }, 60);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-primary cursor-pointer ${
+                      filterPart === 'PART_1' ? 'ring-2 ring-blue-300' : 'opacity-95 hover:opacity-100'
+                    }`}
+                  >
+                    PHẦN I: {part1Count} câu
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setFilterPart('PART_2');
+                      const firstP2 = questions.find((q) => q.part === 'PART_2');
+                      if (firstP2) {
+                        setTimeout(() => {
+                          questionRefs.current[firstP2.id]?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                          });
+                        }, 60);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-emerald cursor-pointer ${
+                      filterPart === 'PART_2' ? 'ring-2 ring-emerald-300' : 'opacity-95 hover:opacity-100'
+                    }`}
+                  >
+                    PHẦN II: {part2Count} câu
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setFilterPart('PART_3');
+                      const firstP3 = questions.find((q) => q.part === 'PART_3');
+                      if (firstP3) {
+                        setTimeout(() => {
+                          questionRefs.current[firstP3.id]?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                          });
+                        }, 60);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-amber cursor-pointer ${
+                      filterPart === 'PART_3' ? 'ring-2 ring-amber-300' : 'opacity-95 hover:opacity-100'
+                    }`}
+                  >
+                    PHẦN III: {part3Count} câu
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      if (part4Count === 0) {
+                        handleAddEssayQuestion();
+                        return;
+                      }
+                      setFilterPart('PART_4');
+                      const firstP4 = questions.find((q) => q.part === 'PART_4');
+                      if (firstP4) {
+                        setTimeout(() => {
+                          questionRefs.current[firstP4.id]?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                          });
+                        }, 60);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-fuchsia cursor-pointer ${
+                      filterPart === 'PART_4' ? 'ring-2 ring-fuchsia-300' : 'opacity-95 hover:opacity-100'
+                    }`}
+                  >
+                    PHẦN {essayPartRomanLabel} (Tự luận): {part4Count} câu
+                  </button>
+                </div>
+
+                {/* Chuyển chế độ Thẻ Câu Hỏi 3D / Trang Word A4 */}
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setEditorViewMode('CARDS_3D');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-sky flex items-center justify-center gap-1.5 cursor-pointer ${
+                      activeRightTab === 'LIVE_EDITOR' && editorViewMode === 'CARDS_3D'
+                        ? 'ring-2 ring-sky-300'
+                        : 'opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <Layers className="w-3.5 h-3.5 shrink-0" />
+                    <span>Thẻ Câu Hỏi 3D</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setWordRawDocumentText(serializeQuestionsToWordRawText(questions));
+                      setEditorViewMode('WORD_A4_PAGE');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-violet flex items-center justify-center gap-1.5 cursor-pointer ${
+                      activeRightTab === 'LIVE_EDITOR' && editorViewMode === 'WORD_A4_PAGE'
+                        ? 'ring-2 ring-violet-300'
+                        : 'opacity-85 hover:opacity-100'
+                    }`}
+                  >
+                    <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Trang Word A4</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Nhóm 2: Các nút tác vụ chính (Mỗi nút 1 màu riêng biệt) */}
+              <div className="space-y-1.5 pb-2 border-b border-sky-200/90">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-primary flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 shrink-0" />
+                    <span>Tải Word / PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSampleExam(true)}
+                    className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span>Đề Mẫu 18-4-6</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleNormalizeAndDeClumpAllQuestions}
+                    className="px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-orange flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Wand2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Tách Dính Chùm &amp; 4 ĐA</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveEdits}
+                    className={`px-2.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
+                    }`}
+                  >
+                    <Save className="w-3.5 h-3.5 shrink-0" />
+                    <span>Lưu Sửa</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleRunShuffle}
+                    disabled={!canShuffle || isProcessing}
+                    className="px-3 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Shuffle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Trộn Đề ({config.numVariants} Mã)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadMasterWithSolutions}
+                    disabled={isProcessing}
+                    className="px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                    <span>Đề Gốc Có Lời Giải</span>
+                  </button>
+                </div>
+
+                {shuffledVariants.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleDownloadZipBundle}
+                    disabled={isProcessing}
+                    className="w-full px-3 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <FileArchive className="w-3.5 h-3.5 shrink-0" />
+                    <span>Tải Trọn Bộ {shuffledVariants.length} Đề Thi &amp; Đáp Án (.zip)</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Nhóm 3: Khung cảnh báo câu hỏi chưa hợp lệ */}
+              <div>
+                {validationIssues.length === 0 ? (
+                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-950 text-xs font-black flex items-center gap-1.5 shadow-2xs">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Đề hợp lệ 100% (0 câu lỗi · Đủ 4 đáp án)</span>
+                  </div>
+                ) : (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-950 space-y-1.5 shadow-xs text-xs">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1 font-black text-rose-700">
+                        <AlertTriangle className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
+                        <span>Cảnh báo ({validationIssues.length} câu lỗi):</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleNormalizeAndDeClumpAllQuestions}
+                        className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-2xs whitespace-nowrap"
+                      >
+                        <Wand2 className="w-3 h-3" />
+                        <span>Sửa tất cả</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {validationIssues.slice(0, 8).map((iss, idx) => (
+                        <button
+                          key={`sticky-iss-${iss.questionId}-${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setActiveRightTab('LIVE_EDITOR');
+                            handleScrollToQuestion(iss.questionId);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-white hover:bg-rose-600 hover:text-white text-rose-800 border border-rose-300 font-black transition-colors cursor-pointer whitespace-nowrap"
+                          title={`${iss.message} — Bấm để nhảy tới sửa ngay`}
+                        >
+                          Câu {iss.questionIndex}
+                        </button>
+                      ))}
+                      {validationIssues.length > 8 && (
+                        <span className="font-bold text-rose-700">
+                          +{validationIssues.length - 8} câu
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Nhóm 4: Chọn cỡ chữ & Chèn nhanh ký hiệu khoa học */}
+              <div className="pt-1 border-t border-sky-200/80 flex flex-wrap items-center justify-between gap-1.5">
+                <select
+                  value={wordFontSizePt}
+                  onChange={(e) => setWordFontSizePt(Number(e.target.value))}
+                  className="px-2 py-1 rounded-xl bg-white border border-sky-300 text-xs font-mono font-bold text-slate-900 cursor-pointer"
+                  title="Chọn cỡ chữ hiển thị"
+                >
+                  <option value={11}>Times 11pt</option>
+                  <option value={12}>Times 12pt</option>
+                  <option value={13}>Times 13pt</option>
+                  <option value={14}>Times 14pt</option>
+                </select>
+
+                <div className="flex items-center gap-1 flex-wrap">
+                  {['→', '⇄', 'Δ', 'α', 'β', '♂', '♀', '±', '°C', '²', '₁', '₂'].map(
+                    (sym) => (
+                      <button
+                        key={sym}
+                        type="button"
+                        onClick={() => handleInsertScientificSymbol(sym)}
+                        className="w-6 h-6 rounded-lg bg-white hover:bg-blue-50 border border-sky-300 text-xs font-mono font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                        title={`Chèn nhanh ký hiệu ${sym} vào câu hỏi đang chọn`}
+                      >
+                        {sym}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* ================= CỘT PHẢI (CHIẾM 2/3 KHUNG HÌNH = 8/12 CỘT): MÀN HÌNH HIỂN THỊ & CHỈNH SỬA ĐỀ ================= */}
+          <section className="lg:col-span-8 min-w-0 space-y-4">
           {/* ================= TAB 1: CHẾ ĐỘ XEM TRƯỚC & CHỈNH SỬA TRỰC TIẾP NỘI DUNG ĐỀ ================= */}
           {activeRightTab === 'LIVE_EDITOR' && (
             <div className="space-y-4">
@@ -3694,7 +3692,8 @@ export default function App() {
               )}
             </div>
           )}
-        </section>
+          </section>
+        </div>
       </main>
 
       {/* Modal 3D: Trung Tâm Bảo Mật Zero-Trace & Cụm Đa Luồng AI Chuyên Gia */}
@@ -3953,69 +3952,61 @@ export default function App() {
         onClose={() => setIsCoffeeModalOpen(false)}
       />
 
-      {/* ================= CHÂN TRANG CỐ ĐỊNH ĐA SẮC MÀU NỔI BẬT + NÚT MỜI THẦY KHẢI LY CÀ PHÊ NẰM TRỰC TIẾP TRÊN CHÂN TRANG KHÔNG BỊ CHE KHUẤT ================= */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-3 sm:px-5 py-2 text-white">
-        <div className="max-w-[1440px] mx-auto flex flex-col xl:flex-row items-center justify-between gap-2.5">
-          {/* Cụm Trái: Logo 3D Nhấp Nháy + Tên trang web EduMix 2025 */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-8 h-8 rounded-xl logo-3d-badge animate-logo-blink flex items-center justify-center text-white shrink-0">
-              <GraduationCap className="w-5 h-5" />
+      {/* ================= CHÂN TRANG SIÊU GỌN CHỈ GỒM 1 HÀNG DUY NHẤT (CHIẾM DIỆN TÍCH NHỎ NHẤT CÓ THỂ) ================= */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-2.5 py-1 text-white">
+        <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-2 overflow-x-auto whitespace-nowrap text-[11px] leading-tight">
+          {/* Cụm Trái: Logo 3D + Tên trang web EduMix 2025 */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-5 h-5 rounded-md logo-3d-badge animate-logo-blink flex items-center justify-center text-white shrink-0">
+              <GraduationCap className="w-3.5 h-3.5" />
             </div>
-            <span className="text-lg sm:text-xl font-black tracking-tight animate-edumix-gradient whitespace-nowrap">
+            <span className="text-xs sm:text-sm font-black tracking-tight animate-edumix-gradient">
               EduMix 2025
             </span>
           </div>
 
-          {/* Cụm Giữa: Các thẻ huy hiệu liên hệ đa sắc màu bắt mắt + Dòng cảm ơn đồng nghiệp */}
-          <div className="flex flex-col items-center gap-1">
-            {/* Dòng 1: Thông tin liên hệ dạng thẻ màu phát sáng */}
-            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-[13px]">
-              <span className="font-extrabold text-slate-100 tracking-wide">
-                Mọi chi tiết liên hệ và góp ý sản phẩm vui lòng liên hệ tác giả:
-              </span>
+          {/* Cụm Giữa: Toàn bộ thông tin tác giả & lời cảm ơn nằm gọn trên cùng 1 hàng */}
+          <div className="flex items-center justify-center gap-1.5 shrink-0">
+            <span className="font-bold text-slate-200 hidden sm:inline">
+              Liên hệ &amp; góp ý:
+            </span>
 
-              {/* Thẻ 1: Hồ Tấn Khải (Đỏ tươi phát sáng) */}
-              <span className="px-2.5 py-0.5 rounded-lg font-black footer-pill-red inline-flex items-center gap-1.5 whitespace-nowrap">
-                <span role="img" aria-label="author">👨‍🏫</span>
-                <span>Hồ Tấn Khải</span>
-              </span>
+            <span className="px-2 py-0.5 rounded-md font-black footer-pill-red inline-flex items-center gap-1">
+              <span role="img" aria-label="author">👨‍🏫</span>
+              <span>Hồ Tấn Khải</span>
+            </span>
 
-              {/* Thẻ 2: Trường THPT Mang Thít (Xanh lam viền phát sáng) */}
-              <span className="px-2.5 py-0.5 rounded-lg font-extrabold footer-pill-blue inline-flex items-center gap-1.5 whitespace-nowrap">
-                <span role="img" aria-label="school">🏫</span>
-                <span>Trường THPT Mang Thít</span>
-              </span>
+            <span className="px-2 py-0.5 rounded-md font-extrabold footer-pill-blue inline-flex items-center gap-1">
+              <span role="img" aria-label="school">🏫</span>
+              <span>Trường THPT Mang Thít</span>
+            </span>
 
-              {/* Thẻ 3: Email (Vàng kim viền phát sáng) */}
-              <a
-                href="mailto:khaibcmt@gmail.com"
-                className="px-2.5 py-0.5 rounded-lg font-extrabold footer-pill-amber inline-flex items-center gap-1.5 whitespace-nowrap"
-                title="Gửi email góp ý tới tác giả Hồ Tấn Khải"
-              >
-                <span role="img" aria-label="email">✉️</span>
-                <span>Email: khaibcmt@gmail.com</span>
-              </a>
+            <a
+              href="mailto:khaibcmt@gmail.com"
+              className="px-2 py-0.5 rounded-md font-extrabold footer-pill-amber inline-flex items-center gap-1"
+              title="Gửi email góp ý tới tác giả Hồ Tấn Khải"
+            >
+              <span role="img" aria-label="email">✉️</span>
+              <span>khaibcmt@gmail.com</span>
+            </a>
 
-              {/* Thẻ 4: Nhắn tin Zalo (Xanh ngọc lục bảo viền phát sáng) */}
-              <a
-                href="https://zalo.me/0939580982"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-2.5 py-0.5 rounded-lg font-extrabold footer-pill-emerald inline-flex items-center gap-1.5 whitespace-nowrap"
-                title="Nhắn tin qua Zalo 0939580982"
-              >
-                <span role="img" aria-label="zalo">💬</span>
-                <span>Nhắn tin Zalo: 0939580982</span>
-              </a>
-            </div>
+            <a
+              href="https://zalo.me/0939580982"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2 py-0.5 rounded-md font-extrabold footer-pill-emerald inline-flex items-center gap-1"
+              title="Nhắn tin qua Zalo 0939580982"
+            >
+              <span role="img" aria-label="zalo">💬</span>
+              <span>Zalo: 0939580982</span>
+            </a>
 
-            {/* Dòng 2: Lời cảm ơn quý đồng nghiệp (Tông Hồng Tím phát sáng nổi bật ở dòng dưới) */}
-            <div className="text-xs sm:text-[13px] font-extrabold tracking-wide footer-thanks-glow text-center">
-              • Xin cảm ơn quý đồng nghiệp đã góp ý để sản phẩm ngày càng tốt hơn! •
-            </div>
+            <span className="font-extrabold footer-thanks-glow hidden 2xl:inline ml-1">
+              • Cảm ơn quý đồng nghiệp đã góp ý!
+            </span>
           </div>
 
-          {/* Cụm Phải: Nút "☕ Mời Thầy Khải Ly Cà Phê" nằm ngay ngắn trên chân trang, nổi bật và không bị che khuất */}
+          {/* Cụm Phải: Nút "☕ Mời Thầy Khải Ly Cà Phê" siêu gọn cùng nằm trên 1 hàng chân trang */}
           <div className="shrink-0 flex items-center">
             <FloatingCoffeeButton onClick={() => setIsCoffeeModalOpen(true)} />
           </div>

@@ -287,21 +287,21 @@ export const FloatingCoffeeButton: React.FC<FloatingCoffeeButtonProps> = ({ onCl
     <button
       type="button"
       onClick={onClick}
-      className="group relative inline-flex items-center gap-2 px-3.5 py-1.5 pt-2 rounded-2xl bg-gradient-to-r from-[#78350F] via-[#92400E] to-[#B45309] hover:from-[#92400E] hover:via-[#B45309] hover:to-[#D97706] text-amber-100 border-2 border-amber-300 shadow-[0_4px_0_#451A03,0_0_18px_rgba(245,158,11,0.5)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer shrink-0"
+      className="group relative inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-gradient-to-r from-[#78350F] via-[#92400E] to-[#B45309] hover:from-[#92400E] hover:via-[#B45309] hover:to-[#D97706] text-amber-100 border border-amber-300 shadow-[0_2px_0_#451A03,0_0_12px_rgba(245,158,11,0.45)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer shrink-0"
       title="Mời Thầy Khải ly cà phê qua mã VietQR động"
     >
-      <div className="relative flex items-center justify-center w-6 h-6 rounded-full bg-amber-400/25 border border-amber-300/60 shrink-0">
+      <div className="relative flex items-center justify-center w-4 h-4 rounded-full bg-amber-400/25 border border-amber-300/60 shrink-0">
         {/* Khói bốc lên nhẹ nhàng bằng CSS keyframes */}
         <div className="coffee-steam-container" aria-hidden="true">
           <span className="coffee-steam-line steam-1" />
           <span className="coffee-steam-line steam-2" />
           <span className="coffee-steam-line steam-3" />
         </div>
-        <span className="text-sm leading-none select-none" role="img" aria-label="coffee">
+        <span className="text-[11px] leading-none select-none" role="img" aria-label="coffee">
           ☕
         </span>
       </div>
-      <span className="text-xs sm:text-[13px] font-black tracking-wide text-amber-100 group-hover:text-white whitespace-nowrap drop-shadow-xs">
+      <span className="text-[11px] font-black tracking-wide text-amber-100 group-hover:text-white whitespace-nowrap drop-shadow-xs">
         Mời Thầy Khải Ly Cà Phê
       </span>
     </button>
