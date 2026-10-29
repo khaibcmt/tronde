@@ -30,14 +30,15 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// Chặn bấm chuột phải
 document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
 });
 
-// Tự động bảo vệ bản quyền
+// Tự động bảo vệ bản quyền (Kiểm tra xem tên tác giả có bị xóa hay không)
 setInterval(function() {
     const bodyText = document.body.innerText;
-    if (!bodyText.includes('Hồ Tấn Khải') && !bodyText.includes('Mang Thít')) {
+    if (!bodyText.includes('Hồ Tấn Khải') || !bodyText.includes('Mang Thít')) {
         document.body.innerHTML = '<h1 style="color:red; text-align:center; margin-top:20vh;">CẢNH BÁO: Trang web đã bị chỉnh sửa trái phép! Vui lòng giữ nguyên thông tin bản quyền của tác giả Hồ Tấn Khải.</h1>';
     }
 }, 2000);
