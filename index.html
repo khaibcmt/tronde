@@ -18,30 +18,17 @@
     <script type="module" src="./src/main.tsx"></script>
   <script>
 <script>
-// 1. Chặn phím tắt và hiện thông báo nhắc nhở nhẹ nhàng
-document.addEventListener('keydown', function(e) {
-    if (
-        e.keyCode === 123 || 
-        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || 
-        (e.ctrlKey && e.keyCode === 85)
-    ) {
+window.addEventListener('keydown', function(e) {
+    if (e.keyCode === 123 || (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || (e.ctrlKey && e.keyCode === 85)) {
         e.preventDefault();
-        alert('Trang web được xây dựng và bảo vệ bản quyền bởi Thầy Hồ Tấn Khải. Mong bạn tôn trọng tác giả nhé!');
+        alert('Trang web bảo vệ bản quyền của Thầy Hồ Tấn Khải!');
         return false;
     }
 });
-
-// 2. Chặn chuột phải và thông báo nhẹ nhàng
-document.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-    alert('Bản quyền thuộc về Thầy Hồ Tấn Khải - THPT Mang Thít!');
-});
-
-// 3. Tự động bảo vệ bản quyền (Kiểm tra tên tác giả)
+window.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 setInterval(function() {
-    const bodyText = document.body.innerText;
-    if (!bodyText.includes('Hồ Tấn Khải') || !bodyText.includes('Mang Thít')) {
-        document.body.innerHTML = '<h1 style="color:red; text-align:center; margin-top:20vh;">CẢNH BÁO: Trang web đã bị thay đổi thông tin tác giả! Vui lòng giữ nguyên bản quyền của Thầy Hồ Tấn Khải.</h1>';
+    if (!document.body.innerText.includes('Hồ Tấn Khải') || !document.body.innerText.includes('Mang Thít')) {
+        document.body.innerHTML = '<h1 style="color:red;text-align:center;margin-top:20vh;">Trang web đã bị thay đổi thông tin bản quyền!</h1>';
     }
 }, 2000);
 </script>
