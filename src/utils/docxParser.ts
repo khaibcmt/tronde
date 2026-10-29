@@ -74,7 +74,6 @@ export function recalculateQuestionNumbering(
     PART_1: 1,
     PART_2: 1,
     PART_3: 1,
-    PART_4: 1,
   };
 
   return questions.map((q) => {
@@ -102,10 +101,6 @@ export function validateExamQuestions(
   const issues: ValidationIssue[] = [];
 
   questions.forEach((q) => {
-    if (q.part === 'PART_4') {
-      // Phần Tự luận: Không kiểm tra điều kiện 4 đáp án A,B,C,D hay Đúng/Sai
-      return;
-    }
     const partLabel =
       q.part === 'PART_1'
         ? 'Phần I'
@@ -2230,6 +2225,7 @@ export function buildQuestionsFromParsedParagraphs(
   let pendingStemParagraphs: ParsedParagraph[] = [];
   let globalIndex = 1;
   let inTrailingAnswerKeySection = false;
+  let inIgnoredEssaySection = false;
   const trailingAnswerKeyPart1 = new Map<number, 'A' | 'B' | 'C' | 'D'>();
 
   const startNewQuestionFromPara = (para: ParsedParagraph, customStemText?: string) => {
@@ -2358,7 +2354,7 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
 
-    // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III và PHẦN IV (TỰ LUẬN)
+    // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III (Bỏ qua phần Tự luận nếu có trong đề)
     const strippedHeaderPrefix = text.replace(/^[*#•\-–—\s]+/, '');
     if (
       /^(?:[A-ZIVX0-9]+\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|TỰ\s+LUẬN\b)/i.test(
@@ -2367,7 +2363,7 @@ export function buildQuestionsFromParsedParagraphs(
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
-      currentPart = 'PART_4';
+      inIgnoredEssaySection = true;
       continue;
     }
     if (
@@ -2379,6 +2375,7 @@ export function buildQuestionsFromParsedParagraphs(
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
+      inIgnoredEssaySection = false;
       currentPart = 'PART_1';
       continue;
     }
@@ -2391,6 +2388,7 @@ export function buildQuestionsFromParsedParagraphs(
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
+      inIgnoredEssaySection = false;
       currentPart = 'PART_2';
       continue;
     }
@@ -2402,11 +2400,12 @@ export function buildQuestionsFromParsedParagraphs(
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
+      inIgnoredEssaySection = false;
       currentPart = 'PART_3';
       continue;
     }
 
-    if (isAdministrativeExamHeader(text)) {
+    if (inIgnoredEssaySection || isAdministrativeExamHeader(text)) {
       continue;
     }
 
@@ -2650,17 +2649,6 @@ export function buildQuestionsFromParsedParagraphs(
       } else {
         currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
       }
-    } else if (currentQuestion.part === 'PART_4') {
-      const guideMatch = text.match(
-        /^(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn\s*chấm|Đáp\s*án(?:\s*&\s*Thang\s*điểm)?)\s*[:=]\s*(.+)$/i
-      );
-      if (guideMatch) {
-        currentQuestion.explanation =
-          (currentQuestion.explanation ? currentQuestion.explanation + '\n' : '') +
-          guideMatch[1].trim();
-      } else {
-        currentQuestion.stemText += (currentQuestion.stemText ? '\n' : '') + text;
-      }
     }
   }
 
@@ -2893,7 +2881,6 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
   const p1 = questions.filter((q) => q.part === 'PART_1');
   const p2 = questions.filter((q) => q.part === 'PART_2');
   const p3 = questions.filter((q) => q.part === 'PART_3');
-  const p4 = questions.filter((q) => q.part === 'PART_4');
 
   const sections: string[] = [];
 
@@ -2923,15 +2910,6 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
       sections.push(
         `Câu ${q.displayIndex}. ${q.stemText}\nĐáp án: ${q.shortAnswer || ''}`
       );
-    }
-  }
-
-  if (p4.length > 0) {
-    const essayTitle = p3.length > 0 ? 'PHẦN IV. TỰ LUẬN' : 'PHẦN III. TỰ LUẬN';
-    sections.push(`\n${essayTitle}`);
-    for (const q of p4) {
-      const guideLine = q.explanation ? `\nHướng dẫn chấm: ${q.explanation}` : '';
-      sections.push(`Câu ${q.displayIndex}. ${q.stemText}${guideLine}`);
     }
   }
 

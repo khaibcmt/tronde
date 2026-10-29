@@ -74,10 +74,8 @@ export function buildQrPayloadString(
 }
 
 /**
-  * Thực thi trộn bộ đề theo cấu hình (Mục II.2 & IV.1 & V.1)
-  * - Phần I, II, III: Trộn theo cấu hình
-  * - Phần IV (Tự luận): KHÔNG ĐẢO CÂU HỎI, giữ nguyên hoàn toàn thứ tự các câu hỏi và nội dung ở tất cả các mã đề
-  */
+ * Thực thi trộn bộ đề theo cấu hình chuẩn 3 phần (Phần I, II, III)
+ */
 export async function generateShuffledVariants(
   sourceQuestions: ExamQuestion[],
   config: ShuffleConfig
@@ -95,7 +93,6 @@ export async function generateShuffledVariants(
   const part1Source = sourceQuestions.filter((q) => q.part === 'PART_1');
   const part2Source = sourceQuestions.filter((q) => q.part === 'PART_2');
   const part3Source = sourceQuestions.filter((q) => q.part === 'PART_3');
-  const part4Source = sourceQuestions.filter((q) => q.part === 'PART_4');
 
   const labelsP1: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   const labelsP2: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
@@ -111,8 +108,6 @@ export async function generateShuffledVariants(
     const p3Questions = config.shuffleQuestions
       ? fisherYatesShuffle(part3Source)
       : [...part3Source];
-    // Phần IV (Tự luận): KHÔNG ĐẢO CÂU HỎI — Giữ nguyên 100% thứ tự câu hỏi và nội dung ở mọi mã đề
-    const p4Questions = [...part4Source];
 
     let continuousCounter = 1;
 
@@ -179,19 +174,7 @@ export async function generateShuffledVariants(
       };
     });
 
-    // 5. Xử lý Phần IV (Tự luận): Giữ nguyên hoàn toàn thứ tự câu hỏi và nội dung
-    const processedP4: ExamQuestion[] = p4Questions.map((q, idx) => {
-      const displayIndex = config.resetNumberingPerPart
-        ? idx + 1
-        : continuousCounter++;
-
-      return {
-        ...q,
-        displayIndex,
-      };
-    });
-
-    // 6. Tổng hợp bảng đáp án cho mã đề này
+    // 5. Tổng hợp bảng đáp án cho mã đề này
     const answerKeyP1 = processedP1.map((q) => {
       const correctOpt = (q.options || []).find((o) => o.isCorrect);
       return {
@@ -218,19 +201,10 @@ export async function generateShuffledVariants(
       answer: (q.shortAnswer || '0').trim(),
     }));
 
-    const answerKeyP4 = processedP4.map((q) => ({
-      questionNumber: q.displayIndex,
-      answer: (
-        q.explanation?.trim() ||
-        'Chấm theo hướng dẫn chấm tự luận của giáo viên.'
-      ),
-    }));
-
     const answerKey = {
       part1: answerKeyP1,
       part2: answerKeyP2,
       part3: answerKeyP3,
-      part4: answerKeyP4,
     };
 
     const qrPayload = buildQrPayloadString(examCode, answerKey, config.qrFormat);
@@ -249,7 +223,7 @@ export async function generateShuffledVariants(
     variants.push({
       examCode,
       createdAt: new Date().toLocaleTimeString('vi-VN'),
-      questions: [...processedP1, ...processedP2, ...processedP3, ...processedP4],
+      questions: [...processedP1, ...processedP2, ...processedP3],
       qrPayload,
       qrDataUrl,
       answerKey,

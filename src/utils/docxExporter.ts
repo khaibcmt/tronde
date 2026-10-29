@@ -783,7 +783,6 @@ function buildQuestionsBodyXml(
   const part1 = questions.filter((q) => q.part === 'PART_1');
   const part2 = questions.filter((q) => q.part === 'PART_2');
   const part3 = questions.filter((q) => q.part === 'PART_3');
-  const part4 = questions.filter((q) => q.part === 'PART_4');
 
   const blocks: string[] = [];
 
@@ -940,88 +939,6 @@ function buildQuestionsBodyXml(
             fontSizeHalfPt: 24,
           })
         );
-      }
-    }
-  }
-
-  if (part4.length > 0) {
-    // Tự động đánh số tiêu đề phần Tự luận:
-    // - Nếu có Phần III -> "PHẦN IV. TỰ LUẬN"
-    // - Nếu khuyết Phần III (nhưng có Phần II) -> "PHẦN III. TỰ LUẬN"
-    // - Nếu chỉ có Phần I + Tự luận -> "PHẦN II. TỰ LUẬN"
-    const essayRoman =
-      part3.length > 0 ? 'IV' : part2.length > 0 ? 'III' : part1.length > 0 ? 'II' : 'I';
-    const essayHeaderPrefix = `PHẦN ${essayRoman}. TỰ LUẬN. `;
-    const essayRangeDesc =
-      part4.length === 1
-        ? `Thí sinh trình bày lời giải chi tiết câu ${part4[0].displayIndex}.`
-        : `Thí sinh trình bày lời giải chi tiết từ câu ${part4[0].displayIndex} đến câu ${part4[part4.length - 1].displayIndex}.`;
-
-    blocks.push(
-      buildStandardParagraphXml(essayHeaderPrefix, essayRangeDesc, {
-        align: 'left',
-        spaceBeforeTwips: 120,
-        spaceAfterTwips: 120,
-        fontSizeHalfPt: 24,
-      })
-    );
-
-    for (const q of part4) {
-      const stemLines = (q.stemText || '').split(/\r?\n/).filter((l) => l.trim().length > 0);
-      const firstLine = stemLines[0] || '';
-      blocks.push(
-        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, firstLine, {
-          align: 'left',
-          spaceAfterTwips: stemLines.length > 1 ? 40 : 80,
-          fontSizeHalfPt: 24,
-        })
-      );
-
-      for (let i = 1; i < stemLines.length; i++) {
-        blocks.push(
-          buildStandardParagraphXml('', stemLines[i], {
-            align: 'left',
-            spaceAfterTwips: i === stemLines.length - 1 ? 80 : 40,
-            fontSizeHalfPt: 24,
-          })
-        );
-      }
-
-      if (q.images && q.images.length > 0 && imageRelMap) {
-        for (const img of q.images) {
-          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
-          if (rId) {
-            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
-          }
-        }
-      }
-
-      if ((includeSolutions || highlightCorrectAnswers) && q.explanation) {
-        const expLines = q.explanation.split(/\r?\n/).filter((l) => l.trim().length > 0);
-        blocks.push(
-          buildStandardParagraphXml(
-            `Hướng dẫn chấm / Lời giải: `,
-            expLines[0] || '',
-            {
-              italicBody: true,
-              prefixColorHex: '9333EA',
-              align: 'left',
-              spaceBeforeTwips: 40,
-              spaceAfterTwips: expLines.length > 1 ? 40 : 100,
-              fontSizeHalfPt: 24,
-            }
-          )
-        );
-        for (let i = 1; i < expLines.length; i++) {
-          blocks.push(
-            buildStandardParagraphXml('', expLines[i], {
-              italicBody: true,
-              align: 'left',
-              spaceAfterTwips: i === expLines.length - 1 ? 100 : 40,
-              fontSizeHalfPt: 24,
-            })
-          );
-        }
       }
     }
   }
@@ -1334,38 +1251,6 @@ function buildKhaoThiVariantRowXml(variant: ShuffledVariant): string {
     .map((item) => `Câu ${item.questionNumber}: ${item.answer}`)
     .join('    |    ');
 
-  // 4. Chuỗi Hướng dẫn chấm Phần Tự luận (nếu đề có Phần Tự luận)
-  const p4Items = variant.answerKey.part4 || [];
-  const p4TitleLabel = p3Items.length > 0 ? 'PHẦN IV (Tự luận)' : 'PHẦN III (Tự luận)';
-  const p4Xml =
-    p4Items.length > 0
-      ? `<w:p>
-        <w:pPr>
-          <w:spacing w:before="30" w:after="60" w:line="240" w:lineRule="auto"/>
-          <w:jc w:val="left"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="7E22CE"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t xml:space="preserve">${escapeXml(p4TitleLabel)} (${p4Items.length} câu — Giữ nguyên thứ tự): </w:t>
-        </w:r>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:color w:val="0F172A"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t xml:space="preserve">${escapeXml(
-            p4Items.map((item) => `Câu ${item.questionNumber}: ${item.answer}`).join('   |   ')
-          )}</w:t>
-        </w:r>
-      </w:p>`
-      : '';
-
   return `<w:tr>
     <!-- Cột bên trái: Mã đề -->
     <w:tc>
@@ -1497,7 +1382,6 @@ function buildKhaoThiVariantRowXml(variant: ShuffledVariant): string {
           <w:t xml:space="preserve">${escapeXml(p3Text || 'Không có')}</w:t>
         </w:r>
       </w:p>
-      ${p4Xml}
     </w:tc>
   </w:tr>`;
 }
