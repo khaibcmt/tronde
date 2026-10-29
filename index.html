@@ -18,12 +18,12 @@
     <script type="module" src="./src/main.tsx"></script>
   <script>
 <script>
-// 1. Chặn các phím tắt và chuột phải ngầm định (Không hiện bảng thông báo gây phiền)
+// Chặn phím tắt F12, Ctrl+U, Ctrl+Shift+I/J ngầm định
 document.addEventListener('keydown', function(e) {
     if (
-        e.keyCode === 123 || // F12
-        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || // Ctrl+Shift+I / J
-        (e.ctrlKey && e.keyCode === 85) // Ctrl+U
+        e.keyCode === 123 || 
+        (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74)) || 
+        (e.ctrlKey && e.keyCode === 85)
     ) {
         e.preventDefault();
         return false;
@@ -34,7 +34,7 @@ document.addEventListener('contextmenu', function(e) {
     e.preventDefault();
 });
 
-// 2. Tự động kiểm tra bản quyền (Chống xóa tên tác giả Hồ Tấn Khải)
+// Tự động bảo vệ bản quyền
 setInterval(function() {
     const bodyText = document.body.innerText;
     if (!bodyText.includes('Hồ Tấn Khải') && !bodyText.includes('Mang Thít')) {
