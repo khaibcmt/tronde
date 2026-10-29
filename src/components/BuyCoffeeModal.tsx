@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Heart, Sparkles, Coffee, Building2, UserCheck, CreditCard, MessageSquareHeart } from 'lucide-react';
+import { X, Copy, Check, Heart, Sparkles, Building2, UserCheck, CreditCard, MessageSquareHeart } from 'lucide-react';
 
 interface BuyCoffeeModalProps {
   isOpen: boolean;
@@ -84,7 +84,7 @@ export const BuyCoffeeModal: React.FC<BuyCoffeeModalProps> = ({ isOpen, onClose 
         <div className="relative bg-gradient-to-r from-[#451A03] via-[#78350F] to-[#92400E] px-5 py-4 text-white border-b-2 border-amber-400/60">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg border border-amber-200/60 shrink-0">
+              <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg border border-amber-200/60 shrink-0 mt-1">
                 {/* Hiệu ứng khói cà phê bốc lên */}
                 <div className="coffee-steam-container" aria-hidden="true">
                   <span className="coffee-steam-line steam-1" />
@@ -97,7 +97,7 @@ export const BuyCoffeeModal: React.FC<BuyCoffeeModalProps> = ({ isOpen, onClose 
               </div>
               <div>
                 <h3 className="text-base sm:text-lg font-black tracking-wide text-amber-200 flex items-center gap-1.5">
-                  <span>Mời Tác Giả Ly Cà Phê</span>
+                  <span>Mời Thầy Khải Ly Cà Phê</span>
                   <Heart className="w-4 h-4 text-rose-400 fill-rose-400 animate-pulse" />
                 </h3>
                 <p className="text-xs text-amber-100/90 font-medium">
@@ -122,7 +122,7 @@ export const BuyCoffeeModal: React.FC<BuyCoffeeModalProps> = ({ isOpen, onClose 
           {/* Thông điệp tri ân */}
           <div className="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-300/90 text-xs sm:text-[13px] text-amber-950 leading-relaxed shadow-2xs">
             <p className="font-semibold">
-              🌟 <strong>Lời tri ân:</strong> Cảm ơn quý Thầy/Cô và đồng nghiệp đã tin tưởng đồng hành cùng <strong>EduMix 2025</strong>. Mỗi ly cà phê ủng hộ từ quý đồng nghiệp là nguồn động viên tinh thần vô giá để tác giả tiếp tục nâng cấp những tính năng mới, mạnh mẽ và hoàn thiện hơn nữa!
+              🌟 <strong>Lời tri ân:</strong> Cảm ơn quý Thầy/Cô và đồng nghiệp đã tin tưởng đồng hành cùng <strong>EduMix 2025</strong>. Mỗi ly cà phê ủng hộ từ quý đồng nghiệp là nguồn động viên tinh thần vô giá để <strong>Thầy Hồ Tấn Khải</strong> tiếp tục nâng cấp những tính năng mới, mạnh mẽ và hoàn thiện hơn nữa!
             </p>
           </div>
 
@@ -287,22 +287,22 @@ export const FloatingCoffeeButton: React.FC<FloatingCoffeeButtonProps> = ({ onCl
     <button
       type="button"
       onClick={onClick}
-      className="fixed bottom-16 sm:bottom-14 right-3 sm:right-5 z-40 group flex items-center gap-2 px-3.5 py-2 rounded-full bg-gradient-to-r from-[#78350F] via-[#92400E] to-[#B45309] hover:from-[#92400E] hover:via-[#B45309] hover:to-[#D97706] text-amber-100 border-2 border-amber-300/90 shadow-[0_5px_0_#451A03,0_10px_25px_rgba(120,53,15,0.55)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer"
-      title="Mời tác giả Hồ Tấn Khải ly cà phê qua mã VietQR động"
+      className="group relative inline-flex items-center gap-2 px-3.5 py-1.5 pt-2 rounded-2xl bg-gradient-to-r from-[#78350F] via-[#92400E] to-[#B45309] hover:from-[#92400E] hover:via-[#B45309] hover:to-[#D97706] text-amber-100 border-2 border-amber-300 shadow-[0_4px_0_#451A03,0_0_18px_rgba(245,158,11,0.5)] hover:-translate-y-0.5 active:translate-y-0.5 transition-all cursor-pointer shrink-0"
+      title="Mời Thầy Khải ly cà phê qua mã VietQR động"
     >
-      <div className="relative flex items-center justify-center w-7 h-7 rounded-full bg-amber-400/20 border border-amber-300/50">
+      <div className="relative flex items-center justify-center w-6 h-6 rounded-full bg-amber-400/25 border border-amber-300/60 shrink-0">
         {/* Khói bốc lên nhẹ nhàng bằng CSS keyframes */}
         <div className="coffee-steam-container" aria-hidden="true">
           <span className="coffee-steam-line steam-1" />
           <span className="coffee-steam-line steam-2" />
           <span className="coffee-steam-line steam-3" />
         </div>
-        <span className="text-base leading-none select-none" role="img" aria-label="coffee">
+        <span className="text-sm leading-none select-none" role="img" aria-label="coffee">
           ☕
         </span>
       </div>
       <span className="text-xs sm:text-[13px] font-black tracking-wide text-amber-100 group-hover:text-white whitespace-nowrap drop-shadow-xs">
-        Mời Tác Giả Ly Cà Phê
+        Mời Thầy Khải Ly Cà Phê
       </span>
     </button>
   );

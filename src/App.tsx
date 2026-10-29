@@ -1114,7 +1114,7 @@ export default function App() {
   );
 
   return (
-    <div className="min-h-screen flex flex-col text-slate-900 pb-20">
+    <div className="min-h-screen flex flex-col text-slate-900 pb-28">
       {/* ================= KHỐI ĐIỀU KHIỂN CỐ ĐỊNH TRÊN CÙNG ================= */}
       <div className="sticky top-0 z-30 bg-sky-50/95 backdrop-blur-md border-b-2 border-sky-300 shadow-md">
         {/* ================= HEADER: DÒNG 1 (LOGO LỚN NỔI BẬT + TÁC GIẢ) & DÒNG 2 (THANH NÚT CHỨC NĂNG NẰM DƯỚI LOGO KHÔNG BỊ VỠ/MẤT KHUNG) ================= */}
@@ -3691,16 +3691,15 @@ export default function App() {
         }}
       />
 
-      {/* Nút nổi Mời Tác Giả Ly Cà Phê (Góc dưới bên phải, có hiệu ứng khói bốc lên) & Modal VietQR Động */}
-      <FloatingCoffeeButton onClick={() => setIsCoffeeModalOpen(true)} />
+      {/* Modal VietQR Động Mời Thầy Khải Ly Cà Phê */}
       <BuyCoffeeModal
         isOpen={isCoffeeModalOpen}
         onClose={() => setIsCoffeeModalOpen(false)}
       />
 
-      {/* ================= CHÂN TRANG CỐ ĐỊNH ĐA SẮC MÀU NỔI BẬT (THEO MẪU ĐÍNH KÈM & ĐẸP HƠN) ================= */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-3 sm:px-6 py-2 text-white">
-        <div className="max-w-[1440px] mx-auto flex flex-col xl:flex-row items-center justify-between gap-2">
+      {/* ================= CHÂN TRANG CỐ ĐỊNH ĐA SẮC MÀU NỔI BẬT + NÚT MỜI THẦY KHẢI LY CÀ PHÊ NẰM TRỰC TIẾP TRÊN CHÂN TRANG KHÔNG BỊ CHE KHUẤT ================= */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-3 sm:px-5 py-2 text-white">
+        <div className="max-w-[1440px] mx-auto flex flex-col xl:flex-row items-center justify-between gap-2.5">
           {/* Cụm Trái: Logo 3D Nhấp Nháy + Tên trang web EduMix 2025 */}
           <div className="flex items-center gap-2.5 shrink-0">
             <div className="w-8 h-8 rounded-xl logo-3d-badge animate-logo-blink flex items-center justify-center text-white shrink-0">
@@ -3711,8 +3710,8 @@ export default function App() {
             </span>
           </div>
 
-          {/* Cụm Giữa & Phải: Các thẻ huy hiệu liên hệ đa sắc màu bắt mắt + Dòng cảm ơn đồng nghiệp */}
-          <div className="flex flex-col items-center xl:items-end gap-1">
+          {/* Cụm Giữa: Các thẻ huy hiệu liên hệ đa sắc màu bắt mắt + Dòng cảm ơn đồng nghiệp */}
+          <div className="flex flex-col items-center gap-1">
             {/* Dòng 1: Thông tin liên hệ dạng thẻ màu phát sáng */}
             <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-[13px]">
               <span className="font-extrabold text-slate-100 tracking-wide">
@@ -3758,6 +3757,11 @@ export default function App() {
             <div className="text-xs sm:text-[13px] font-extrabold tracking-wide footer-thanks-glow text-center">
               • Xin cảm ơn quý đồng nghiệp đã góp ý để sản phẩm ngày càng tốt hơn! •
             </div>
+          </div>
+
+          {/* Cụm Phải: Nút "☕ Mời Thầy Khải Ly Cà Phê" nằm ngay ngắn trên chân trang, nổi bật và không bị che khuất */}
+          <div className="shrink-0 flex items-center">
+            <FloatingCoffeeButton onClick={() => setIsCoffeeModalOpen(true)} />
           </div>
         </div>
       </footer>
