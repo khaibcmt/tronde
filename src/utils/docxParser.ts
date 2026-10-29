@@ -73,6 +73,7 @@ export function recalculateQuestionNumbering(
     PART_1: 1,
     PART_2: 1,
     PART_3: 1,
+    PART_4: 1,
   };
 
   return questions.map((q) => {
@@ -100,6 +101,10 @@ export function validateExamQuestions(
   const issues: ValidationIssue[] = [];
 
   questions.forEach((q) => {
+    if (q.part === 'PART_4') {
+      // Phần Tự luận: Không kiểm tra điều kiện 4 đáp án A,B,C,D hay Đúng/Sai
+      return;
+    }
     const partLabel =
       q.part === 'PART_1'
         ? 'Phần I'
@@ -208,7 +213,89 @@ export function validateExamQuestions(
 /**
  * Kiểm tra xem một node <w:rPr> có thuộc tính gạch chân (<w:u>) hay tô màu đỏ (<w:color>) không
  */
-function inspectRunProperties(rPr: Element | null): {
+/**
+ * Tiền xử lý mảng runs của một đoạn văn:
+ * Khi phát hiện ký tự đầu của ý a), b), c), d) hoặc A., B., C., D. (dù chỉ gạch chân/tô đỏ mỗi chữ cái 'a',
+ * hoặc chỉ dấu ')', hoặc cả 'a) ') có isUnderline hoặc isRed -> tự động gắn cờ '*' ngay trước nhãn
+ * để bộ tách câu phía sau nhận diện chính xác 100% đáp án ĐÚNG mà không bao giờ bị rơi mất!
+ */
+function injectFormattingMarkersIntoRuns(runs: ParsedRun[]): ParsedRun[] {
+  if (!runs || runs.length === 0) return runs;
+  const fullText = runs.map((r) => r.text).join('');
+  if (!fullText.trim()) return runs;
+
+  // Tìm tất cả các vị trí xuất hiện nhãn a), b), c), d) hoặc A., B., C., D.
+  const prefixRegex = /(?:^|[\s\t\n.;:?!)"'”’\],-])([a-dA-D])(\s*[).:\-–—]\s*)/g;
+  const markPositions = new Set<number>();
+
+  let m: RegExpExecArray | null;
+  while ((m = prefixRegex.exec(fullText)) !== null) {
+    const fullMatch = m[0];
+    const letter = m[1];
+    const suffix = m[2];
+    const letterOffset = fullMatch.lastIndexOf(letter + suffix);
+    const letterStart = m.index + (letterOffset >= 0 ? letterOffset : 0);
+    const prefixEnd = letterStart + letter.length + suffix.length;
+
+    // Nếu trước chữ cái đã có dấu * hoặc # thì bỏ qua
+    if (letterStart > 0 && (fullText[letterStart - 1] === '*' || fullText[letterStart - 1] === '#')) {
+      continue;
+    }
+
+    // Kiểm tra xem trong phạm vi [letterStart, prefixEnd] (bao gồm chữ cái a/b/c/d, dấu ngoặc ')' và khoảng trắng sát sau)
+    // có bất kỳ run nào mang thuộc tính isUnderline hoặc isRed hay không
+    let cursor = 0;
+    let hasHighlightInPrefix = false;
+    for (const r of runs) {
+      const rStart = cursor;
+      const rEnd = cursor + r.text.length;
+      cursor = rEnd;
+      if (rEnd > letterStart && rStart < prefixEnd) {
+        if (r.isUnderline || r.isRed) {
+          hasHighlightInPrefix = true;
+          break;
+        }
+      }
+    }
+
+    if (hasHighlightInPrefix) {
+      markPositions.add(letterStart);
+    }
+
+    if (m.index === prefixRegex.lastIndex) {
+      prefixRegex.lastIndex++;
+    }
+  }
+
+  if (markPositions.size === 0) return runs;
+
+  // Chèn ký tự '*' vào đúng vị trí letterStart trong mảng runs
+  const updatedRuns: ParsedRun[] = [];
+  let cursor = 0;
+  for (const r of runs) {
+    const rStart = cursor;
+    const rEnd = cursor + r.text.length;
+    cursor = rEnd;
+
+    let modifiedText = '';
+    for (let i = 0; i < r.text.length; i++) {
+      const globalCharIdx = rStart + i;
+      if (markPositions.has(globalCharIdx)) {
+        modifiedText += '*';
+      }
+      modifiedText += r.text[i];
+    }
+
+    updatedRuns.push({
+      ...r,
+      text: modifiedText,
+    });
+  }
+
+  return updatedRuns;
+}
+
+function inspectRunProperties(rPr: Element | null, paraRPr?: Element | null): {
   isUnderline: boolean;
   isRed: boolean;
   isBold: boolean;
@@ -219,12 +306,20 @@ function inspectRunProperties(rPr: Element | null): {
   let isRed = false;
   let isBold = false;
 
-  const uNodes = rPr.getElementsByTagName('w:u');
-  if (uNodes.length > 0) {
-    const val = uNodes[0].getAttribute('w:val');
-    if (!val || (val !== 'none' && val !== 'false' && val !== '0')) {
-      isUnderline = true;
+  const checkUnderlineNode = (container: Element | null) => {
+    if (!container) return false;
+    const uNodes = container.getElementsByTagName('w:u');
+    if (uNodes.length > 0) {
+      const val = (uNodes[0].getAttribute('w:val') || '').toLowerCase().trim();
+      if (!val || (val !== 'none' && val !== 'false' && val !== '0')) {
+        return true;
+      }
     }
+    return false;
+  };
+
+  if (checkUnderlineNode(rPr)) {
+    isUnderline = true;
   }
 
   const colorNodes = rPr.getElementsByTagName('w:color');
@@ -425,7 +520,7 @@ function splitClumpedParagraphIntoLogicalParagraphs(
 
   // Tìm tất cả các vị trí bắt đầu bằng xuống dòng \n hoặc nơi xuất hiện "PHẦN I/II/III" hoặc "Câu \d+[.:]" giữa dòng
   const splitRegex =
-    /(?:\n+|(?<=[.?!;:\t\s])(?=(?:PHẦN\s+(?:I|II|III|1|2|3)\b|(?:Câu|Bài|Question)\s*\d+\s*[.:\-–—)])))/gi;
+    /(?:\n+|(?<=[.?!;:\t\s])(?=(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)\b|(?:[A-ZIVX]+\s*[.:\-]\s*)?TỰ\s+LUẬN\b|(?:Câu|Bài|Question)\s*\d+\s*[.:\-–—)])))/gi;
 
   const splitIndices: number[] = [0];
   let match: RegExpExecArray | null;
@@ -505,56 +600,88 @@ function extractParagraphsFromDocxXml(
     const paragraphImages = extractImagesFromElement(p, mediaMap);
 
     const childNodes = p.childNodes;
-    for (let j = 0; j < childNodes.length; j++) {
-      const child = childNodes[j] as Element;
-      if (!child.tagName) continue;
+    const pPrNode = p.getElementsByTagName('w:pPr')[0] || null;
+    const paraRPrNode = pPrNode ? pPrNode.getElementsByTagName('w:rPr')[0] || null : null;
 
-      if (child.tagName === 'w:r') {
-        const rPr = child.getElementsByTagName('w:rPr')[0] || null;
-        const props = inspectRunProperties(rPr);
+    // Hàm đệ quy duyệt qua cả <w:r> trực tiếp lẫn <w:r> nằm trong <w:ins>, <w:hyperlink>, <w:smartTag>, <w:sdtContent>
+    const collectRunsFromContainer = (container: Element) => {
+      const cNodes = container.childNodes;
+      for (let j = 0; j < cNodes.length; j++) {
+        const child = cNodes[j] as Element;
+        if (!child.tagName) continue;
 
-        // Duyệt tuần tự các node con trong <w:r> để bắt cả <w:t>, <w:tab/> và <w:br/>
-        let text = '';
-        for (let k = 0; k < child.childNodes.length; k++) {
-          const rChild = child.childNodes[k] as Element;
-          if (!rChild.tagName) continue;
-          if (rChild.tagName === 'w:t') {
-            text += rChild.textContent || '';
-          } else if (rChild.tagName === 'w:tab') {
-            text += '\t';
-          } else if (rChild.tagName === 'w:br' || rChild.tagName === 'w:cr') {
-            text += '\n';
+        if (child.tagName === 'w:r') {
+          const rPr = child.getElementsByTagName('w:rPr')[0] || null;
+          const props = inspectRunProperties(rPr, paraRPrNode);
+
+          let text = '';
+          for (let k = 0; k < child.childNodes.length; k++) {
+            const rChild = child.childNodes[k] as Element;
+            if (!rChild.tagName) continue;
+            if (rChild.tagName === 'w:t') {
+              text += rChild.textContent || '';
+            } else if (rChild.tagName === 'w:tab') {
+              text += '\t';
+            } else if (rChild.tagName === 'w:br' || rChild.tagName === 'w:cr') {
+              text += '\n';
+            }
           }
-        }
 
-        const runImages = extractImagesFromElement(child, mediaMap);
+          const runImages = extractImagesFromElement(child, mediaMap);
 
-        if (text || runImages.length > 0) {
-          runs.push({
-            text,
-            isUnderline: props.isUnderline,
-            isRed: props.isRed,
-            isBold: props.isBold,
-            hasFormula: false,
-            images: runImages.length > 0 ? runImages : undefined,
-          });
-        }
-      } else if (child.tagName === 'm:oMath' || child.tagName === 'm:oMathPara') {
-        hasFormula = true;
-        const latex = ommlToLatex(child);
-        rawFormulaXml = new XMLSerializer().serializeToString(child);
-        formulaLatex = latex;
-        if (latex) {
-          runs.push({
-            text: ` ${latex} `,
-            isUnderline: false,
-            isRed: false,
-            isBold: false,
-            hasFormula: true,
-          });
+          if (text || runImages.length > 0) {
+            runs.push({
+              text,
+              isUnderline: props.isUnderline,
+              isRed: props.isRed,
+              isBold: props.isBold,
+              hasFormula: false,
+              images: runImages.length > 0 ? runImages : undefined,
+            });
+          }
+        } else if (child.tagName === 'm:oMath' || child.tagName === 'm:oMathPara') {
+          hasFormula = true;
+          const latex = ommlToLatex(child);
+          rawFormulaXml = new XMLSerializer().serializeToString(child);
+          formulaLatex = latex;
+          if (latex) {
+            runs.push({
+              text: ` ${latex} `,
+              isUnderline: false,
+              isRed: false,
+              isBold: false,
+              hasFormula: true,
+            });
+          }
+        } else if (
+          child.tagName === 'w:ins' ||
+          child.tagName === 'w:hyperlink' ||
+          child.tagName === 'w:smartTag' ||
+          child.tagName === 'w:sdt' ||
+          child.tagName === 'w:sdtContent'
+        ) {
+          collectRunsFromContainer(child);
         }
       }
+    };
+
+    collectRunsFromContainer(p);
+
+    // Nếu đoạn văn dùng auto-numbering cho a), b), c), d) mà <w:pPr><w:rPr> có gạch chân hoặc tô đỏ
+    if (paraRPrNode && runs.length > 0) {
+      const pProps = inspectRunProperties(paraRPrNode);
+      if ((pProps.isUnderline || pProps.isRed) && /^\s*[*#]?[a-dA-D]\s*[).:\-–—]/.test(runs[0].text)) {
+        runs[0] = {
+          ...runs[0],
+          isUnderline: runs[0].isUnderline || pProps.isUnderline,
+          isRed: runs[0].isRed || pProps.isRed,
+        };
+      }
     }
+
+    const markedRuns = injectFormattingMarkersIntoRuns(runs);
+    runs.length = 0;
+    runs.push(...markedRuns);
 
     const fullText = runs.map((r) => r.text).join('').trim();
     if (fullText || paragraphImages.length > 0) {
@@ -584,22 +711,43 @@ function checkRangeHighlight(
   runs: ParsedRun[],
   fullRawText: string,
   segmentText: string,
-  approxStartIndex: number
+  approxStartIndex: number,
+  fullSegmentWithPrefix?: string
 ): { isUnderline: boolean; isRed: boolean } {
+  const cleanFull = (fullSegmentWithPrefix || '').trim();
   const cleanSeg = segmentText.trim();
-  if (!cleanSeg) return { isUnderline: false, isRed: false };
+  if (!cleanFull && !cleanSeg) return { isUnderline: false, isRed: false };
 
-  let startIdx = fullRawText.indexOf(cleanSeg, Math.max(0, approxStartIndex - 10));
-  if (startIdx === -1) {
-    startIdx = fullRawText.indexOf(cleanSeg);
+  // Ưu tiên tìm vị trí bắt đầu từ cả cụm có nhãn (ví dụ "a) Phát biểu...") để kiểm tra được cả gạch chân/tô đỏ ở chữ cái đầu dòng 'a', 'b', 'c', 'd'
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (cleanFull) {
+    startIdx = fullRawText.indexOf(cleanFull, Math.max(0, approxStartIndex - 12));
+    if (startIdx === -1) {
+      startIdx = fullRawText.indexOf(cleanFull);
+    }
+    if (startIdx !== -1) {
+      endIdx = startIdx + cleanFull.length;
+    }
   }
+
+  if (startIdx === -1 && cleanSeg) {
+    const bodyIdx = fullRawText.indexOf(cleanSeg, Math.max(0, approxStartIndex - 12));
+    const resolvedBodyIdx = bodyIdx !== -1 ? bodyIdx : fullRawText.indexOf(cleanSeg);
+    if (resolvedBodyIdx !== -1) {
+      // Lùi lại tối đa 6 ký tự trước phần nội dung để bao trùm cả nhãn "a) ", "b) ", "c) ", "d) "
+      startIdx = Math.max(0, resolvedBodyIdx - 6);
+      endIdx = resolvedBodyIdx + cleanSeg.length;
+    }
+  }
+
   if (startIdx === -1) {
     return {
       isUnderline: runs.some((r) => r.isUnderline && r.text.trim().length > 0),
       isRed: runs.some((r) => r.isRed && r.text.trim().length > 0),
     };
   }
-  const endIdx = startIdx + cleanSeg.length;
 
   let cursor = 0;
   let isUnderline = false;
@@ -610,7 +758,8 @@ function checkRangeHighlight(
     const runEnd = cursor + run.text.length;
     cursor = runEnd;
 
-    if (runEnd > startIdx && runStart < endIdx && run.text.trim().length > 0) {
+    if (runEnd > startIdx && runStart < endIdx && run.text.length > 0) {
+      // Chấp nhận cả trường hợp người dùng chỉ gạch chân chữ cái 'a' hoặc dấu ')' hoặc khoảng trắng đi kèm 'a) '
       if (run.isUnderline) isUnderline = true;
       if (run.isRed) isRed = true;
     }
@@ -770,7 +919,7 @@ export function enforceStrictFourOptionsPart1(
       const prevOpt = existingOpts.find((o) => o.originalLabel === seg.label);
       const hl =
         questionRuns.length > 0
-          ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text || seg.fullSeg, seg.start)
+          ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text, seg.start, seg.fullSeg)
           : { isUnderline: false, isRed: false };
 
       let cleanOptText = seg.text;
@@ -989,7 +1138,7 @@ export function enforceStrictFourSubItemsPart2(
       const prevSub = existingSubs.find((s) => s.originalLabel === seg.label);
       const hl =
         questionRuns.length > 0
-          ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text || seg.fullSeg, seg.start)
+          ? checkRangeHighlight(questionRuns, rawJoinedRuns, seg.text, seg.start, seg.fullSeg)
           : { isUnderline: false, isRed: false };
 
       let cleanSubText = seg.text;
@@ -1215,13 +1364,23 @@ export function buildQuestionsFromParsedParagraphs(
     const text = para.fullText.trim();
     const rawJoined = para.runs.map((r) => r.text).join('');
 
-    // 1. Nhận diện tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III
-    if (/^PHẦN\s+(I|1)\b/i.test(text) && !/^PHẦN\s+(II|III)/i.test(text)) {
+    // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III và PHẦN IV (TỰ LUẬN)
+    // Ưu tiên kiểm tra từ khóa "TỰ LUẬN" hoặc "PHẦN IV / PHẦN 4" trước để xử lý cả trường hợp khuyết Phần III (gõ "PHẦN III. TỰ LUẬN" hoặc nhảy cóc sang "PHẦN IV. TỰ LUẬN")
+    if (
+      /^(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|(?:[A-ZIVX]+\s*[.:\-–—]\s*)?TỰ\s+LUẬN\b)/i.test(
+        text
+      )
+    ) {
+      pushCurrentQuestion();
+      currentPart = 'PART_4';
+      continue;
+    }
+    if (/^PHẦN\s+(I|1)\b/i.test(text) && !/^PHẦN\s+(II|III|IV)/i.test(text)) {
       pushCurrentQuestion();
       currentPart = 'PART_1';
       continue;
     }
-    if (/^PHẦN\s+(II|2)\b/i.test(text) && !/^PHẦN\s+III/i.test(text)) {
+    if (/^PHẦN\s+(II|2)\b/i.test(text) && !/^PHẦN\s+(III|IV)/i.test(text)) {
       pushCurrentQuestion();
       currentPart = 'PART_2';
       continue;
@@ -1316,7 +1475,7 @@ export function buildQuestionsFromParsedParagraphs(
           const label = m[2].toUpperCase() as 'A' | 'B' | 'C' | 'D';
           const optText = m[3].trim();
           const fullSegment = m[0];
-          const hl = checkRangeHighlight(para.runs, rawJoined, optText || fullSegment, m.index || 0);
+          const hl = checkRangeHighlight(para.runs, rawJoined, optText, m.index || 0, fullSegment);
           const isCorrect = isStarred || hl.isUnderline || hl.isRed;
 
           currentQuestion.options = currentQuestion.options || [];
@@ -1345,7 +1504,7 @@ export function buildQuestionsFromParsedParagraphs(
           const isStarred = markerRaw.startsWith('*') || markerRaw.startsWith('#');
           const label = m[2].toLowerCase() as 'a' | 'b' | 'c' | 'd';
           const subText = m[3].trim();
-          const hl = checkRangeHighlight(para.runs, rawJoined, subText || m[0], m.index || 0);
+          const hl = checkRangeHighlight(para.runs, rawJoined, subText, m.index || 0, m[0]);
           const isTrue = isStarred || hl.isUnderline || hl.isRed;
 
           currentQuestion.subItems = currentQuestion.subItems || [];
@@ -1375,6 +1534,17 @@ export function buildQuestionsFromParsedParagraphs(
         }
       } else {
         currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+      }
+    } else if (currentQuestion.part === 'PART_4') {
+      // Phần Tự luận: Gom nguyên khối toàn bộ văn bản, công thức, ý nhỏ a), b), bảng biểu vào câu hỏi tự luận
+      // Nếu dòng bắt đầu bằng "Lời giải:", "Hướng dẫn chấm:", "Đáp án:" thì đưa vào explanation
+      const guideMatch = text.match(/^(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn\s*chấm|Đáp\s*án(?:\s*&\s*Thang\s*điểm)?)\s*[:=]\s*(.+)$/i);
+      if (guideMatch) {
+        currentQuestion.explanation =
+          (currentQuestion.explanation ? currentQuestion.explanation + '\n' : '') +
+          guideMatch[1].trim();
+      } else {
+        currentQuestion.stemText += (currentQuestion.stemText ? '\n' : '') + text;
       }
     }
   }
@@ -1425,10 +1595,146 @@ export function parseRawTextToExamQuestions(
 /**
  * Chuyển đổi danh sách câu hỏi hiện tại sang văn bản chuẩn định dạng Word để giáo viên chỉnh sửa hàng loạt
  */
+/**
+ * Phân tích dữ liệu HTML khi giáo viên Copy & Paste trực tiếp từ Microsoft Word vào trình duyệt:
+ * - Nhận diện chính xác cả thẻ <u>, <ins>, style="text-decoration: underline", "text-underline: single"
+ * - Nhận diện chính xác cả màu chữ đỏ (color: red, #ff0000, rgb(255,0,0)...)
+ * - Bắt trọn các trường hợp chỉ gạch chân chữ cái <u>a</u>), hoặc <u>a)</u>, hoặc <u>a) </u> ở Phần II và Phần I
+ */
+export function parseClipboardHtmlToExamQuestions(
+  htmlString: string,
+  fallbackPlainText: string,
+  resetPerPart = true
+): ExamQuestion[] {
+  if (!htmlString || !htmlString.trim()) {
+    return parseRawTextToExamQuestions(fallbackPlainText, resetPerPart);
+  }
+
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+    const rawParas: ParsedParagraph[] = [];
+
+    const isElementUnderlined = (el: Element | null): boolean => {
+      let curr: Element | null = el;
+      while (curr && curr.tagName !== 'BODY' && curr.tagName !== 'HTML') {
+        const tag = curr.tagName.toUpperCase();
+        if (tag === 'U' || tag === 'INS') return true;
+        const styleAttr = (curr.getAttribute('style') || '').toLowerCase();
+        if (
+          /text-decoration(?:-line)?\s*:\s*[^;]*underline/.test(styleAttr) ||
+          /text-underline\s*:\s*(?!none)[a-z]+/.test(styleAttr)
+        ) {
+          return true;
+        }
+        curr = curr.parentElement;
+      }
+      return false;
+    };
+
+    const isElementRed = (el: Element | null): boolean => {
+      let curr: Element | null = el;
+      while (curr && curr.tagName !== 'BODY' && curr.tagName !== 'HTML') {
+        const colorAttr = (curr.getAttribute('color') || '').replace('#', '').toUpperCase().trim();
+        if (colorAttr && (RED_COLOR_HEXES.has(colorAttr) || colorAttr === 'RED')) {
+          return true;
+        }
+        const styleAttr = (curr.getAttribute('style') || '').toLowerCase();
+        const colorMatch = styleAttr.match(/(?:^|;|\s)color\s*:\s*([^;]+)/);
+        if (colorMatch) {
+          const val = colorMatch[1].trim();
+          if (
+            val === 'red' ||
+            val === 'crimson' ||
+            val === 'darkred' ||
+            val === 'firebrick' ||
+            /^#(?:ff0000|f00|c00000|e00000|d00000|dc2626|ef4444|b91c1c)/i.test(val) ||
+            /^rgb\(\s*(?:1[89]\d|2[0-5]\d)\s*,\s*(?:[0-5]?\d)\s*,\s*(?:[0-5]?\d)\s*\)/i.test(val)
+          ) {
+            return true;
+          }
+        }
+        curr = curr.parentElement;
+      }
+      return false;
+    };
+
+    const blockNodes = doc.body.querySelectorAll('p, li, div, tr, h1, h2, h3, h4');
+    const containers = blockNodes.length > 0 ? Array.from(blockNodes) : [doc.body];
+
+    for (const block of containers) {
+      // Bỏ qua div/tr cha nếu bên trong nó đã có thẻ p hoặc li con để tránh lặp dòng
+      if (
+        (block.tagName === 'DIV' || block.tagName === 'TR') &&
+        block.querySelector('p, li')
+      ) {
+        continue;
+      }
+
+      const runs: ParsedRun[] = [];
+      const walkTextNodes = (node: Node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const txt = (node.textContent || '').replace(/\u00A0/g, ' ');
+          if (txt) {
+            const parentEl = node.parentElement;
+            runs.push({
+              text: txt,
+              isUnderline: isElementUnderlined(parentEl),
+              isRed: isElementRed(parentEl),
+              isBold: false,
+              hasFormula: /[√∫∑πΔαβλθ±×÷≤≥≠∈∉→∞]/.test(txt),
+            });
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as Element;
+          if (el.tagName === 'BR') {
+            runs.push({
+              text: '\n',
+              isUnderline: false,
+              isRed: false,
+              isBold: false,
+              hasFormula: false,
+            });
+          } else {
+            for (let i = 0; i < el.childNodes.length; i++) {
+              walkTextNodes(el.childNodes[i]);
+            }
+          }
+        }
+      };
+
+      walkTextNodes(block);
+      const markedRuns = injectFormattingMarkersIntoRuns(runs);
+      const fullText = markedRuns.map((r) => r.text).join('').trim();
+      if (!fullText) continue;
+
+      const p: ParsedParagraph = {
+        fullText,
+        runs: markedRuns,
+        hasUnderline: markedRuns.some((r) => r.isUnderline && r.text.trim().length > 0),
+        hasRed: markedRuns.some((r) => r.isRed && r.text.trim().length > 0),
+        hasFormula: markedRuns.some((r) => r.hasFormula),
+        isAutoNumbered: block.tagName === 'LI',
+        images: [],
+      };
+      rawParas.push(...splitClumpedParagraphIntoLogicalParagraphs(p));
+    }
+
+    if (rawParas.length > 0) {
+      return buildQuestionsFromParsedParagraphs(rawParas, resetPerPart);
+    }
+  } catch {
+    // Fallback sang plain text nếu HTML không hợp lệ
+  }
+
+  return parseRawTextToExamQuestions(fallbackPlainText, resetPerPart);
+}
+
 export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): string {
   const p1 = questions.filter((q) => q.part === 'PART_1');
   const p2 = questions.filter((q) => q.part === 'PART_2');
   const p3 = questions.filter((q) => q.part === 'PART_3');
+  const p4 = questions.filter((q) => q.part === 'PART_4');
 
   const sections: string[] = [];
 
@@ -1446,7 +1752,7 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
     sections.push('\nPHẦN II. Câu trắc nghiệm đúng sai.');
     for (const q of p2) {
       const subsLine = (q.subItems || [])
-        .map((s) => `${s.currentLabel}) ${s.text} (${s.isTrue ? 'Đ' : 'S'})`)
+        .map((s) => `${s.isTrue ? '*' : ''}${s.currentLabel}) ${s.text} (${s.isTrue ? 'Đ' : 'S'})`)
         .join('\n');
       sections.push(`Câu ${q.displayIndex}. ${q.stemText}\n${subsLine}`);
     }
@@ -1458,6 +1764,15 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
       sections.push(
         `Câu ${q.displayIndex}. ${q.stemText}\nĐáp án: ${q.shortAnswer || ''}`
       );
+    }
+  }
+
+  if (p4.length > 0) {
+    const essayTitle = p3.length > 0 ? 'PHẦN IV. TỰ LUẬN' : 'PHẦN III. TỰ LUẬN';
+    sections.push(`\n${essayTitle}`);
+    for (const q of p4) {
+      const guideLine = q.explanation ? `\nHướng dẫn chấm: ${q.explanation}` : '';
+      sections.push(`Câu ${q.displayIndex}. ${q.stemText}${guideLine}`);
     }
   }
 

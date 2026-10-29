@@ -1,4 +1,4 @@
-export type PartType = 'PART_1' | 'PART_2' | 'PART_3';
+export type PartType = 'PART_1' | 'PART_2' | 'PART_3' | 'PART_4';
 
 export type LayoutMode = 'AUTO' | '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL';
 
@@ -61,19 +61,26 @@ export interface ExamQuestion {
   images?: ExamImageAttachment[]; // Danh sách hình ảnh, sơ đồ đính kèm
   rawFormulaOmmlXml?: string;     // Khối XML công thức toán gốc OMML (nếu có)
   formulaLatex?: string;          // Biểu diễn LaTeX công thức (nếu có)
+
   // Siêu dữ liệu Sư phạm & AI (Lời giải chi tiết, Mức độ nhận thức, Yêu cầu cần đạt)
   explanation?: string;
   bloomLevel?: BloomLevel;
   learningOutcome?: string;
   isAiCloned?: boolean;
+
   // Phần I: Trắc nghiệm 4 lựa chọn
   options?: OptionPart1[];
   computedLayout?: '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL';
+
   // Phần II: Trắc nghiệm Đúng / Sai
   subItems?: SubItemPart2[];
+
   // Phần III: Trắc nghiệm Trả lời ngắn
   shortAnswer?: string;
   shortAnswerDetectedBy?: 'KEYWORD' | 'UNDERLINE_RED' | 'MANUAL' | 'NONE';
+
+  // Phần IV: Tự luận (Hỗ trợ lưu tiêu đề phần gốc nếu khuyết Phần III)
+  essayRawHeading?: string;
 }
 
 export interface ValidationIssue {
@@ -105,6 +112,7 @@ export interface ShuffleConfig {
   qrFormat: QRAppFormat;
   embedQrInWord: boolean;
   includeSolutionsInExport: boolean; // Tùy chọn xuất kèm lời giải chi tiết trong Word
+
   // Thông tin tiêu đề đề thi & Quốc hiệu Tiêu ngữ
   departmentName: string; // VD: SỞ GD&ĐT VĨNH LONG
   schoolName: string;     // VD: TRƯỜNG THPT MANG THÍT
@@ -128,6 +136,7 @@ export interface ShuffledVariant {
     part1: { questionNumber: number; answer: 'A' | 'B' | 'C' | 'D' }[];
     part2: { questionNumber: number; answers: ('Đ' | 'S')[]; tfString: string; dsString: string }[];
     part3: { questionNumber: number; answer: string }[];
+    part4?: { questionNumber: number; answer: string }[];
   };
 }
 
