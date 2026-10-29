@@ -94,6 +94,7 @@ import {
 } from './utils/aiExamCloner';
 import { UserGuideModal } from './components/UserGuideModal';
 import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
+import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModal';
 
 export default function App() {
   // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề chuẩn Sinh học 2025 tỉ lệ 18 - 4 - 6 = 28 câu sạch lỗi 100%)
@@ -198,6 +199,7 @@ export default function App() {
   // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [isCoffeeModalOpen, setIsCoffeeModalOpen] = useState<boolean>(false);
   const [featureRegistry, setFeatureRegistry] = useState<FeatureReleaseItem[]>(
     DYNAMIC_FEATURE_REGISTRY
   );
@@ -3689,9 +3691,16 @@ export default function App() {
         }}
       />
 
-      {/* ================= CHÂN TRANG CỐ ĐỊNH: LOGO NHẤP NHÁY + THÔNG TIN LIÊN HỆ & GÓP Ý TÁC GIẢ HỒ TẤN KHẢI ================= */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-4 sm:px-6 py-2 text-white">
-        <div className="max-w-[1440px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-2">
+      {/* Nút nổi Mời Tác Giả Ly Cà Phê (Góc dưới bên phải, có hiệu ứng khói bốc lên) & Modal VietQR Động */}
+      <FloatingCoffeeButton onClick={() => setIsCoffeeModalOpen(true)} />
+      <BuyCoffeeModal
+        isOpen={isCoffeeModalOpen}
+        onClose={() => setIsCoffeeModalOpen(false)}
+      />
+
+      {/* ================= CHÂN TRANG CỐ ĐỊNH ĐA SẮC MÀU NỔI BẬT (THEO MẪU ĐÍNH KÈM & ĐẸP HƠN) ================= */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-3 sm:px-6 py-2 text-white">
+        <div className="max-w-[1440px] mx-auto flex flex-col xl:flex-row items-center justify-between gap-2">
           {/* Cụm Trái: Logo 3D Nhấp Nháy + Tên trang web EduMix 2025 */}
           <div className="flex items-center gap-2.5 shrink-0">
             <div className="w-8 h-8 rounded-xl logo-3d-badge animate-logo-blink flex items-center justify-center text-white shrink-0">
@@ -3702,15 +3711,52 @@ export default function App() {
             </span>
           </div>
 
-          {/* Cụm Phải: Dòng chữ liên hệ & góp ý sản phẩm của tác giả Hồ Tấn Khải (Đứng yên, rõ nét) */}
-          <div className="text-center lg:text-right">
-            <div className="space-y-0.5 leading-snug">
-              <p className="text-xs sm:text-[13px] font-bold tracking-wide text-amber-300">
-                Mọi chi tiết liên hệ và góp ý sản phẩm xin liên hệ tác giả: <span className="text-white font-black">Hồ Tấn Khải Trường THPT Mang Thít</span>. Email: <a href="mailto:khaibcmt@gmail.com" className="text-sky-300 underline hover:text-white font-mono">khaibcmt@gmail.com</a> và Nhắn tin qua Zalo: <span className="text-emerald-300 font-mono font-black">0939580982</span>.
-              </p>
-              <p className="text-xs sm:text-[13px] font-extrabold tracking-wide text-cyan-300">
-                Xin chân thành cám ơn góp ý của quí đồng nghiệp để sản phẩm ngày càng tốt hơn !!!
-              </p>
+          {/* Cụm Giữa & Phải: Các thẻ huy hiệu liên hệ đa sắc màu bắt mắt + Dòng cảm ơn đồng nghiệp */}
+          <div className="flex flex-col items-center xl:items-end gap-1">
+            {/* Dòng 1: Thông tin liên hệ dạng thẻ màu phát sáng */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-[13px]">
+              <span className="font-extrabold text-slate-100 tracking-wide">
+                Mọi chi tiết liên hệ và góp ý sản phẩm vui lòng liên hệ tác giả:
+              </span>
+
+              {/* Thẻ 1: Hồ Tấn Khải (Đỏ tươi phát sáng) */}
+              <span className="px-2.5 py-0.5 rounded-lg font-black footer-pill-red inline-flex items-center gap-1.5 whitespace-nowrap">
+                <span role="img" aria-label="author">👨‍🏫</span>
+                <span>Hồ Tấn Khải</span>
+              </span>
+
+              {/* Thẻ 2: Trường THPT Mang Thít (Xanh lam viền phát sáng) */}
+              <span className="px-2.5 py-0.5 rounded-lg font-extrabold footer-pill-blue inline-flex items-center gap-1.5 whitespace-nowrap">
+                <span role="img" aria-label="school">🏫</span>
+                <span>Trường THPT Mang Thít</span>
+              </span>
+
+              {/* Thẻ 3: Email (Vàng kim viền phát sáng) */}
+              <a
+                href="mailto:khaibcmt@gmail.com"
+                className="px-2.5 py-0.5 rounded-lg font-extrabold footer-pill-amber inline-flex items-center gap-1.5 whitespace-nowrap"
+                title="Gửi email góp ý tới tác giả Hồ Tấn Khải"
+              >
+                <span role="img" aria-label="email">✉️</span>
+                <span>Email: khaibcmt@gmail.com</span>
+              </a>
+
+              {/* Thẻ 4: Nhắn tin Zalo (Xanh ngọc lục bảo viền phát sáng) */}
+              <a
+                href="https://zalo.me/0939580982"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-0.5 rounded-lg font-extrabold footer-pill-emerald inline-flex items-center gap-1.5 whitespace-nowrap"
+                title="Nhắn tin qua Zalo 0939580982"
+              >
+                <span role="img" aria-label="zalo">💬</span>
+                <span>Nhắn tin Zalo: 0939580982</span>
+              </a>
+            </div>
+
+            {/* Dòng 2: Lời cảm ơn quý đồng nghiệp (Tông Hồng Tím phát sáng nổi bật ở dòng dưới) */}
+            <div className="text-xs sm:text-[13px] font-extrabold tracking-wide footer-thanks-glow text-center">
+              • Xin cảm ơn quý đồng nghiệp đã góp ý để sản phẩm ngày càng tốt hơn! •
             </div>
           </div>
         </div>

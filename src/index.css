@@ -548,3 +548,96 @@
   transform: translateY(2px);
   box-shadow: 0 1px 0 #2E1065;
 }
+
+
+/* ================= HIỆU ỨNG KHÓI BỐC LÊN TỪ LY CÀ PHÊ (CSS KEYFRAMES) ================= */
+.coffee-steam-container {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 12px;
+  display: flex;
+  justify-content: space-around;
+  pointer-events: none;
+}
+
+.coffee-steam-line {
+  width: 2px;
+  height: 8px;
+  background: rgba(254, 243, 199, 0.85);
+  border-radius: 999px;
+  filter: blur(0.4px);
+  animation: coffeeSteamRise 2.2s infinite ease-in-out;
+}
+
+.coffee-steam-line.steam-1 {
+  animation-delay: 0s;
+}
+.coffee-steam-line.steam-2 {
+  animation-delay: 0.65s;
+  height: 10px;
+}
+.coffee-steam-line.steam-3 {
+  animation-delay: 1.3s;
+}
+
+@keyframes coffeeSteamRise {
+  0% {
+    transform: translateY(3px) scaleX(1);
+    opacity: 0;
+  }
+  45% {
+    transform: translateY(-2px) scaleX(1.15);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-8px) scaleX(0.85);
+    opacity: 0;
+  }
+}
+
+/* ================= CÁC THẺ HUY HIỆU ĐA SẮC MÀU NỔI BẬT Ở CHÂN TRANG (GIỐNG MẪU & ĐẸP HƠN) ================= */
+.footer-pill-red {
+  background: linear-gradient(180deg, #EF4444 0%, #DC2626 100%);
+  border: 1.5px solid #FCA5A5;
+  color: #FFFFFF;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.footer-pill-blue {
+  background: rgba(12, 34, 59, 0.92);
+  border: 1.5px solid #38BDF8;
+  color: #38BDF8;
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35), inset 0 1px 0 rgba(56, 189, 248, 0.2);
+}
+
+.footer-pill-amber {
+  background: rgba(45, 34, 12, 0.92);
+  border: 1.5px solid #FACC15;
+  color: #FDE047;
+  box-shadow: 0 0 12px rgba(250, 204, 21, 0.35), inset 0 1px 0 rgba(250, 204, 21, 0.2);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.footer-pill-amber:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.6);
+}
+
+.footer-pill-emerald {
+  background: rgba(10, 42, 30, 0.92);
+  border: 1.5px solid #34D399;
+  color: #4ADE80;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.35), inset 0 1px 0 rgba(52, 211, 153, 0.2);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+.footer-pill-emerald:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 16px rgba(52, 211, 153, 0.6);
+}
+
+.footer-thanks-glow {
+  color: #F472B6;
+  text-shadow: 0 0 12px rgba(244, 114, 182, 0.55);
+}
