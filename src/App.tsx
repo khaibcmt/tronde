@@ -134,8 +134,8 @@ export default function App() {
     qrFormat: 'QM2025',
     embedQrInWord: true,
     includeSolutionsInExport: false,
-    departmentName: 'ĐẠI HỌC QUỐC GIA',
-    schoolName: 'TRUNG TÂM KHẢO THÍ & ĐÁNH GIÁ CHẤT LƯỢNG',
+    departmentName: 'SỞ GD&ĐT VĨNH LONG',
+    schoolName: 'TRƯỜNG THPT MANG THÍT',
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
     nationalMotto: 'Độc lập - Tự do - Hạnh phúc',
     examTitle: 'BÀI THI ĐÁNH GIÁ NĂNG LỰC TỔNG HỢP',
@@ -3585,13 +3585,100 @@ export default function App() {
                                     </div>
                                   )}
 
-                                  <div className="space-y-1.5 leading-relaxed text-left">
-                                    <p className="text-left whitespace-pre-wrap">
+                                  <div className="space-y-2 leading-relaxed text-left">
+                                    <p className="text-left leading-relaxed">
                                       <strong className="font-bold">
                                         Câu {vq.displayIndex}.{' '}
                                       </strong>
-                                      <span>{vq.stemText}</span>
+                                      <ScientificContentRenderer text={vq.stemText} inline />
                                     </p>
+
+                                    {/* Bảng dữ liệu / bảng ghép đôi thuộc phần dẫn câu hỏi */}
+                                    {vq.stemTables && vq.stemTables.length > 0 && (
+                                      <div className="my-2 space-y-2">
+                                        {vq.stemTables.map((tbl) => (
+                                          <div
+                                            key={tbl.id}
+                                            className="overflow-x-auto rounded-lg border border-slate-300"
+                                          >
+                                            <table
+                                              className="w-full border-collapse text-xs text-slate-900"
+                                              style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                                            >
+                                              <tbody>
+                                                {tbl.rows.map((row, rIdx) => (
+                                                  <tr
+                                                    key={`${tbl.id}-r-${rIdx}`}
+                                                    className={rIdx === 0 ? 'bg-slate-100 font-bold' : 'bg-white'}
+                                                  >
+                                                    {row.map((cell, cIdx) =>
+                                                      cell.vMergeContinue ? null : (
+                                                        <td
+                                                          key={`${tbl.id}-c-${rIdx}-${cIdx}`}
+                                                          colSpan={cell.colSpan || 1}
+                                                          rowSpan={cell.rowSpan || 1}
+                                                          className={`border border-slate-300 px-2.5 py-1.5 ${
+                                                            cell.align === 'center'
+                                                              ? 'text-center'
+                                                              : cell.align === 'right'
+                                                              ? 'text-right'
+                                                              : 'text-left'
+                                                          } ${cell.isBold || rIdx === 0 ? 'font-bold' : ''}`}
+                                                        >
+                                                          <ScientificContentRenderer text={cell.text} inline />
+                                                        </td>
+                                                      )
+                                                    )}
+                                                  </tr>
+                                                ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {/* Hình ảnh / sơ đồ / phả hệ / đồ thị đính kèm (In Line with Text, căn giữa, có thẻ định danh) */}
+                                    {vq.images && vq.images.length > 0 && (
+                                      <div className="my-3 flex flex-col items-center justify-center gap-2">
+                                        {vq.images.map((img, imgIdx) => {
+                                          const displayTag =
+                                            img.tagId ||
+                                            `[HINH_ANH_CAU_${vq.displayIndex}${
+                                              vq.images && vq.images.length > 1 ? `_${imgIdx + 1}` : ''
+                                            }]`;
+                                          return (
+                                            <div
+                                              key={img.id || `${vq.id}-img-${imgIdx}`}
+                                              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200 shadow-xs max-w-full"
+                                            >
+                                              <div className="w-full flex items-center justify-between gap-2 mb-1 px-1">
+                                                <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                                  {displayTag}
+                                                </span>
+                                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                                  In Line with Text · {img.dpi || 300} DPI
+                                                </span>
+                                              </div>
+                                              <img
+                                                src={img.dataUrl}
+                                                alt={img.caption || displayTag}
+                                                className="max-h-56 max-w-full object-contain rounded-lg border border-slate-200 cursor-pointer hover:shadow-md transition-shadow bg-white"
+                                                onClick={() =>
+                                                  setPreviewModalImage({
+                                                    src: img.dataUrl,
+                                                    caption: `${displayTag} — Mã đề ${activeVariant.examCode} — Câu ${vq.displayIndex}`,
+                                                  })
+                                                }
+                                              />
+                                              <div className="mt-1 text-center font-mono text-[11px] text-slate-600 font-semibold">
+                                                {img.caption || displayTag}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
 
                                     {vq.part === 'PART_1' && vq.options && (
                                       <div
@@ -3611,7 +3698,13 @@ export default function App() {
                                             <strong className="font-bold">
                                               {o.currentLabel}.{' '}
                                             </strong>
-                                            <span>{o.text}</span>
+                                            <ScientificContentRenderer
+                                              text={o.text}
+                                              inline
+                                              isCorrect={o.isCorrect}
+                                              isUnderline={o.isUnderline}
+                                              isRed={o.isRed}
+                                            />
                                           </div>
                                         ))}
                                       </div>
@@ -3627,9 +3720,24 @@ export default function App() {
                                             <strong className="font-bold">
                                               {s.currentLabel}){' '}
                                             </strong>
-                                            <span>{s.text}</span>
+                                            <ScientificContentRenderer
+                                              text={s.text}
+                                              inline
+                                              isCorrect={s.isTrue}
+                                              isUnderline={s.isUnderline}
+                                              isRed={s.isRed}
+                                            />
                                           </div>
                                         ))}
+                                      </div>
+                                    )}
+
+                                    {vq.part === 'PART_3' && (
+                                      <div className="pt-1 text-sm text-slate-800 flex items-center gap-2">
+                                        <span className="font-bold text-slate-900">Đáp số / Trả lời ngắn:</span>
+                                        <span className="inline-block border-b-2 border-dotted border-slate-600 w-44 text-center font-bold text-blue-900">
+                                          {vq.shortAnswer ? vq.shortAnswer : '................................................'}
+                                        </span>
                                       </div>
                                     )}
                                   </div>

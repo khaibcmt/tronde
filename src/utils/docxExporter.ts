@@ -891,12 +891,60 @@ function buildQuestionImageDrawingXml(
 }
 
 /**
- * Gom toàn bộ ảnh đính kèm từ danh sách câu hỏi và tạo bản đồ quan hệ rId
+ * Chuyển đổi mọi định dạng ảnh (kể cả SVG và URI) sang dạng ảnh PNG chuẩn bitmap 300 DPI
+ * để Microsoft Word / Office 365 hiển thị 100% hình vẽ, sơ đồ, đồ thị mà không bị ô vuông trắng hay báo lỗi.
  */
-function collectImagesAndBuildRelMap(questions: ExamQuestion[]): {
+export async function convertImageToStandardPngDataUrl(dataUrl: string): Promise<string> {
+  if (!dataUrl) return dataUrl;
+  if (!dataUrl.startsWith('data:image/svg+xml') && dataUrl.startsWith('data:image/png;base64,')) {
+    return dataUrl;
+  }
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const naturalW = img.naturalWidth || img.width || 800;
+        const naturalH = img.naturalHeight || img.height || 600;
+        // Đảm bảo độ nét cao >= 300 DPI (chiều ngang tối thiểu 1200px)
+        const scale = naturalW < 1200 ? 1200 / naturalW : 1.0;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(naturalW * scale);
+        canvas.height = Math.round(naturalH * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(dataUrl);
+          return;
+        }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const png = canvas.toDataURL('image/png', 1.0);
+        resolve(png);
+      } catch (err) {
+        console.warn('Could not rasterize image to PNG:', err);
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => {
+      resolve(dataUrl);
+    };
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Gom toàn bộ ảnh đính kèm từ danh sách câu hỏi và tạo bản đồ quan hệ rId (chuẩn hóa sang PNG 300 DPI)
+ */
+async function collectImagesAndBuildRelMap(questions: ExamQuestion[]): Promise<{
   imagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }>;
   imageRelMap: Map<string, string>;
-} {
+}> {
   const imagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }> = [];
   const imageRelMap = new Map<string, string>();
   let imgIndex = 1;
@@ -906,12 +954,11 @@ function collectImagesAndBuildRelMap(questions: ExamQuestion[]): {
       for (const img of q.images) {
         if (!imageRelMap.has(img.id) && !imageRelMap.has(img.dataUrl)) {
           const relId = `rIdImg${imgIndex++}`;
-          const ext = img.fileName?.split('.').pop()?.toLowerCase() || 'png';
-          const safeExt = ['jpg', 'jpeg', 'gif', 'png', 'svg'].includes(ext) ? ext : 'png';
-          const fileName = `figure_${imgIndex - 1}.${safeExt}`;
+          const pngDataUrl = await convertImageToStandardPngDataUrl(img.dataUrl);
+          const fileName = `figure_${imgIndex - 1}.png`;
           imagesToEmbed.push({
             relId,
-            dataUrl: img.dataUrl,
+            dataUrl: pngDataUrl,
             fileName,
           });
           imageRelMap.set(img.id, relId);
@@ -1296,7 +1343,7 @@ export async function exportCleanedMasterDocx(
   config: ShuffleConfig,
   includeSolutions: boolean = false
 ): Promise<Blob> {
-  const { imagesToEmbed, imageRelMap } = collectImagesAndBuildRelMap(questions);
+  const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     includeSolutions
@@ -1327,7 +1374,7 @@ export async function exportMasterExamWithSolutionsDocx(
   questions: ExamQuestion[],
   config: ShuffleConfig
 ): Promise<Blob> {
-  const { imagesToEmbed, imageRelMap } = collectImagesAndBuildRelMap(questions);
+  const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
@@ -1359,7 +1406,7 @@ export async function exportSingleVariantDocx(
   variant: ShuffledVariant,
   config: ShuffleConfig
 ): Promise<Blob> {
-  const { imagesToEmbed, imageRelMap } = collectImagesAndBuildRelMap(variant.questions);
+  const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(variant.questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     `MÃ ĐỀ THI: ${variant.examCode}`
