@@ -96,6 +96,7 @@ import {
 import { UserGuideModal } from './components/UserGuideModal';
 import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModal';
+import { ScientificContentRenderer } from './components/ScientificContentRenderer';
 
 export default function App() {
   // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề chuẩn Sinh học 2025 tỉ lệ 18 - 4 - 6 = 28 câu sạch lỗi 100%)
@@ -2229,6 +2230,27 @@ export default function App() {
                             }}
                             className="w-full px-3.5 py-2 text-left text-slate-900 bg-white border-2 border-sky-200 rounded-xl focus:outline-none focus:border-blue-600 leading-relaxed shadow-inner"
                           />
+
+                          {/* ================= XEM TRƯỚC TRỰC QUAN CÔNG THỨC TOÁN - LÝ - HÓA - SINH ================= */}
+                          {(q.stemText.includes('$') ||
+                            q.stemText.includes('\\') ||
+                            q.hasFormula ||
+                            /[A-Z][a-z]?\d/.test(q.stemText) ||
+                            q.stemText.includes('→') ||
+                            q.stemText.includes('⇌')) && (
+                            <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-sky-50/90 border border-blue-200/90 text-slate-900 shadow-2xs">
+                              <div className="flex items-center justify-between mb-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-800">
+                                <span className="flex items-center gap-1.5">
+                                  <Sigma className="w-3.5 h-3.5 text-blue-600" />
+                                  <span>Định dạng công thức trực quan (KaTeX Toán / Lý / Hóa / Sinh):</span>
+                                </span>
+                                <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  Xuất Word Equation &lt;m:oMath&gt;
+                                </span>
+                              </div>
+                              <ScientificContentRenderer text={q.stemText} formulaLatex={q.formulaLatex} hasFormula={q.hasFormula} />
+                            </div>
+                          )}
                         </div>
 
                         {/* ================= CÔNG THỨC TOÁN / LÝ / HÓA / SINH NHẬN DIỆN ĐƯỢC ================= */}
@@ -2432,28 +2454,43 @@ export default function App() {
                                     {opt.currentLabel}
                                   </button>
 
-                                  <input
-                                    type="text"
-                                    value={opt.text}
-                                    onChange={(e) =>
-                                      handleUpdateOptionTextPart1(
-                                        q.id,
-                                        opt.id,
-                                        e.target.value
-                                      )
-                                    }
-                                    style={{
-                                      fontFamily: "'Times New Roman', Times, serif",
-                                      fontSize: '12pt',
-                                    }}
-                                    className={`flex-1 min-w-0 px-2 py-1 text-left bg-transparent border-b border-transparent focus:border-blue-600 focus:bg-white focus:outline-none ${
-                                      opt.isUnderline ? 'underline decoration-2' : ''
-                                    } ${
-                                      opt.isRed
-                                        ? 'text-rose-600 font-bold'
-                                        : 'text-slate-900 font-medium'
-                                    }`}
-                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <input
+                                      type="text"
+                                      value={opt.text}
+                                      onChange={(e) =>
+                                        handleUpdateOptionTextPart1(
+                                          q.id,
+                                          opt.id,
+                                          e.target.value
+                                        )
+                                      }
+                                      style={{
+                                        fontFamily: "'Times New Roman', Times, serif",
+                                        fontSize: '12pt',
+                                      }}
+                                      className={`w-full px-2 py-1 text-left bg-transparent border-b border-transparent focus:border-blue-600 focus:bg-white focus:outline-none ${
+                                        opt.isUnderline ? 'underline decoration-2' : ''
+                                      } ${
+                                        opt.isRed
+                                          ? 'text-rose-600 font-bold'
+                                          : 'text-slate-900 font-medium'
+                                      }`}
+                                    />
+                                    {(opt.text.includes('$') ||
+                                      opt.text.includes('\\') ||
+                                      /[A-Z][a-z]?\d/.test(opt.text)) && (
+                                      <div className="text-[11px] px-1.5 py-0.5 mt-0.5 text-slate-800 bg-white/70 rounded border border-slate-200/60">
+                                        <ScientificContentRenderer
+                                          text={opt.text}
+                                          inline
+                                          isCorrect={opt.isCorrect}
+                                          isUnderline={opt.isUnderline}
+                                          isRed={opt.isRed}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
 
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     <button
@@ -2514,26 +2551,35 @@ export default function App() {
                                     {sub.currentLabel})
                                   </span>
 
-                                  <input
-                                    type="text"
-                                    value={sub.text}
-                                    onChange={(e) =>
-                                      handleUpdateSubItemTextPart2(
-                                        q.id,
-                                        sub.id,
-                                        e.target.value
-                                      )
-                                    }
-                                    style={{
-                                      fontFamily: "'Times New Roman', Times, serif",
-                                      fontSize: '12pt',
-                                    }}
-                                    className={`flex-1 min-w-0 px-3 py-1.5 text-left bg-white border border-sky-200 rounded-lg focus:outline-none focus:border-blue-600 ${
-                                      sub.isTrue
-                                        ? 'underline decoration-emerald-600 text-slate-900 font-bold'
-                                        : 'text-slate-700 font-medium'
-                                    }`}
-                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <input
+                                      type="text"
+                                      value={sub.text}
+                                      onChange={(e) =>
+                                        handleUpdateSubItemTextPart2(
+                                          q.id,
+                                          sub.id,
+                                          e.target.value
+                                        )
+                                      }
+                                      style={{
+                                        fontFamily: "'Times New Roman', Times, serif",
+                                        fontSize: '12pt',
+                                      }}
+                                      className={`w-full px-3 py-1.5 text-left bg-white border border-sky-200 rounded-lg focus:outline-none focus:border-blue-600 ${
+                                        sub.isTrue
+                                          ? 'underline decoration-emerald-600 text-slate-900 font-bold'
+                                          : 'text-slate-700 font-medium'
+                                      }`}
+                                    />
+                                    {(sub.text.includes('$') ||
+                                      sub.text.includes('\\') ||
+                                      /[A-Z][a-z]?\d/.test(sub.text)) && (
+                                      <div className="text-[11px] px-2 py-0.5 mt-1 text-slate-800 bg-white/80 rounded border border-slate-200">
+                                        <ScientificContentRenderer text={sub.text} inline />
+                                      </div>
+                                    )}
+                                  </div>
 
                                   <div className="flex items-center gap-1.5 shrink-0">
                                     <button
@@ -2576,15 +2622,24 @@ export default function App() {
                               <span className="text-xs font-black text-amber-950 uppercase">
                                 Đáp số chuẩn (Phần III):
                               </span>
-                              <input
-                                type="text"
-                                value={q.shortAnswer || ''}
-                                onChange={(e) =>
-                                  handleUpdateShortAnswerPart3(q.id, e.target.value)
-                                }
-                                placeholder="Nhập số (VD: 375 hoặc 0.12)"
-                                className="w-44 px-3 py-1.5 text-sm font-mono font-extrabold text-rose-600 underline bg-white border-2 border-amber-400 rounded-xl focus:outline-none focus:border-blue-600"
-                              />
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={q.shortAnswer || ''}
+                                  onChange={(e) =>
+                                    handleUpdateShortAnswerPart3(q.id, e.target.value)
+                                  }
+                                  placeholder="Nhập số (VD: 375 hoặc 0.12)"
+                                  className="w-44 px-3 py-1.5 text-sm font-mono font-extrabold text-rose-600 underline bg-white border-2 border-amber-400 rounded-xl focus:outline-none focus:border-blue-600"
+                                />
+                                {(q.shortAnswer?.includes('$') ||
+                                  q.shortAnswer?.includes('\\') ||
+                                  /[A-Z][a-z]?\d/.test(q.shortAnswer || '')) && (
+                                  <div className="text-[11px] px-2 py-0.5 text-slate-800 bg-white rounded border border-amber-300">
+                                    <ScientificContentRenderer text={q.shortAnswer || ''} inline />
+                                  </div>
+                                )}
+                              </div>
                             </div>
                             <span className="text-xs text-amber-900 font-mono font-bold">
                               Nguồn nhận diện:{' '}
