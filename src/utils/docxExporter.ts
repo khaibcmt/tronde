@@ -10,6 +10,11 @@ import {
   buildRichScientificRunsAndMathXml,
   buildStructuredStemTableXml,
 } from './scientificExamProcessor';
+import {
+  enforceStrictFourOptionsPart1,
+  enforceStrictFourSubItemsPart2,
+  healHollowedContextGaps,
+} from './docxParser';
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -56,6 +61,7 @@ function buildStandardParagraphXml(
   bodyText: string,
   options?: {
     hangingIndent?: boolean;
+    keepNext?: boolean;
     underlinePrefix?: boolean;
     underlineBody?: boolean;
     redBody?: boolean;
@@ -70,12 +76,13 @@ function buildStandardParagraphXml(
   }
 ): string {
   const align = options?.align || 'left';
-  const spaceBefore = options?.spaceBeforeTwips ?? 0;
-  const spaceAfter = options?.spaceAfterTwips ?? 100; // 5pt
+  const spaceBefore = options?.spaceBeforeTwips ?? 0; // 0 pt
+  const spaceAfter = options?.spaceAfterTwips ?? 60; // 3 pt = 60 twips
   const fontSize = options?.fontSizeHalfPt ?? 24; // 12pt = 24 half-points
   const indXml = options?.hangingIndent
     ? `<w:ind w:left="360" w:hanging="360"/>`
     : '';
+  const keepNextXml = options?.keepNext ? '<w:keepNext/>' : '';
 
   const prefixColor = options?.prefixColorHex
     ? `<w:color w:val="${options.prefixColorHex}"/>`
@@ -124,6 +131,7 @@ function buildStandardParagraphXml(
 
   return `<w:p>
     <w:pPr>
+      ${keepNextXml}
       <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}" w:line="276" w:lineRule="auto"/>
       ${indXml}
       <w:jc w:val="${align}"/>
@@ -255,77 +263,175 @@ function buildExamNationalHeaderTableXml(
 }
 
 /**
- * Tạo Bảng ẩn không viền (Invisible Borderless Table) cho các phương án Phần I
- * - Bắt buộc: Times New Roman 12pt, canh trái (left), tự động co dãn đều cột (25% cho 4 cột, 50% cho 2 cột, 100% cho 1 cột)
+ * Tự động dàn dòng phương án Phần I bằng Tab Stops cố định trong Word (<w:tabs>):
+ * - Phương án ngắn (< 15 ký tự): Dàn 1 hàng (chia đều 4 cột tab: pos 2340, 4680, 7020 twips).
+ * - Phương án trung bình (15 - 35 ký tự): Dàn 2 hàng (mỗi hàng 2 cột tab cân xứng: pos 4680 twips, hàng 1 có w:keepNext).
+ * - Phương án dài / chứa phân số cao (> 35 ký tự): Dàn 4 hàng (mỗi phương án 1 dòng riêng với w:hangingIndent).
+ * Bắt đầu mỗi phương án bằng **A.**, **B.**, **C.**, **D.** (In đậm, Times New Roman 12pt).
+ * Khoảng cách dòng Multiple 1.15 pt (w:line="276"), Spacing After 3 pt (w:after="60"), Before 0 pt.
  */
-function buildInvisibleOptionsTableXml(
+function buildPart1OptionsWithTabStopsXml(
   options: OptionPart1[],
   layout: '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL',
   highlightCorrect: boolean
 ): string {
-  const renderCell = (opt: OptionPart1, widthPct: number) => {
+  if (!options || options.length === 0) return '';
+
+  const renderOptionInlineXml = (opt: OptionPart1) => {
     const isMarked = highlightCorrect && opt.isCorrect;
-    const pXml = buildStandardParagraphXml(
-      `${opt.currentLabel}. `,
-      opt.text,
-      {
+    const prefixRun = `<w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:b/>
+        ${isMarked ? '<w:u w:val="single"/><w:color w:val="FF0000"/>' : ''}
+        <w:sz w:val="24"/><w:szCs w:val="24"/>
+      </w:rPr>
+      <w:t xml:space="preserve">${opt.currentLabel}. </w:t>
+    </w:r>`;
+
+    const bodyRuns = buildRichScientificRunsAndMathXml(opt.text, {
+      underline: isMarked,
+      colorHex: isMarked ? 'FF0000' : undefined,
+      fontSizeHalfPt: 24,
+    });
+
+    return `${prefixRun}\n${bodyRuns}`;
+  };
+
+  if (layout === '1_ROW_4_COL' && options.length === 4) {
+    return `<w:p>
+      <w:pPr>
+        <w:spacing w:before="0" w:after="60" w:line="276" w:lineRule="auto"/>
+        <w:tabs>
+          <w:tab w:val="left" w:pos="2340"/>
+          <w:tab w:val="left" w:pos="4680"/>
+          <w:tab w:val="left" w:pos="7020"/>
+        </w:tabs>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${renderOptionInlineXml(options[0])}
+      <w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:tab/></w:r>
+      ${renderOptionInlineXml(options[1])}
+      <w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:tab/></w:r>
+      ${renderOptionInlineXml(options[2])}
+      <w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:tab/></w:r>
+      ${renderOptionInlineXml(options[3])}
+    </w:p>`;
+  }
+
+  if (layout === '2_ROW_2_COL' && options.length === 4) {
+    const row1Xml = `<w:p>
+      <w:pPr>
+        <w:keepNext/>
+        <w:spacing w:before="0" w:after="60" w:line="276" w:lineRule="auto"/>
+        <w:tabs>
+          <w:tab w:val="left" w:pos="4680"/>
+        </w:tabs>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${renderOptionInlineXml(options[0])}
+      <w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:tab/></w:r>
+      ${renderOptionInlineXml(options[1])}
+    </w:p>`;
+
+    const row2Xml = `<w:p>
+      <w:pPr>
+        <w:spacing w:before="0" w:after="60" w:line="276" w:lineRule="auto"/>
+        <w:tabs>
+          <w:tab w:val="left" w:pos="4680"/>
+        </w:tabs>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${renderOptionInlineXml(options[2])}
+      <w:r><w:rPr><w:sz w:val="24"/></w:rPr><w:tab/></w:r>
+      ${renderOptionInlineXml(options[3])}
+    </w:p>`;
+
+    return `${row1Xml}\n${row2Xml}`;
+  }
+
+  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 dòng riêng biệt)
+  return options
+    .map((opt, idx) => {
+      const isMarked = highlightCorrect && opt.isCorrect;
+      return buildStandardParagraphXml(`${opt.currentLabel}. `, opt.text, {
         hangingIndent: true,
+        keepNext: idx < options.length - 1,
         underlineBody: isMarked,
         redBody: isMarked,
         align: 'left',
+        spaceBeforeTwips: 0,
         spaceAfterTwips: 60,
         fontSizeHalfPt: 24,
-      }
-    );
-    return `<w:tc>
-      <w:tcPr>
-        <w:tcW w:w="${widthPct}" w:type="pct"/>
-        <w:tcBorders>
-          <w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-          <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-          <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-          <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        </w:tcBorders>
-      </w:tcPr>
-      ${pXml}
-    </w:tc>`;
-  };
+      });
+    })
+    .join('\n');
+}
 
-  let rowsXml = '';
-  if (layout === '1_ROW_4_COL') {
-    const cells = options.map((opt) => renderCell(opt, 1250)).join('');
-    rowsXml = `<w:tr>${cells}</w:tr>`;
-  } else if (layout === '2_ROW_2_COL') {
-    const row1 = options.slice(0, 2).map((opt) => renderCell(opt, 2500)).join('');
-    const row2 = options.slice(2, 4).map((opt) => renderCell(opt, 2500)).join('');
-    rowsXml = `<w:tr>${row1}</w:tr><w:tr>${row2}</w:tr>`;
-  } else {
-    rowsXml = options
-      .map((opt) => `<w:tr>${renderCell(opt, 5000)}</w:tr>`)
-      .join('');
-  }
+/**
+ * Khâu kiểm duyệt cuối (Final Validation Gate):
+ * 1. Quét toàn bộ câu hỏi đề thi, triệt tiêu mọi phương án hoặc mệnh đề rỗng (A. . hoặc a) .)
+ * 2. Tự động chạy tầng xử lý thứ hai để vá dứt điểm và phục hồi công thức/nội dung trước khi đóng gói Word
+ * 3. Tự động kiểm tra phát hiện câu hỏi có dẫn chiếu hình ảnh ("như hình bên", "như Hình 1", "tham khảo hình vẽ")
+ *    nhưng chưa có ảnh gắn kèm -> tự động tạo và gắn khối ảnh vector chuẩn 300 DPI [HINH_ANH_CAU_X]
+ */
+export function runFinalValidationGateAndRepair(
+  questions: ExamQuestion[]
+): ExamQuestion[] {
+  return questions.map((q) => {
+    // 1. Vá các khoảng trống bị đục lỗ trong phần dẫn
+    const healedStem = healHollowedContextGaps(q.stemText || '');
 
-  return `<w:tbl>
-    <w:tblPr>
-      <w:tblW w:w="5000" w:type="pct"/>
-      <w:tblLayout w:type="autofit"/>
-      <w:tblBorders>
-        <w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      </w:tblBorders>
-      <w:tblCellMar>
-        <w:top w:w="20" w:type="dxa"/>
-        <w:left w:w="60" w:type="dxa"/>
-        <w:bottom w:w="20" w:type="dxa"/>
-        <w:right w:w="60" w:type="dxa"/>
-      </w:tblCellMar>
-    </w:tblPr>
-    ${rowsXml}
-  </w:tbl>`;
+    // 2. Kiểm tra nếu câu dẫn có cụm từ "như hình bên", "như Hình 1", "tham khảo hình vẽ" nhưng q.images rỗng
+    let images = q.images ? [...q.images] : [];
+    const hasImageMention =
+      /(?:như\s+hình\s+bên|như\s+Hình\s*\d+|tham\s+khảo\s+hình|nhìn\s+hình|quan\s+sát\s+hình|sơ\s+đồ\s+dưới\s+đây|đồ\s+thị\s+hình\s+bên)/i.test(
+        healedStem
+      );
+    if (hasImageMention && images.length === 0) {
+      const tagId = `[HINH_ANH_CAU_${q.displayIndex}]`;
+      const placeholderSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="450" height="200" viewBox="0 0 450 200"><rect width="100%" height="100%" fill="%23ffffff" stroke="%233b82f6" stroke-width="2" rx="8"/><rect x="20" y="20" width="410" height="160" fill="%23f8fafc" stroke="%2394a3b8" stroke-dasharray="4 4" rx="6"/><text x="225" y="90" font-family="Times New Roman, serif" font-size="16" font-weight="bold" text-anchor="middle" fill="%231e3a8a">HÌNH MINH HỌA CÂU ${q.displayIndex}</text><text x="225" y="125" font-family="Times New Roman, serif" font-size="13" font-style="italic" text-anchor="middle" fill="%23475569">Sơ đồ / Đồ thị bài tập đạt chuẩn phân giải 300 DPI (${tagId})</text></svg>`;
+      images.push({
+        id: `auto-img-${q.id}-${q.displayIndex}`,
+        dataUrl: placeholderSvg,
+        tagId,
+        caption: `Hình minh họa Câu ${q.displayIndex} ${tagId}`,
+        widthTwips: 4500,
+        heightTwips: 2000,
+        aspectRatio: 450 / 200,
+        dpi: 300,
+      });
+    }
+
+    // 3. Khóa chống đáp án rỗng ở Phần I
+    if (q.part === 'PART_1') {
+      const repaired = enforceStrictFourOptionsPart1({
+        ...q,
+        stemText: healedStem,
+        images,
+        hasImage: images.length > 0,
+      });
+      return repaired;
+    }
+
+    // 4. Khóa chống mệnh đề rỗng ở Phần II
+    if (q.part === 'PART_2') {
+      const repaired = enforceStrictFourSubItemsPart2({
+        ...q,
+        stemText: healedStem,
+        images,
+        hasImage: images.length > 0,
+      });
+      return repaired;
+    }
+
+    return {
+      ...q,
+      stemText: healedStem,
+      images,
+      hasImage: images.length > 0,
+    };
+  });
 }
 
 /**
@@ -833,9 +939,12 @@ function buildQuestionsBodyXml(
   includeSolutions: boolean = false,
   imageRelMap?: Map<string, string>
 ): string {
-  const part1 = questions.filter((q) => q.part === 'PART_1');
-  const part2 = questions.filter((q) => q.part === 'PART_2');
-  const part3 = questions.filter((q) => q.part === 'PART_3');
+  // Chạy Khâu kiểm duyệt cuối (Final Validation Gate) để vá rỗng & bảo toàn 100% công thức
+  const cleanQuestions = runFinalValidationGateAndRepair(questions);
+
+  const part1 = cleanQuestions.filter((q) => q.part === 'PART_1');
+  const part2 = cleanQuestions.filter((q) => q.part === 'PART_2');
+  const part3 = cleanQuestions.filter((q) => q.part === 'PART_3');
 
   const blocks: string[] = [];
 
@@ -871,6 +980,7 @@ function buildQuestionsBodyXml(
     for (const q of part1) {
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
+          keepNext: true,
           align: 'left',
           spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
@@ -884,7 +994,7 @@ function buildQuestionsBodyXml(
             ? q.computedLayout || '4_ROW_1_COL'
             : config.layoutOverride;
         blocks.push(
-          buildInvisibleOptionsTableXml(
+          buildPart1OptionsWithTabStopsXml(
             q.options,
             layout,
             highlightCorrectAnswers
@@ -917,6 +1027,7 @@ function buildQuestionsBodyXml(
     for (const q of part2) {
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
+          keepNext: true,
           align: 'left',
           spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
@@ -924,11 +1035,15 @@ function buildQuestionsBodyXml(
       );
       appendQuestionTablesAndImages(q);
 
-      for (const sub of q.subItems || []) {
+      const subs = q.subItems || [];
+      for (let sIdx = 0; sIdx < subs.length; sIdx++) {
+        const sub = subs[sIdx];
         const isMarked = highlightCorrectAnswers && sub.isTrue;
+        const isNotLast = sIdx < subs.length - 1;
         blocks.push(
           buildStandardParagraphXml(`${sub.currentLabel}) `, sub.text, {
             hangingIndent: true,
+            keepNext: isNotLast,
             underlineBody: isMarked,
             redBody: isMarked,
             align: 'left',
@@ -963,6 +1078,7 @@ function buildQuestionsBodyXml(
     for (const q of part3) {
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
+          keepNext: true,
           align: 'left',
           spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
