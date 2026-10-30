@@ -70,6 +70,7 @@ import {
   validateExamQuestions,
 } from './utils/docxParser';
 import { parsePdfExamFile } from './utils/pdfParser';
+import { enhanceAndCropExamImage } from './utils/scientificExamProcessor';
 import { generateShuffledVariants } from './utils/shuffleEngine';
 import {
   buildStandardExportFileName,
@@ -269,7 +270,7 @@ export default function App() {
     caption?: string;
   } | null>(null);
 
-  // Thêm ảnh / sơ đồ đính kèm vào câu hỏi
+  // Thêm ảnh / sơ đồ / đồ thị đính kèm vào câu hỏi (Tự động crop viền thừa, khử nhiễu nền, giữ nguyên tỷ lệ khung hình 300 DPI & gắn thẻ [HINH_ANH_CAU_X])
   const handleAddImageToQuestion = (
     questionId: string,
     e: React.ChangeEvent<HTMLInputElement>
@@ -278,18 +279,30 @@ export default function App() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      if (!dataUrl) return;
+    reader.onload = async (ev) => {
+      const rawDataUrl = ev.target?.result as string;
+      if (!rawDataUrl) return;
+
+      const targetQ = questions.find((q) => q.id === questionId);
+      const qNum = targetQ?.displayIndex || 1;
+      const processed = await enhanceAndCropExamImage(rawDataUrl, qNum, file.name);
 
       setQuestions((prev) =>
         prev.map((q) => {
           if (q.id !== questionId) return q;
+          const nextIdx = (q.images?.length || 0) + 1;
+          const suffix = nextIdx > 1 ? `_${nextIdx}` : '';
+          const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
           const newImg: ExamImageAttachment = {
             id: `img-man-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            dataUrl,
+            dataUrl: processed.dataUrl,
             fileName: file.name,
-            caption: `Hình minh họa Câu ${q.displayIndex}`,
+            caption: `Hình minh họa Câu ${q.displayIndex} ${tagId}`,
+            tagId,
+            widthTwips: processed.widthTwips,
+            heightTwips: processed.heightTwips,
+            aspectRatio: processed.aspectRatio,
+            dpi: 300,
           };
           return {
             ...q,
@@ -301,7 +314,7 @@ export default function App() {
       setHasUnsavedChanges(true);
       setStatusBanner({
         type: 'SUCCESS',
-        text: `Đã đính kèm ảnh "${file.name}" vào câu hỏi.`,
+        text: `Đã tự động cắt viền, khử nhiễu nền (300 DPI) và gắn thẻ ${processed.tagId} (In Line with Text) cho "${file.name}".`,
       });
     };
     reader.readAsDataURL(file);
@@ -327,16 +340,68 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  // ================= HANDLERS: UPLOAD & PARSE DOCX & PDF =================
+  // ================= HANDLERS: UPLOAD & PARSE WORD (.DOCX/.DOC), PDF, SCAN & ẢNH =================
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessing(true);
     try {
+      const lowerName = file.name.toLowerCase();
+      const isImageOrScan =
+        /\.(png|jpe?g|webp|gif|bmp|svg)$/i.test(lowerName) ||
+        file.type.startsWith('image/');
+
+      if (isImageOrScan) {
+        const rawDataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string) || '');
+          reader.onerror = () => reject(new Error('Không thể đọc tệp hình ảnh'));
+          reader.readAsDataURL(file);
+        });
+
+        const targetId = activeFocusedQuestionId || questions[0]?.id;
+        const targetQ = questions.find((q) => q.id === targetId) || questions[0];
+        const qNum = targetQ?.displayIndex || 1;
+        const processed = await enhanceAndCropExamImage(rawDataUrl, qNum, file.name);
+
+        if (targetQ) {
+          setQuestions((prev) =>
+            prev.map((q) => {
+              if (q.id !== targetQ.id) return q;
+              const nextIdx = (q.images?.length || 0) + 1;
+              const suffix = nextIdx > 1 ? `_${nextIdx}` : '';
+              const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
+              const newImg: ExamImageAttachment = {
+                id: `img-scan-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                dataUrl: processed.dataUrl,
+                fileName: file.name,
+                caption: `Sơ đồ / Đồ thị Câu ${q.displayIndex} ${tagId}`,
+                tagId,
+                widthTwips: processed.widthTwips,
+                heightTwips: processed.heightTwips,
+                aspectRatio: processed.aspectRatio,
+                dpi: 300,
+              };
+              return {
+                ...q,
+                hasImage: true,
+                images: [...(q.images || []), newImg],
+              };
+            })
+          );
+          setHasUnsavedChanges(true);
+          setActiveRightTab('LIVE_EDITOR');
+          setStatusBanner({
+            type: 'SUCCESS',
+            text: `Đã xử lý ảnh/sơ đồ "${file.name}" (Khử nhiễu nền, giữ nguyên tỷ lệ 300 DPI, gắn thẻ ${processed.tagId} In Line with Text) vào Câu ${qNum}!`,
+          });
+        }
+        return;
+      }
+
       const isPdf =
-        file.name.toLowerCase().endsWith('.pdf') ||
-        file.type === 'application/pdf';
+        lowerName.endsWith('.pdf') || file.type === 'application/pdf';
 
       const rawParsed = isPdf
         ? await parsePdfExamFile(file, config.resetNumberingPerPart)
@@ -357,6 +422,10 @@ export default function App() {
           (acc, q) => acc + (q.images?.length || 0),
           0
         );
+        const totalTables = parsed.reduce(
+          (acc, q) => acc + (q.stemTables?.length || 0),
+          0
+        );
         const formulaCount = parsed.filter((q) => q.hasFormula).length;
 
         setFileName(file.name);
@@ -371,9 +440,11 @@ export default function App() {
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
         setStatusBanner({
           type: 'SUCCESS',
-          text: `Đã phân tích thông minh & chuẩn hóa tự động tệp "${file.name}" (${parsed.length} câu hỏi chuẩn 4 đáp án${
-            totalImages > 0 ? `, nhận diện ${totalImages} sơ đồ/hình ảnh` : ''
-          }${formulaCount > 0 ? `, ${formulaCount} câu có công thức` : ''}).`,
+          text: `Đã phân tích & chuẩn hóa tự động tệp "${file.name}" (${parsed.length} câu hỏi chuẩn 4 đáp án${
+            totalImages > 0 ? `, ${totalImages} sơ đồ/đồ thị 300 DPI` : ''
+          }${totalTables > 0 ? `, ${totalTables} bảng dữ liệu` : ''}${
+            formulaCount > 0 ? `, ${formulaCount} câu có công thức OMML/LaTeX` : ''
+          }).`,
         });
       }
     } catch (err) {
@@ -1356,11 +1427,11 @@ export default function App() {
 
       {/* ================= BỐ CỤC CHIA 2 CỘT: BÊN TRÁI (1/3 KHUNG HÌNH - THÔNG TIN & THANH CÔNG CỤ) | BÊN PHẢI (2/3 KHUNG HÌNH - MÀN HÌNH HIỂN THỊ ĐỀ) ================= */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto px-3 sm:px-5 py-3">
-        {/* Input ẩn phục vụ tải tệp Word / PDF */}
+        {/* Input ẩn phục vụ tải tệp Word / PDF / Scan / Ảnh */}
         <input
           ref={fileInputRef}
           type="file"
-          accept=".docx,.doc,.pdf,.txt"
+          accept=".docx,.doc,.pdf,.png,.jpg,.jpeg,.webp,.svg,.txt"
           onChange={handleFileUpload}
           className="hidden"
         />
@@ -1671,7 +1742,7 @@ export default function App() {
                     1. Thao tác đề thi &amp; trộn đề:
                   </span>
                   <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md border border-orange-300">
-                    Hỗ trợ .docx, .doc, .pdf
+                    Word, PDF, Scan, Ảnh
                   </span>
                 </div>
 
@@ -1681,7 +1752,7 @@ export default function App() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}
-                    title="Tải đề thi từ máy tính (.docx, .doc, .pdf) lên hệ thống"
+                    title="Tải đề thi từ máy tính (Word .docx/.doc, PDF, Bản Scan, Ảnh .png/.jpg) lên hệ thống"
                     className="px-3 py-2.5 rounded-xl font-black text-white btn-auto-scale btn-3d-upload-hero flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                   >
                     <Upload className="w-4 h-4 shrink-0 stroke-[2.5]" />
@@ -1943,19 +2014,34 @@ export default function App() {
                 </select>
 
                 <div className="flex items-center gap-1 flex-wrap">
-                  {['→', '⇄', 'Δ', 'α', 'β', '♂', '♀', '±', '°C', '²', '₁', '₂'].map(
-                    (sym) => (
-                      <button
-                        key={sym}
-                        type="button"
-                        onClick={() => handleInsertScientificSymbol(sym)}
-                        className="w-6 h-6 rounded-lg bg-white hover:bg-blue-50 border border-sky-300 text-xs font-mono font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
-                        title={`Chèn nhanh ký hiệu ${sym} vào câu hỏi đang chọn`}
-                      >
-                        {sym}
-                      </button>
-                    )
-                  )}
+                  {[
+                    { label: '→', insert: '→' },
+                    { label: '⇌', insert: '⇌' },
+                    { label: 'Ω', insert: 'Ω' },
+                    { label: 'λ', insert: 'λ' },
+                    { label: 'μ', insert: 'μ' },
+                    { label: 'α', insert: 'α' },
+                    { label: 'Δ', insert: 'Δ' },
+                    { label: '∫', insert: '$\\int_{a}^{b}$' },
+                    { label: 'a/b', insert: '$\\frac{a}{b}$' },
+                    { label: 'vec', insert: '$\\vec{E}$' },
+                    { label: 'H₂SO₄', insert: 'H_{2}SO_{4}' },
+                    { label: 'Fe³⁺', insert: 'Fe^{3+}' },
+                    { label: 'SO₄²⁻', insert: 'SO_{4}^{2-}' },
+                    { label: '♂', insert: '♂' },
+                    { label: '♀', insert: '♀' },
+                    { label: '°C', insert: '°C' },
+                  ].map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      onClick={() => handleInsertScientificSymbol(item.insert)}
+                      className="px-1.5 h-6 rounded-lg bg-white hover:bg-blue-50 border border-sky-300 text-[11px] font-mono font-black text-blue-950 shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                      title={`Chèn nhanh ký hiệu / công thức ${item.label} (Tự động xuất chuẩn Word OMML / Sub-Superscript)`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -2150,23 +2236,78 @@ export default function App() {
                           <div className="mb-3 px-3 py-2 rounded-xl bg-indigo-50/90 border border-indigo-200 flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-950">
                             <div className="flex items-center gap-1.5 font-medium">
                               <Sigma className="w-4 h-4 text-indigo-600 shrink-0" />
-                              <span className="font-bold">Công thức toán / khoa học:</span>
+                              <span className="font-bold">Công thức Toán / Lý / Hóa:</span>
                               <span className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200 font-bold text-indigo-700">
-                                {q.formulaLatex || 'Đã chuẩn hóa biểu thức OMML'}
+                                {q.formulaLatex || 'Chuẩn LaTeX / Office Math Markup (OMML)'}
                               </span>
                             </div>
                             <span className="text-[11px] font-bold text-indigo-600 bg-white/70 px-2 py-0.5 rounded">
-                              Tự động xuất Word OMML không lỗi
+                              Xuất trực tiếp Word Equation / Sub-Superscript chuẩn
                             </span>
                           </div>
                         )}
 
-                        {/* ================= HÌNH ẢNH / SƠ ĐỒ ĐÍNH KÈM CỦA CÂU HỎI ================= */}
+                        {/* ================= BẢNG DỮ LIỆU / BẢNG GHÉP ĐÔI (CỘT A - CỘT B) CỦA CÂU HỎI ================= */}
+                        {q.stemTables && q.stemTables.length > 0 && (
+                          <div className="mb-3 space-y-2">
+                            <div className="text-[11px] font-bold text-sky-900 flex items-center justify-between">
+                              <span>
+                                Bảng dữ liệu / Bảng ghép đôi trong câu hỏi ({q.stemTables.length} bảng — Bảo toàn cấu trúc Word Table):
+                              </span>
+                              <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                Giữ nguyên ô gộp &amp; căn lề khi xuất .docx
+                              </span>
+                            </div>
+                            {q.stemTables.map((tbl) => (
+                              <div
+                                key={tbl.id}
+                                className="overflow-x-auto rounded-xl border border-slate-300 bg-white shadow-2xs"
+                              >
+                                <table
+                                  className="w-full border-collapse text-xs text-slate-900"
+                                  style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                                >
+                                  <tbody>
+                                    {tbl.rows.map((row, rIdx) => (
+                                      <tr
+                                        key={`${tbl.id}-r-${rIdx}`}
+                                        className={rIdx === 0 ? 'bg-slate-100 font-bold' : 'bg-white'}
+                                      >
+                                        {row.map((cell, cIdx) =>
+                                          cell.vMergeContinue ? null : (
+                                            <td
+                                              key={`${tbl.id}-c-${rIdx}-${cIdx}`}
+                                              colSpan={cell.colSpan || 1}
+                                              rowSpan={cell.rowSpan || 1}
+                                              className={`border border-slate-300 px-2.5 py-1.5 ${
+                                                cell.align === 'center'
+                                                  ? 'text-center'
+                                                  : cell.align === 'right'
+                                                  ? 'text-right'
+                                                  : 'text-left'
+                                              } ${cell.isBold || rIdx === 0 ? 'font-bold' : ''}`}
+                                            >
+                                              {cell.text}
+                                            </td>
+                                          )
+                                        )}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* ================= HÌNH ẢNH / SƠ ĐỒ / PHẢ HỆ / ĐỒ THỊ ĐÍNH KÈM CỦA CÂU HỎI ================= */}
                         <div className="mb-3 space-y-2">
                           <div className="flex items-center justify-between gap-2">
                             <label className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
                               <ImageIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>Hình ảnh, Sơ đồ, Đồ thị câu hỏi ({q.images?.length || 0}):</span>
+                              <span>
+                                Sơ đồ, Phả hệ, Đồ thị câu hỏi ({q.images?.length || 0} — Chuẩn In Line with Text căn giữa):
+                              </span>
                             </label>
 
                             <div>
@@ -2180,7 +2321,7 @@ export default function App() {
                               <label
                                 htmlFor={`upload-img-${q.id}`}
                                 className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white btn-3d-cyan flex items-center gap-1 cursor-pointer transition-transform hover:scale-102"
-                                title="Thêm sơ đồ / hình ảnh minh họa cho câu hỏi này"
+                                title="Thêm sơ đồ / phả hệ / đồ thị minh họa (Tự động khử nhiễu nền, giữ tỷ lệ gốc 300 DPI & gắn thẻ [HINH_ANH_CAU_X])"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                                 <span>Thêm ảnh / sơ đồ</span>
@@ -2190,52 +2331,67 @@ export default function App() {
 
                           {q.images && q.images.length > 0 && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                              {q.images.map((img) => (
-                                <div
-                                  key={img.id}
-                                  className="relative group p-2 rounded-xl bg-white border-2 border-sky-200 shadow-xs flex flex-col items-center"
-                                >
-                                  <img
-                                    src={img.dataUrl}
-                                    alt={img.caption || `Hình câu ${q.displayIndex}`}
-                                    className="max-h-36 object-contain rounded-lg border border-slate-100 cursor-pointer transition-transform group-hover:scale-102"
-                                    onClick={() =>
-                                      setPreviewModalImage({
-                                        src: img.dataUrl,
-                                        caption: img.caption || `Câu ${q.displayIndex}`,
-                                      })
-                                    }
-                                  />
-                                  <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[11px] text-slate-500 font-mono">
-                                    <span className="truncate max-w-[120px]" title={img.fileName}>
-                                      {img.fileName || 'diagram.png'}
-                                    </span>
-                                    <div className="flex items-center gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setPreviewModalImage({
-                                            src: img.dataUrl,
-                                            caption: img.caption || `Câu ${q.displayIndex}`,
-                                          })
-                                        }
-                                        className="p-1 hover:text-blue-600 rounded cursor-pointer"
-                                        title="Phóng to xem chi tiết"
-                                      >
-                                        <Maximize2 className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemoveImageFromQuestion(q.id, img.id)}
-                                        className="p-1 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
-                                        title="Xóa hình ảnh này"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
+                              {q.images.map((img, imgIdx) => {
+                                const displayTag =
+                                  img.tagId ||
+                                  `[HINH_ANH_CAU_${q.displayIndex}${
+                                    (q.images?.length || 0) > 1 ? `_${imgIdx + 1}` : ''
+                                  }]`;
+                                return (
+                                  <div
+                                    key={img.id}
+                                    className="relative group p-2 rounded-xl bg-white border-2 border-sky-200 shadow-xs flex flex-col items-center"
+                                  >
+                                    <div className="w-full flex items-center justify-between gap-1 mb-1 px-1">
+                                      <span className="text-[10px] font-mono font-black text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                        {displayTag}
+                                      </span>
+                                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                        In Line · {img.dpi || 300} DPI
+                                      </span>
+                                    </div>
+                                    <img
+                                      src={img.dataUrl}
+                                      alt={img.caption || displayTag}
+                                      className="max-h-36 object-contain rounded-lg border border-slate-100 cursor-pointer transition-transform group-hover:scale-102"
+                                      onClick={() =>
+                                        setPreviewModalImage({
+                                          src: img.dataUrl,
+                                          caption: `${displayTag} — Câu ${q.displayIndex}`,
+                                        })
+                                      }
+                                    />
+                                    <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[11px] text-slate-500 font-mono">
+                                      <span className="truncate max-w-[120px]" title={img.fileName}>
+                                        {img.fileName || 'diagram.png'}
+                                      </span>
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setPreviewModalImage({
+                                              src: img.dataUrl,
+                                              caption: `${displayTag} — Câu ${q.displayIndex}`,
+                                            })
+                                          }
+                                          className="p-1 hover:text-blue-600 rounded cursor-pointer"
+                                          title="Phóng to xem chi tiết"
+                                        >
+                                          <Maximize2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveImageFromQuestion(q.id, img.id)}
+                                          className="p-1 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
+                                          title="Xóa hình ảnh này"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>

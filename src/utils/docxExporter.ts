@@ -1,10 +1,15 @@
 import JSZip from 'jszip';
 import {
+  ExamImageAttachment,
   ExamQuestion,
   OptionPart1,
   ShuffleConfig,
   ShuffledVariant,
 } from '../types/exam';
+import {
+  buildRichScientificRunsAndMathXml,
+  buildStructuredStemTableXml,
+} from './scientificExamProcessor';
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -39,11 +44,12 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 }
 
 /**
- * Tạo đoạn văn bản Word chuẩn Typography:
+ * Tạo đoạn văn bản Word chuẩn Typography & Khoa học Tự nhiên:
  * - Bắt buộc Font Times New Roman kích cỡ 12pt (24 half-points)
+ * - Tự động nhận diện và chuyển đổi công thức Toán/Lý sang chuẩn Office Math Markup (<m:oMath>)
+ * - Tự động nhận diện chỉ số trên/dưới Hóa học (H₂SO₄, Fe³⁺, SO₄²⁻) sang <w:vertAlign w:val="subscript/superscript"/>
  * - Canh trái (left) hoặc theo tùy chọn, tự động co dãn đều đẹp mắt
  * - Giãn dòng chuẩn Line spacing: 1.15 (w:line="276")
- * - Khoảng cách câu Spacing After: 6pt (w:after="120")
  */
 function buildStandardParagraphXml(
   boldPrefix: string,
@@ -77,28 +83,11 @@ function buildStandardParagraphXml(
     ? '<w:color w:val="FF0000"/>'
     : '';
 
-  const bodyColor = options?.bodyColorHex
-    ? `<w:color w:val="${options.bodyColorHex}"/>`
+  const resolvedBodyColorHex = options?.bodyColorHex
+    ? options.bodyColorHex
     : options?.redBody
-    ? '<w:color w:val="FF0000"/>'
-    : '';
-
-  const bodyRPrParts: string[] = [
-    `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>`,
-    `<w:sz w:val="${fontSize}"/><w:szCs w:val="${fontSize}"/>`,
-  ];
-  if (options?.boldBody) {
-    bodyRPrParts.push(`<w:b/>`);
-  }
-  if (options?.italicBody) {
-    bodyRPrParts.push(`<w:i/>`);
-  }
-  if (options?.underlineBody) {
-    bodyRPrParts.push(`<w:u w:val="single"/>`);
-  }
-  if (bodyColor) {
-    bodyRPrParts.push(bodyColor);
-  }
+    ? 'FF0000'
+    : undefined;
 
   const prefixRunXml = boldPrefix
     ? `<w:r>
@@ -113,12 +102,25 @@ function buildStandardParagraphXml(
       </w:r>`
     : '';
 
-  const bodyRunXml = bodyText
-    ? `<w:r>
-        <w:rPr>${bodyRPrParts.join('')}</w:rPr>
-        <w:t xml:space="preserve">${escapeXml(bodyText)}</w:t>
-      </w:r>`
-    : '';
+  // Chuyển đổi nội dung thân đoạn văn qua bộ xử lý Toán - Lý - Hóa (OMML + Subscript/Superscript)
+  // Hỗ trợ xuống dòng mềm (\n) bên trong thân câu hỏi (ví dụ câu hỏi có nhiều dòng dữ kiện hoặc bảng ghép đôi Cột A - Cột B)
+  let bodyRunXml = '';
+  if (bodyText) {
+    const lines = bodyText.split(/\r?\n/);
+    bodyRunXml = lines
+      .map((line, idx) => {
+        const lineXml = buildRichScientificRunsAndMathXml(line, {
+          bold: options?.boldBody,
+          italic: options?.italicBody,
+          underline: options?.underlineBody,
+          colorHex: resolvedBodyColorHex,
+          fontSizeHalfPt: fontSize,
+        });
+        if (idx === 0) return lineXml;
+        return `<w:r><w:br/></w:r>\n${lineXml}`;
+      })
+      .join('\n');
+  }
 
   return `<w:p>
     <w:pPr>
@@ -703,13 +705,40 @@ export function formatPedagogicalSubject(raw: string): string {
 }
 
 /**
- * Tạo block XML nhúng hình ảnh/sơ đồ bài tập vào tệp Word
+ * Tạo block XML nhúng hình ảnh/sơ đồ/đồ thị bài tập vào tệp Word:
+ * - Bắt buộc hiển thị dạng In Line with Text (<wp:inline>) trên một dòng riêng biệt, căn giữa (<w:jc w:val="center"/>)
+ * - Giữ nguyên 100% tỷ lệ khung hình gốc (aspect ratio) để không bị méo hình hay đè lên chữ khi trộn đề
+ * - Gắn thẻ định danh [HINH_ANH_CAU_X] vào thuộc tính descr/name của đối tượng DrawingML
  */
-function buildQuestionImageDrawingXml(relId: string, imgId: string): string {
-  const cx = 3600000; // ~3.93 inches
-  const cy = 2400000; // ~2.62 inches
+function buildQuestionImageDrawingXml(
+  relId: string,
+  img: ExamImageAttachment,
+  questionNumber: number
+): string {
+  // 1 Twip = 635 EMUs. Giới hạn chiều rộng tối đa ~5200 Twips (3,302,000 EMUs ~ 3.61 inch) để vừa đẹp khung trang A4
+  const rawWTwips = img.widthTwips && img.widthTwips > 400 ? img.widthTwips : 4500;
+  const aspect =
+    img.aspectRatio && img.aspectRatio > 0.1
+      ? img.aspectRatio
+      : img.heightTwips && img.heightTwips > 300
+      ? rawWTwips / img.heightTwips
+      : 1.5;
+
+  const clampedWTwips = Math.min(5400, Math.max(1800, rawWTwips));
+  let clampedHTwips = Math.round(clampedWTwips / aspect);
+  if (clampedHTwips > 4000) {
+    clampedHTwips = 4000;
+  }
+  const finalWTwips = Math.round(clampedHTwips * aspect);
+
+  const cx = finalWTwips * 635;
+  const cy = clampedHTwips * 635;
+  const tagLabel = img.tagId || `[HINH_ANH_CAU_${questionNumber}]`;
+  const docPrId = Math.floor(Math.random() * 80000) + 1000;
+
   return `<w:p>
     <w:pPr>
+      <w:keepNext/>
       <w:spacing w:before="80" w:after="100"/>
       <w:jc w:val="center"/>
     </w:pPr>
@@ -717,19 +746,29 @@ function buildQuestionImageDrawingXml(relId: string, imgId: string): string {
       <w:drawing>
         <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
           <wp:extent cx="${cx}" cy="${cy}"/>
-          <wp:docPr id="${Math.floor(Math.random() * 80000) + 1000}" name="Diagram_${escapeXml(imgId)}"/>
+          <wp:effectExtent l="0" t="0" r="0" b="0"/>
+          <wp:docPr id="${docPrId}" name="${escapeXml(tagLabel)}" descr="${escapeXml(
+    img.caption || tagLabel
+  )}"/>
+          <wp:cNvGraphicFramePr>
+            <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
+          </wp:cNvGraphicFramePr>
           <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
             <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
               <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
                 <pic:nvPicPr>
-                  <pic:cNvPr id="${Math.floor(Math.random() * 80000) + 1000}" name="img_${escapeXml(imgId)}.png"/>
-                  <pic:cNvPicPr/>
+                  <pic:cNvPr id="${docPrId + 1}" name="img_${escapeXml(img.id)}.png" descr="${escapeXml(
+    tagLabel
+  )}"/>
+                  <pic:cNvPicPr>
+                    <a:picLocks noChangeAspect="1" noChangeArrowheads="1"/>
+                  </pic:cNvPicPr>
                 </pic:nvPicPr>
                 <pic:blipFill>
                   <a:blip r:embed="${relId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
                   <a:stretch><a:fillRect/></a:stretch>
                 </pic:blipFill>
-                <pic:spPr>
+                <pic:spPr bwMode="auto">
                   <a:xfrm>
                     <a:off x="0" y="0"/>
                     <a:ext cx="${cx}" cy="${cy}"/>
@@ -782,8 +821,10 @@ function collectImagesAndBuildRelMap(questions: ExamQuestion[]): {
 /**
  * Tạo nội dung body XML cho 1 bộ câu hỏi:
  * - Bắt buộc dùng Times New Roman 12pt, canh trái (left), tự động co dãn đều đẹp mắt
- * - Cho phép bật/tắt hiển thị Lời giải chi tiết độc lập
- * - Tự động nhúng hình ảnh, sơ đồ minh họa đi kèm câu hỏi
+ * - Công thức Toán/Lý xuất dưới dạng chuẩn Office Math (<m:oMath>)
+ * - Ký hiệu Hóa học xuất chỉ số trên/dưới (<w:vertAlign>) và mũi tên phản ứng chuẩn
+ * - Bảng dữ liệu / bảng ghép đôi xuất dưới dạng Word Table (<w:tbl>) giữ nguyên ô gộp & căn lề
+ * - Hình ảnh / sơ đồ / đồ thị xuất dạng In Line with Text (<wp:inline>) căn giữa trên dòng riêng biệt
  */
 function buildQuestionsBodyXml(
   questions: ExamQuestion[],
@@ -797,6 +838,27 @@ function buildQuestionsBodyXml(
   const part3 = questions.filter((q) => q.part === 'PART_3');
 
   const blocks: string[] = [];
+
+  const appendQuestionTablesAndImages = (q: ExamQuestion) => {
+    // 1. Nhúng bảng dữ liệu / bảng ghép đôi Cột A - Cột B thuộc phần dẫn câu hỏi (nếu có)
+    if (q.stemTables && q.stemTables.length > 0) {
+      for (const tbl of q.stemTables) {
+        const tblXml = buildStructuredStemTableXml(tbl);
+        if (tblXml) {
+          blocks.push(tblXml);
+        }
+      }
+    }
+    // 2. Nhúng sơ đồ, phả hệ, đồ thị hàm số/dao động dạng In Line with Text căn giữa ngay dưới phần dẫn câu hỏi
+    if (q.images && q.images.length > 0 && imageRelMap) {
+      for (const img of q.images) {
+        const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
+        if (rId) {
+          blocks.push(buildQuestionImageDrawingXml(rId, img, q.displayIndex));
+        }
+      }
+    }
+  };
 
   if (part1.length > 0) {
     blocks.push(
@@ -814,15 +876,8 @@ function buildQuestionsBodyXml(
           fontSizeHalfPt: 24,
         })
       );
-      // Nhúng ảnh / sơ đồ câu hỏi nếu có
-      if (q.images && q.images.length > 0 && imageRelMap) {
-        for (const img of q.images) {
-          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
-          if (rId) {
-            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
-          }
-        }
-      }
+      appendQuestionTablesAndImages(q);
+
       if (q.options && q.options.length > 0) {
         const layout =
           config.layoutOverride === 'AUTO'
@@ -867,15 +922,8 @@ function buildQuestionsBodyXml(
           fontSizeHalfPt: 24,
         })
       );
-      // Nhúng ảnh / sơ đồ câu hỏi nếu có
-      if (q.images && q.images.length > 0 && imageRelMap) {
-        for (const img of q.images) {
-          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
-          if (rId) {
-            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
-          }
-        }
-      }
+      appendQuestionTablesAndImages(q);
+
       for (const sub of q.subItems || []) {
         const isMarked = highlightCorrectAnswers && sub.isTrue;
         blocks.push(
@@ -920,15 +968,8 @@ function buildQuestionsBodyXml(
           fontSizeHalfPt: 24,
         })
       );
-      // Nhúng ảnh / sơ đồ câu hỏi nếu có
-      if (q.images && q.images.length > 0 && imageRelMap) {
-        for (const img of q.images) {
-          const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
-          if (rId) {
-            blocks.push(buildQuestionImageDrawingXml(rId, img.id));
-          }
-        }
-      }
+      appendQuestionTablesAndImages(q);
+
       if (highlightCorrectAnswers && q.shortAnswer) {
         blocks.push(
           buildStandardParagraphXml(`Đáp án: `, q.shortAnswer, {
@@ -1107,7 +1148,11 @@ async function packOpenXmlDocx(
 
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
-            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+            xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
   <w:body>
     ${documentBodyInnerXml}
     <w:sectPr>

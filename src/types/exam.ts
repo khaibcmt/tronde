@@ -18,11 +18,31 @@ export type BloomLevel =
 
 export interface ExamImageAttachment {
   id: string;
-  dataUrl: string; // Base64 data URL (image/png, image/jpeg, etc.)
+  dataUrl: string; // Base64 data URL (image/png, image/jpeg, image/svg+xml, etc.)
   fileName?: string;
   caption?: string;
-  widthTwips?: number;
-  heightTwips?: number;
+  tagId?: string;        // Thẻ định danh chuẩn: [HINH_ANH_CAU_X]
+  widthTwips?: number;   // Chiều rộng chuẩn OpenXML Twips (giữ nguyên aspect ratio)
+  heightTwips?: number;  // Chiều cao chuẩn OpenXML Twips (giữ nguyên aspect ratio)
+  aspectRatio?: number;  // Tỷ lệ khung hình gốc (width / height)
+  dpi?: number;          // Độ phân giải chuẩn hóa (mặc định >= 300 DPI cho đồ thị/sơ đồ)
+}
+
+export interface ExamTableCell {
+  text: string;
+  align?: 'left' | 'center' | 'right';
+  isHeader?: boolean;
+  isBold?: boolean;
+  colSpan?: number;      // w:gridSpan (ô gộp ngang)
+  rowSpan?: number;      // w:vMerge (ô gộp dọc)
+  vMergeContinue?: boolean;
+}
+
+export interface ExamStemTable {
+  id: string;
+  caption?: string;
+  isMatchingColumns?: boolean; // Bảng ghép đôi (Cột A - Cột B)
+  rows: ExamTableCell[][];
 }
 
 export interface OptionPart1 {
@@ -58,11 +78,12 @@ export interface ExamQuestion {
   stemRichHtml?: string;
   hasFormula?: boolean;
   hasImage?: boolean;
-  images?: ExamImageAttachment[]; // Danh sách hình ảnh, sơ đồ đính kèm
+  images?: ExamImageAttachment[]; // Danh sách hình ảnh, sơ đồ, đồ thị đính kèm ([HINH_ANH_CAU_X])
+  stemTables?: ExamStemTable[];   // Bảng dữ liệu hoặc bảng ghép đôi Cột A - Cột B thuộc phần dẫn câu hỏi
   rawFormulaOmmlXml?: string;     // Khối XML công thức toán gốc OMML (nếu có)
   formulaLatex?: string;          // Biểu diễn LaTeX công thức (nếu có)
 
-  // Siêu dữ liệu Sư phạm & AI (Lời giải chi tiết, Mức độ nhận thức, Yêu cầu cần đạt)
+  // Siêu dữ liệu Sư phạm & AI
   explanation?: string;
   bloomLevel?: BloomLevel;
   learningOutcome?: string;
@@ -75,7 +96,7 @@ export interface ExamQuestion {
   // Phần II: Trắc nghiệm Đúng / Sai
   subItems?: SubItemPart2[];
 
-  // Phần III: Trắc nghiệm Trả lời ngắn
+  // Phần III: Trắc nghiệm Trả lời ngắn / Điền khuyết
   shortAnswer?: string;
   shortAnswerDetectedBy?: 'KEYWORD' | 'UNDERLINE_RED' | 'MANUAL' | 'NONE';
 }

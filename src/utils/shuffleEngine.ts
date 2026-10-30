@@ -8,6 +8,7 @@ import {
   SubItemPart2,
 } from '../types/exam';
 import { computeAutoLayoutForOptions } from './docxParser';
+import { assignDeterministicImageTagsToQuestions } from './scientificExamProcessor';
 
 /**
   * Thuật toán hoán vị Fisher-Yates chuẩn xác (Mục I.2.4)
@@ -223,7 +224,11 @@ export async function generateShuffledVariants(
     variants.push({
       examCode,
       createdAt: new Date().toLocaleTimeString('vi-VN'),
-      questions: [...processedP1, ...processedP2, ...processedP3],
+      questions: assignDeterministicImageTagsToQuestions([
+        ...processedP1,
+        ...processedP2,
+        ...processedP3,
+      ]),
       qrPayload,
       qrDataUrl,
       answerKey,
