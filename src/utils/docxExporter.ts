@@ -15,6 +15,8 @@ import {
   enforceStrictFourSubItemsPart2,
   healHollowedContextGaps,
 } from './docxParser';
+import { buildCV7991MatrixAndSpecification } from './matrixSpecCv7991';
+import { generateMasterMultiQrCode } from './shuffleEngine';
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -1447,172 +1449,231 @@ export async function exportSingleVariantDocx(
 }
 
 /**
- * Tạo hàng XML cho 1 mã đề trong Bảng Khảo Thí A4:
- * - Khung bên trái: MÃ ĐỀ (Nền xanh nhạt, chữ đậm to rõ ràng)
- * - Khung bên phải: Đáp án từng câu và từng phần theo thứ tự từ trên xuống:
- *   + PHẦN I (18 câu 4 lựa chọn)
- *   + PHẦN II (4 câu Đúng / Sai)
- *   + PHẦN III (6 câu Trả lời ngắn)
- * Dùng font Times New Roman, canh trái tự động co dãn, vừa vặn trên 1 trang A4 nộp khảo thí!
+ * Xây dựng bảng ma trận đối chiếu đáp án đa mã đề chuẩn Khảo thí:
+ * - Cực kỳ tiết kiệm diện tích (vừa vặn trên 1 trang A4)
+ * - Xếp song song các mã đề (101, 102, 103, 104...) theo từng câu
+ * - Phân nhóm màu sắc và kẻ viền chuyên nghiệp, giáo viên nhìn là đối chiếu được ngay lập tức, không bị rối mắt
  */
-function buildKhaoThiVariantRowXml(variant: ShuffledVariant): string {
-  // 1. Chuỗi đáp án Phần I
-  const p1Items = variant.answerKey.part1;
-  const p1Text = p1Items.map((item) => `${item.questionNumber}.${item.answer}`).join('   ');
+function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): string {
+  if (!variants || variants.length === 0) return '';
 
-  // 2. Chuỗi đáp án Phần II
-  const p2Items = variant.answerKey.part2;
-  const p2Text = p2Items
-    .map((item) => `Câu ${item.questionNumber}: ${item.dsString} (${item.tfString})`)
-    .join('    |    ');
+  const numCols = variants.length + 1; // Cột 'Câu' + các cột Mã đề
+  const col1Pct = 900;
+  const otherColPct = Math.floor((5000 - col1Pct) / Math.max(1, variants.length));
 
-  // 3. Chuỗi đáp án Phần III
-  const p3Items = variant.answerKey.part3;
-  const p3Text = p3Items
-    .map((item) => `Câu ${item.questionNumber}: ${item.answer}`)
-    .join('    |    ');
-
-  return `<w:tr>
-    <!-- Cột bên trái: Mã đề -->
-    <w:tc>
+  // --- HEADER ROW ---
+  const headerCells = [
+    `<w:tc>
       <w:tcPr>
-        <w:tcW w:w="1200" w:type="pct"/>
-        <w:tcBorders>
-          <w:top w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
-          <w:left w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
-          <w:bottom w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
-          <w:right w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
-        </w:tcBorders>
-        <w:shd w:val="clear" w:color="auto" w:fill="E0F2FE"/>
+        <w:tcW w:w="${col1Pct}" w:type="pct"/>
+        <w:shd w:val="clear" w:color="auto" w:fill="1E3A8A"/>
+        <w:vAlign w:val="center"/>
       </w:tcPr>
       <w:p>
-        <w:pPr>
-          <w:spacing w:before="60" w:after="20"/>
-          <w:jc w:val="center"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="0369A1"/>
-            <w:sz w:val="20"/><w:szCs w:val="20"/>
-          </w:rPr>
-          <w:t>MÃ ĐỀ</w:t>
-        </w:r>
+        <w:pPr><w:jc w:val="center"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+        <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>CÂU</w:t></w:r>
       </w:p>
-      <w:p>
-        <w:pPr>
-          <w:spacing w:before="0" w:after="40"/>
-          <w:jc w:val="center"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="1E3A8A"/>
-            <w:sz w:val="32"/><w:szCs w:val="32"/>
-          </w:rPr>
-          <w:t>${escapeXml(variant.examCode)}</w:t>
-        </w:r>
-      </w:p>
-    </w:tc>
-
-    <!-- Cột bên phải: Đáp án từng phần từ trên xuống -->
-    <w:tc>
+    </w:tc>`,
+    ...variants.map((v) => `<w:tc>
       <w:tcPr>
-        <w:tcW w:w="3800" w:type="pct"/>
-        <w:tcBorders>
-          <w:top w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
-          <w:left w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
-          <w:bottom w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
-          <w:right w:val="single" w:sz="8" w:space="0" w:color="94A3B8"/>
-        </w:tcBorders>
-        <w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+        <w:tcW w:w="${otherColPct}" w:type="pct"/>
+        <w:shd w:val="clear" w:color="auto" w:fill="0284C7"/>
+        <w:vAlign w:val="center"/>
       </w:tcPr>
-      <!-- PHẦN I -->
       <w:p>
-        <w:pPr>
-          <w:spacing w:before="60" w:after="30" w:line="240" w:lineRule="auto"/>
-          <w:jc w:val="left"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="1E40AF"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t>PHẦN I (18 câu 4 lựa chọn): </w:t>
-        </w:r>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="DC2626"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t xml:space="preserve">${escapeXml(p1Text)}</w:t>
-        </w:r>
+        <w:pPr><w:jc w:val="center"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+        <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>MÃ ${escapeXml(v.examCode)}</w:t></w:r>
       </w:p>
-      <!-- PHẦN II -->
-      <w:p>
-        <w:pPr>
-          <w:spacing w:before="30" w:after="30" w:line="240" w:lineRule="auto"/>
-          <w:jc w:val="left"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="065F46"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t>PHẦN II (4 câu Đúng / Sai): </w:t>
-        </w:r>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:color w:val="0F172A"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t xml:space="preserve">${escapeXml(p2Text)}</w:t>
-        </w:r>
-      </w:p>
-      <!-- PHẦN III -->
-      <w:p>
-        <w:pPr>
-          <w:spacing w:before="30" w:after="60" w:line="240" w:lineRule="auto"/>
-          <w:jc w:val="left"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="92400E"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t>PHẦN III (6 câu Trả lời ngắn): </w:t>
-        </w:r>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="DC2626"/>
-            <w:sz w:val="23"/><w:szCs w:val="23"/>
-          </w:rPr>
-          <w:t xml:space="preserve">${escapeXml(p3Text || 'Không có')}</w:t>
-        </w:r>
-      </w:p>
-    </w:tc>
-  </w:tr>`;
+    </w:tc>`),
+  ].join('\n');
+
+  const headerRowXml = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${headerCells}</w:tr>`;
+
+  // --- PHẦN I ---
+  const maxP1 = Math.max(0, ...variants.map((v) => v.answerKey.part1.length));
+  const p1RowsXml: string[] = [];
+  if (maxP1 > 0) {
+    p1RowsXml.push(`<w:tr>
+      <w:tc>
+        <w:tcPr>
+          <w:gridSpan w:val="${numCols}"/>
+          <w:shd w:val="clear" w:color="auto" w:fill="E0F2FE"/>
+        </w:tcPr>
+        <w:p>
+          <w:pPr><w:jc w:val="left"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+          <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0369A1"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>PHẦN I. CÂU TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN (0.25 điểm / câu)</w:t></w:r>
+        </w:p>
+      </w:tc>
+    </w:tr>`);
+
+    for (let q = 1; q <= maxP1; q++) {
+      const isEven = q % 2 === 0;
+      const rowFill = isEven ? 'F8FAFC' : 'FFFFFF';
+      const cells = [
+        `<w:tc>
+          <w:tcPr>
+            <w:tcW w:w="${col1Pct}" w:type="pct"/>
+            <w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="30"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0F172A"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${q}</w:t></w:r>
+          </w:p>
+        </w:tc>`,
+        ...variants.map((v) => {
+          const item = v.answerKey.part1.find((x) => x.questionNumber === q);
+          const ans = item ? item.answer : '—';
+          return `<w:tc>
+            <w:tcPr>
+              <w:tcW w:w="${otherColPct}" w:type="pct"/>
+              <w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/>
+              <w:vAlign w:val="center"/>
+            </w:tcPr>
+            <w:p>
+              <w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="30"/></w:pPr>
+              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="DC2626"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${ans}</w:t></w:r>
+            </w:p>
+          </w:tc>`;
+        }),
+      ].join('\n');
+      p1RowsXml.push(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`);
+    }
+  }
+
+  // --- PHẦN II ---
+  const maxP2 = Math.max(0, ...variants.map((v) => v.answerKey.part2.length));
+  const p2RowsXml: string[] = [];
+  if (maxP2 > 0) {
+    p2RowsXml.push(`<w:tr>
+      <w:tc>
+        <w:tcPr>
+          <w:gridSpan w:val="${numCols}"/>
+          <w:shd w:val="clear" w:color="auto" w:fill="ECFDF5"/>
+        </w:tcPr>
+        <w:p>
+          <w:pPr><w:jc w:val="left"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+          <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="065F46"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>PHẦN II. CÂU TRẮC NGHIỆM ĐÚNG SAI (Đúng 1 ý: 0.1đ; 2 ý: 0.25đ; 3 ý: 0.5đ; 4 ý: 1.0đ)</w:t></w:r>
+        </w:p>
+      </w:tc>
+    </w:tr>`);
+
+    for (let q = 1; q <= maxP2; q++) {
+      const isEven = q % 2 === 0;
+      const rowFill = isEven ? 'F0FDF4' : 'FFFFFF';
+      const cells = [
+        `<w:tc>
+          <w:tcPr>
+            <w:tcW w:w="${col1Pct}" w:type="pct"/>
+            <w:shd w:val="clear" w:color="auto" w:fill="D1FAE5"/>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="065F46"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Câu ${q}</w:t></w:r>
+          </w:p>
+        </w:tc>`,
+        ...variants.map((v) => {
+          const item = v.answerKey.part2.find((x) => x.questionNumber === q);
+          const seq = item ? `${item.dsString} (${item.tfString})` : '—';
+          return `<w:tc>
+            <w:tcPr>
+              <w:tcW w:w="${otherColPct}" w:type="pct"/>
+              <w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/>
+              <w:vAlign w:val="center"/>
+            </w:tcPr>
+            <w:p>
+              <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="047857"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${seq}</w:t></w:r>
+            </w:p>
+          </w:tc>`;
+        }),
+      ].join('\n');
+      p2RowsXml.push(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`);
+    }
+  }
+
+  // --- PHẦN III ---
+  const maxP3 = Math.max(0, ...variants.map((v) => v.answerKey.part3.length));
+  const p3RowsXml: string[] = [];
+  if (maxP3 > 0) {
+    p3RowsXml.push(`<w:tr>
+      <w:tc>
+        <w:tcPr>
+          <w:gridSpan w:val="${numCols}"/>
+          <w:shd w:val="clear" w:color="auto" w:fill="FFFBEB"/>
+        </w:tcPr>
+        <w:p>
+          <w:pPr><w:jc w:val="left"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+          <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="78350F"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>PHẦN III. CÂU TRẮC NGHIỆM TRẢ LỜI NGẮN (0.25 điểm / câu)</w:t></w:r>
+        </w:p>
+      </w:tc>
+    </w:tr>`);
+
+    for (let q = 1; q <= maxP3; q++) {
+      const isEven = q % 2 === 0;
+      const rowFill = isEven ? 'FEFCE8' : 'FFFFFF';
+      const cells = [
+        `<w:tc>
+          <w:tcPr>
+            <w:tcW w:w="${col1Pct}" w:type="pct"/>
+            <w:shd w:val="clear" w:color="auto" w:fill="FEF3C7"/>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="92400E"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Câu ${q}</w:t></w:r>
+          </w:p>
+        </w:tc>`,
+        ...variants.map((v) => {
+          const item = v.answerKey.part3.find((x) => x.questionNumber === q);
+          const ans = item ? item.answer : '—';
+          return `<w:tc>
+            <w:tcPr>
+              <w:tcW w:w="${otherColPct}" w:type="pct"/>
+              <w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/>
+              <w:vAlign w:val="center"/>
+            </w:tcPr>
+            <w:p>
+              <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="B45309"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${ans}</w:t></w:r>
+            </w:p>
+          </w:tc>`;
+        }),
+      ].join('\n');
+      p3RowsXml.push(`<w:tr><w:trPr><w:cantSplit/></w:trPr>${cells}</w:tr>`);
+    }
+  }
+
+  return `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="10" w:space="0" w:color="1E3A8A"/>
+        <w:left w:val="single" w:sz="10" w:space="0" w:color="1E3A8A"/>
+        <w:bottom w:val="single" w:sz="10" w:space="0" w:color="1E3A8A"/>
+        <w:right w:val="single" w:sz="10" w:space="0" w:color="1E3A8A"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+        <w:insideV w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:top w:w="30" w:type="dxa"/>
+        <w:left w:w="50" w:type="dxa"/>
+        <w:bottom w:w="30" w:type="dxa"/>
+        <w:right w:w="50" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+    ${headerRowXml}
+    ${p1RowsXml.join('\n')}
+    ${p2RowsXml.join('\n')}
+    ${p3RowsXml.join('\n')}
+  </w:tbl>`;
 }
 
 /**
- * Tiện ích 4: Xuất File BẢNG ĐÁP ÁN TỔNG HỢP NỘP KHẢO THÍ CHUẨN TRÊN 1 TRANG A4:
- * - Có tiêu đề Quốc ngữ giống như đề (Sở/Trường/Kỳ thi/Môn thi/Thời gian)
- * - Gom chung tất cả các mã đề vào 1 khung A4 chuẩn
- * - Khung bên trái: Các mã đề
- * - Khung bên phải: Đáp án từng câu và từng phần theo thứ tự từ trên xuống: Phần I, Phần II, Phần III
+ * Tiện ích 4: Xuất File BẢNG ĐÁP ÁN MA TRẬN ĐA MÃ ĐỀ NỘP KHẢO THÍ CHUẨN TRÊN 1 TRANG A4:
+ * - Dạng Ma trận đối chiếu (Matrix Grid) song song các mã đề, cực kỳ gọn và không bị rối mắt
+ * - Tích hợp Mã QR Tổng Hợp Đa Mã Đề (Master Multi-Exam QR Code) để GV quét 1 lần nạp đủ toàn bộ key
  * - Có sẵn khung chữ ký khảo thí & cán bộ coi thi, in nộp ngay không cần chỉnh sửa!
  */
 export async function exportMasterAnswerSheetDocx(
@@ -1626,7 +1687,7 @@ export async function exportMasterAnswerSheetDocx(
 
   const subHeadingXml = `<w:p>
     <w:pPr>
-      <w:spacing w:before="100" w:after="80"/>
+      <w:spacing w:before="80" w:after="60"/>
       <w:jc w:val="center"/>
     </w:pPr>
     <w:r>
@@ -1636,36 +1697,52 @@ export async function exportMasterAnswerSheetDocx(
         <w:color w:val="1E3A8A"/>
         <w:sz w:val="26"/><w:szCs w:val="26"/>
       </w:rPr>
-      <w:t>BẢNG TỔNG HỢP ĐÁP ÁN CHẤM THI CÁC MÃ ĐỀ</w:t>
+      <w:t>BẢNG MA TRẬN ĐỐI CHIẾU ĐÁP ÁN CHẤM THI CÁC MÃ ĐỀ</w:t>
     </w:r>
   </w:p>`;
 
-  // Các dòng trong bảng Khảo Thí (Mỗi dòng: bên trái là Mã đề, bên phải là Phần I, II, III từ trên xuống)
-  const rowsXml = variants.map((v) => buildKhaoThiVariantRowXml(v)).join('\n');
+  // 1. Tạo bảng ma trận đối chiếu đa mã đề (Cross-Referencing Matrix)
+  const matrixTableXml = buildCrossReferencingAnswerMatrixXml(variants);
 
-  const unifiedMasterFrameXml = `<w:tbl>
-    <w:tblPr>
-      <w:tblW w:w="5000" w:type="pct"/>
-      <w:tblLayout w:type="autofit"/>
-      <w:tblBorders>
-        <w:top w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
-        <w:left w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
-        <w:bottom w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
-        <w:right w:val="single" w:sz="12" w:space="0" w:color="0284C7"/>
-        <w:insideH w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
-        <w:insideV w:val="single" w:sz="8" w:space="0" w:color="0284C7"/>
-      </w:tblBorders>
-      <w:tblCellMar>
-        <w:top w:w="80" w:type="dxa"/>
-        <w:left w:w="100" w:type="dxa"/>
-        <w:bottom w:w="80" w:type="dxa"/>
-        <w:right w:w="100" w:type="dxa"/>
-      </w:tblCellMar>
-    </w:tblPr>
-    ${rowsXml}
-  </w:tbl>`;
+  // 2. Tạo Mã QR Tổng Hợp Tất Cả Mã Đề (Master Multi-Exam QR Code)
+  const { qrDataUrl: masterQrDataUrl } = await generateMasterMultiQrCode(variants, config);
 
-  // Bảng chữ ký Khảo thí & Cán bộ chấm thi
+  // 3. Khung hướng dẫn QR Tổng Hợp và nhúng QR
+  const qrSectionXml = masterQrDataUrl
+    ? `<w:p>
+        <w:pPr>
+          <w:spacing w:before="100" w:after="40"/>
+          <w:jc w:val="center"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+            <w:b/>
+            <w:color w:val="0F172A"/>
+            <w:sz w:val="22"/><w:szCs w:val="22"/>
+          </w:rPr>
+          <w:t>MÃ QR TỔNG HỢP TOÀN BỘ ĐÁP ÁN (${variants.length} MÃ ĐỀ — QUÉT 1 LẦN NẠP ĐỦ KEY)</w:t>
+        </w:r>
+      </w:p>
+      ${buildEmbeddedQrDrawingXml('rIdQr1', 'MASTER_MULTI_CODES')}
+      <w:p>
+        <w:pPr>
+          <w:spacing w:before="20" w:after="80"/>
+          <w:jc w:val="center"/>
+        </w:pPr>
+        <w:r>
+          <w:rPr>
+            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+            <w:i/>
+            <w:color w:val="475569"/>
+            <w:sz w:val="20"/><w:szCs w:val="20"/>
+          </w:rPr>
+          <w:t>(Cán bộ chấm thi dùng ứng dụng quét mã QR để nhập tự động đáp án của tất cả các mã đề vào hệ thống)</w:t>
+        </w:r>
+      </w:p>`
+    : '';
+
+  // 4. Bảng chữ ký Khảo thí & Cán bộ chấm thi
   const signatureTableXml = `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
@@ -1678,9 +1755,9 @@ export async function exportMasterAnswerSheetDocx(
         <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
       </w:tblBorders>
       <w:tblCellMar>
-        <w:top w:w="160" w:type="dxa"/>
+        <w:top w:w="120" w:type="dxa"/>
         <w:left w:w="60" w:type="dxa"/>
-        <w:bottom w:w="100" w:type="dxa"/>
+        <w:bottom w:w="80" w:type="dxa"/>
         <w:right w:w="60" w:type="dxa"/>
       </w:tblCellMar>
     </w:tblPr>
@@ -1740,32 +1817,235 @@ export async function exportMasterAnswerSheetDocx(
     </w:tr>
   </w:tbl>`;
 
-  const fullInnerXml = `${headerXml}\n${subHeadingXml}\n${unifiedMasterFrameXml}\n${signatureTableXml}`;
+  const fullInnerXml = `${headerXml}\n${subHeadingXml}\n${matrixTableXml}\n${qrSectionXml}\n${signatureTableXml}`;
 
   return packOpenXmlDocx(
     fullInnerXml,
     config,
-    `Bảng đáp án khảo thí (${variants.length} mã đề)`
+    `Bảng đáp án ma trận (${variants.length} mã đề)`,
+    masterQrDataUrl
   );
 }
 
 /**
- * Tiện ích 5: Đóng gói toàn bộ bộ đề (.docx) + Đề gốc có lời giải + Bảng đáp án khảo thí + QR (.png) thành 1 file .ZIP:
- * - 00_De_Goc_Co_Loi_Giai_Chi_Tiet_2025.docx (Cho giáo viên)
- * - 00_De_Goc_Chuan_Khong_Loi_Giai_2025.docx (Cho học sinh)
- * - 01_Bang_Dap_An_Chung_Khao_Thi_2025.docx (1 trang A4 chuẩn nộp khảo thí)
- * - Thư mục Bo_De_Thi_Hoc_Sinh_Docx/: Tất cả các mã đề hoán vị BẮT BUỘC KHÔNG CÓ LỜI GIẢI / ĐÁP ÁN
- * - Thư mục Ma_QR_Cham_Thi_PNG/: Mã QR từng mã đề
- * - Bang_Dap_An_Tong_Hop_2025.csv
+ * Tiện ích 5: Xuất tệp Word (.docx) KHUNG MA TRẬN & BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ THEO CÔNG VĂN 7991/BGDĐT-GDTrH:
+ * - Phụ lục 1: Khung ma trận kiểm tra định kỳ phân theo 3 phần thi & 3 cấp độ nhận thức (NB: 40%, TH: 30%, VD: 30%)
+ * - Phụ lục 2: Bản đặc tả chuẩn GDPT 2018 với Yêu cầu cần đạt chi tiết
+ * - Khung chữ ký Hiệu trưởng duyệt / Tổ trưởng chuyên môn / Giáo viên ra đề
  */
+export async function exportMatrixAndSpecificationDocx(
+  questions: ExamQuestion[],
+  config: ShuffleConfig
+): Promise<Blob> {
+  const { matrixRows, specRows, summary } = buildCV7991MatrixAndSpecification(questions);
+
+  const headerXml = buildExamNationalHeaderTableXml(
+    config,
+    'MA TRẬN & BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ (CV 7991/BGDĐT-GDTrH)'
+  );
+
+  const docTitleXml = `<w:p>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="40"/></w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+        <w:b/>
+        <w:color w:val="1E3A8A"/>
+        <w:sz w:val="26"/><w:szCs w:val="26"/>
+      </w:rPr>
+      <w:t>KHUNG MA TRẬN VÀ BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ</w:t>
+    </w:r>
+  </w:p>
+  <w:p>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="100"/></w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+        <w:i/>
+        <w:color w:val="334155"/>
+        <w:sz w:val="22"/><w:szCs w:val="22"/>
+      </w:rPr>
+      <w:t>Môn: ${escapeXml(config.subjectName)} — ${escapeXml(config.gradeLevel || 'Lớp 12')} — Thời gian làm bài: ${config.durationMinutes} phút</w:t>
+    </w:r>
+    <w:r><w:br/></w:r>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+        <w:i/>
+        <w:color w:val="64748B"/>
+        <w:sz w:val="20"/><w:szCs w:val="20"/>
+      </w:rPr>
+      <w:t>(Xây dựng theo chuẩn Công văn số 7991/BGDĐT-GDTrH ngày 20/12/2024 của Bộ GD&ĐT)</w:t>
+    </w:r>
+  </w:p>`;
+
+  // 1. PHỤ LỤC 1: KHUNG MA TRẬN ĐỀ KIỂM TRA
+  const sec1Heading = `<w:p>
+    <w:pPr><w:jc w:val="left"/><w:spacing w:before="120" w:after="60"/></w:pPr>
+    <w:r>
+      <w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0369A1"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>
+      <w:t>I. KHUNG MA TRẬN ĐỀ KIỂM TRA ĐỊNH KỲ (PHỤ LỤC 1 — CV 7991)</w:t>
+    </w:r>
+  </w:p>`;
+
+  // Bảng Khung Ma trận
+  const matrixHeaderRow = `<w:tr>
+    <w:trPr><w:tblHeader/></w:trPr>
+    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>TT</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="1200" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Chủ đề / Đơn vị kiến thức</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Phần I (Nhiều LC)\nNB - TH - VD</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Phần II (Đúng/Sai)\nNB - TH - VD</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Phần III (Trả lời ngắn)\nNB - TH - VD</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="400" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Tổng câu</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="400" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Điểm số</w:t></w:r></w:p></w:tc>
+  </w:tr>`;
+
+  const matrixBodyRows = matrixRows
+    .map(
+      (r, idx) => `<w:tr>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${r.tt}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${escapeXml(r.unit)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${r.p1NhanBiet} - ${r.p1ThongHieu} - ${r.p1VanDung}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${r.p2NhanBiet} - ${r.p2ThongHieu} - ${r.p2VanDung}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${r.p3NhanBiet} - ${r.p3ThongHieu} - ${r.p3VanDung}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${r.totalQuestionsOrCommands}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="DC2626"/><w:sz w:val="20"/></w:rPr><w:t>${r.totalScore} đ</w:t></w:r></w:p></w:tc>
+      </w:tr>`
+    )
+    .join('\n');
+
+  const matrixTotalRow = `<w:tr>
+    <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>TỔNG CỘNG TOÀN ĐỀ</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${summary.totalP1} câu (4.5đ)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${summary.totalP2Questions} câu (${summary.totalP2Commands} ý - 4.0đ)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${summary.totalP3} câu (1.5đ)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${questions.length}</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="DC2626"/><w:sz w:val="22"/></w:rPr><w:t>10.0 đ</w:t></w:r></w:p></w:tc>
+  </w:tr>`;
+
+  const matrixTableXml = `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:left w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:bottom w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:right w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+        <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+      </w:tblBorders>
+      <w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>
+    </w:tblPr>
+    ${matrixHeaderRow}
+    ${matrixBodyRows}
+    ${matrixTotalRow}
+  </w:tbl>`;
+
+  // 2. PHỤ LỤC 2: BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ
+  const sec2Heading = `<w:p>
+    <w:pPr><w:jc w:val="left"/><w:spacing w:before="160" w:after="60"/></w:pPr>
+    <w:r>
+      <w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0369A1"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>
+      <w:t>II. BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ (PHỤ LỤC 2 — CV 7991)</w:t>
+    </w:r>
+  </w:p>`;
+
+  const specHeaderRow = `<w:tr>
+    <w:trPr><w:tblHeader/></w:trPr>
+    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>TT</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="1100" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Đơn vị kiến thức / Kĩ năng</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="600" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Mức độ</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="2100" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>Yêu cầu cần đạt (chuẩn GDPT 2018)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>P.I</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>P.II</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/></w:rPr><w:t>P.III</w:t></w:r></w:p></w:tc>
+  </w:tr>`;
+
+  const specBodyRows = specRows
+    .map(
+      (s, idx) => `<w:tr>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${s.tt}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="20"/></w:rPr><w:t>${escapeXml(s.unit)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="${s.cognitiveLevel === 'Nhận biết' ? '0284C7' : s.cognitiveLevel === 'Thông hiểu' ? '059669' : 'D97706'}"/><w:sz w:val="20"/></w:rPr><w:t>${s.cognitiveLevel}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${escapeXml(s.learningOutcomes.join(' '))}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${s.p1Count || '—'}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${s.p2CommandCount || '—'}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${s.p3Count || '—'}</w:t></w:r></w:p></w:tc>
+      </w:tr>`
+    )
+    .join('\n');
+
+  const specTableXml = `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:left w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:bottom w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:right w:val="single" w:sz="6" w:space="0" w:color="475569"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+        <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
+      </w:tblBorders>
+      <w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>
+    </w:tblPr>
+    ${specHeaderRow}
+    ${specBodyRows}
+  </w:tbl>`;
+
+  // 3. Khung chữ ký phê duyệt 3 bên: BGH duyệt / Tổ trưởng chuyên môn / Giáo viên ra đề
+  const signXml = `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+        <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+      </w:tblBorders>
+      <w:tblCellMar><w:top w:w="120" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/></w:tblCellMar>
+    </w:tblPr>
+    <w:tr>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="1700" w:type="pct"/></w:tcPr>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr><w:t>HIỆU TRƯỞNG / BGH DUYỆT</w:t></w:r></w:p>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/><w:color w:val="64748B"/><w:sz w:val="20"/></w:rPr><w:t>(Ký, đóng dấu)</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="1650" w:type="pct"/></w:tcPr>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr><w:t>TỔ TRƯỞNG CHUYÊN MÔN</w:t></w:r></w:p>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/><w:color w:val="64748B"/><w:sz w:val="20"/></w:rPr><w:t>(Ký và ghi rõ họ tên)</w:t></w:r></w:p>
+      </w:tc>
+      <w:tc>
+        <w:tcPr><w:tcW w:w="1650" w:type="pct"/></w:tcPr>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="22"/></w:rPr><w:t>GIÁO VIÊN RA ĐỀ</w:t></w:r></w:p>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/><w:color w:val="64748B"/><w:sz w:val="20"/></w:rPr><w:t>(Ký và ghi rõ họ tên)</w:t></w:r></w:p>
+      </w:tc>
+    </w:tr>
+  </w:tbl>`;
+
+  const fullInnerXml = `${headerXml}\n${docTitleXml}\n${sec1Heading}\n${matrixTableXml}\n${sec2Heading}\n${specTableXml}\n${signXml}`;
+
+  return packOpenXmlDocx(
+    fullInnerXml,
+    config,
+    'Ma trận & Bản đặc tả CV 7991'
+  );
+}
+
 /**
- * Định dạng ngày tháng chuẩn mm-dd-yy theo yêu cầu đặt tên tệp xuất ra
+ * Định dạng ngày tháng chuẩn dd-mm-yy theo yêu cầu đặt tên tệp xuất ra đồng nhất (dd/mm/yy)
  */
-export function getFormattedDateMmDdYy(date: Date = new Date()): string {
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
+export function getFormattedDateDdMmYy(date: Date = new Date()): string {
   const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
   const yy = String(date.getFullYear()).slice(-2);
-  return `${mm}-${dd}-${yy}`;
+  return `${dd}-${mm}-${yy}`;
+}
+
+export function getFormattedDateMmDdYy(date: Date = new Date()): string {
+  return getFormattedDateDdMmYy(date);
 }
 
 function cleanFileSegment(raw: string): string {
@@ -1776,21 +2056,22 @@ function cleanFileSegment(raw: string): string {
 }
 
 /**
- * Tạo chuỗi tên tệp chuẩn: tên môn-lớp-kỳ kiểm tra-mm-dd-yy
- * Ví dụ: SINH HỌC-Lớp 12-KỲ THI TỐT NGHIỆP THPT NĂM 2025-10-27-26.docx
+ * Tạo chuỗi tên tệp chuẩn: Môn:... Lớp:... Kỳ kiểm tra:... dd/mm/yy (dùng dấu - an toàn cho Windows/Mac/Linux)
+ * Ví dụ: Môn Toán học & KHTN - Lớp 12 - Kỳ kiểm tra Cuối học kì 1 - 30-10-26 - Mã đề 101.docx
  */
 export function buildStandardExportFileName(
   config: ShuffleConfig,
   extension: 'docx' | 'zip' | 'csv' | 'png' | 'txt',
   suffix?: string
 ): string {
-  const subjectPart = cleanFileSegment(config.subjectName || 'SINH HỌC');
+  const subjectPart = cleanFileSegment(config.subjectName || 'Toán học & KHTN');
   const rawGrade = cleanFileSegment(config.gradeLevel || 'Lớp 12');
   const gradePart = /^lớp\s+/i.test(rawGrade) ? rawGrade : `Lớp ${rawGrade}`;
   const examPart = cleanFileSegment(config.examTitle || 'Kỳ kiểm tra');
-  const datePart = getFormattedDateMmDdYy();
-  const baseName = `${subjectPart}-${gradePart}-${examPart}-${datePart}`;
-  const extra = suffix ? `-${cleanFileSegment(suffix)}` : '';
+  const datePart = getFormattedDateDdMmYy();
+
+  const baseName = `Môn ${subjectPart} - ${gradePart} - Kỳ kiểm tra ${examPart} - ${datePart}`;
+  const extra = suffix ? ` - ${cleanFileSegment(suffix)}` : '';
   return `${baseName}${extra}.${extension}`;
 }
 
@@ -1808,14 +2089,25 @@ export async function exportAllVariantsZipBundle(
     masterCleanBlob
   );
 
-  // 2. Lưu file Bảng đáp án tổng hợp nộp khảo thí (1 trang A4)
+  // 2. Lưu file Bảng đáp án ma trận khảo thí (A4)
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
   bundleZip.file(
-    buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí'),
+    buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí ma trận'),
     masterAnswerDocxBlob
   );
 
-  // 3. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
+  // 3. Lưu file Ma Trận & Bản Đặc Tả theo chuẩn Công văn 7991/BGDĐT-GDTrH
+  try {
+    const matrixDocxBlob = await exportMatrixAndSpecificationDocx(masterQuestions, config);
+    bundleZip.file(
+      buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991'),
+      matrixDocxBlob
+    );
+  } catch (err) {
+    console.warn('Không thể xuất kèm Ma trận CV 7991 vào zip:', err);
+  }
+
+  // 4. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
   const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
   const qrFolder = bundleZip.folder('Ma_QR_Cham_Thi_PNG');
 
@@ -1835,7 +2127,21 @@ export async function exportAllVariantsZipBundle(
     }
   }
 
-  // 4. Tạo file CSV tổng hợp key chấm thi
+  // 5. Lưu ảnh Mã QR Tổng Hợp Tất Cả Mã Đề (Master Multi-Exam QR Code)
+  try {
+    const { qrDataUrl: masterQrDataUrl } = await generateMasterMultiQrCode(variants, config);
+    if (masterQrDataUrl) {
+      const masterQrBytes = dataUrlToUint8Array(masterQrDataUrl);
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp Tất Cả Mã Đề'),
+        masterQrBytes
+      );
+    }
+  } catch (err) {
+    console.warn('Không thể lưu ảnh QR tổng hợp vào zip:', err);
+  }
+
+  // 6. Tạo file CSV tổng hợp key chấm thi
   const csvLines: string[] = [
     'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload',
   ];

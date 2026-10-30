@@ -237,3 +237,60 @@ export async function generateShuffledVariants(
 
   return variants;
 }
+
+/**
+ * Sinh Mã QR Tổng Hợp Đa Mã Đề (Master Multi-Exam QR Code) tích hợp toàn bộ các mã đề
+ * Giúp Giáo viên quét đúng 1 lần là nhận diện và nạp toàn bộ key chấm thi của tất cả các mã đề!
+ */
+export async function generateMasterMultiQrCode(
+  variants: ShuffledVariant[],
+  config: ShuffleConfig
+): Promise<{ qrDataUrl: string; qrPayload: string }> {
+  if (!variants || variants.length === 0) {
+    return { qrDataUrl: '', qrPayload: '' };
+  }
+
+  // Xây dựng chuỗi Payload đa mã đề chuẩn nén gọn
+  const codeList = variants.map((v) => v.examCode).join(',');
+  const variantBlocks = variants.map((v) => {
+    const p1 = v.answerKey.part1
+      .map((item) => `${item.questionNumber}${item.answer}`)
+      .join('');
+    const p2 = v.answerKey.part2
+      .map((item) => `${item.questionNumber}-${item.dsString}`)
+      .join(';');
+    const p3 = v.answerKey.part3
+      .map((item) => `${item.questionNumber}:${item.answer.replace(',', '.')}`)
+      .join(';');
+    return `[${v.examCode}]P1:${p1}|P2:${p2}|P3:${p3}`;
+  });
+
+  const qrPayload = `QM2025_MULTI|${config.schoolName}|${config.subjectName}|CODES:${codeList}\n` +
+    variantBlocks.join('\n');
+
+  try {
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, {
+      errorCorrectionLevel: 'L', // Dùng L để dung lượng chứa tối đa cho nhiều mã đề
+      margin: 2,
+      width: 400,
+      color: {
+        dark: '#0B132B',
+        light: '#FFFFFF',
+      },
+    });
+    return { qrDataUrl, qrPayload };
+  } catch (err) {
+    console.warn('Không thể tạo QR Multi dạng lớn, thu gọn payload:', err);
+    // Thu gọn payload nếu quá dài
+    const shortPayload = `QM2025_MULTI|${codeList}|` + variants.map((v) => {
+      const p1 = v.answerKey.part1.map((item) => `${item.questionNumber}${item.answer}`).join('');
+      return `${v.examCode}:${p1}`;
+    }).join('|');
+    const qrDataUrl = await QRCode.toDataURL(shortPayload, {
+      errorCorrectionLevel: 'L',
+      margin: 2,
+      width: 360,
+    });
+    return { qrDataUrl, qrPayload: shortPayload };
+  }
+}

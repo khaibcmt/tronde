@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -71,18 +71,20 @@ import {
 } from './utils/docxParser';
 import { parsePdfExamFile } from './utils/pdfParser';
 import { enhanceAndCropExamImage } from './utils/scientificExamProcessor';
-import { generateShuffledVariants } from './utils/shuffleEngine';
+import { generateShuffledVariants, generateMasterMultiQrCode } from './utils/shuffleEngine';
 import {
   buildStandardExportFileName,
   exportAllVariantsZipBundle,
   exportCleanedMasterDocx,
   exportFourAiClonesZipBundle,
   exportMasterAnswerSheetDocx,
+  exportMatrixAndSpecificationDocx,
   exportQrCodesZip,
   exportSingleVariantDocx,
   formatPedagogicalSubject,
   triggerBrowserDownload,
 } from './utils/docxExporter';
+import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
 import {
   AiClonedExamVariant,
   AiConnectionStatus,
@@ -114,8 +116,13 @@ export default function App() {
   >('LIVE_EDITOR');
   const [filterPart, setFilterPart] = useState<'ALL' | PartType>('ALL');
   const [answerSheetViewMode, setAnswerSheetViewMode] = useState<
-    'KHAO_THI_A4' | 'THREE_COLUMN_CARDS'
-  >('KHAO_THI_A4');
+    'MA_TRAN_DOI_CHIEU' | 'KHAO_THI_A4' | 'THREE_COLUMN_CARDS'
+  >('MA_TRAN_DOI_CHIEU');
+  const [masterMultiQr, setMasterMultiQr] = useState<{
+    qrDataUrl: string;
+    qrPayload: string;
+  } | null>(null);
+  const [activeQrViewCode, setActiveQrViewCode] = useState<'ALL' | string>('ALL');
   const [statusBanner, setStatusBanner] = useState<{
     type: 'SUCCESS' | 'INFO' | 'ERROR';
     text: string;
@@ -227,6 +234,12 @@ export default function App() {
     VAN_DUNG: questions.filter((q) => q.bloomLevel === 'VAN_DUNG').length,
     VAN_DUNG_CAO: questions.filter((q) => q.bloomLevel === 'VAN_DUNG_CAO').length,
   };
+
+  // Ma trận & Bản đặc tả theo đúng Công văn số 7991/BGDĐT-GDTrH
+  const matrixCv7991Data = useMemo(
+    () => buildCV7991MatrixAndSpecification(questions),
+    [questions]
+  );
 
   const currentModelInfo =
     GEMINI_MODEL_OPTIONS.find((m) => m.id === selectedModelTier) ||
@@ -960,13 +973,19 @@ export default function App() {
     try {
       const variants = await generateShuffledVariants(questions, config);
       setShuffledVariants(variants);
+      try {
+        const multiQr = await generateMasterMultiQrCode(variants, config);
+        setMasterMultiQr(multiQr);
+      } catch (err) {
+        console.warn('Lỗi tạo Master Multi QR:', err);
+      }
       if (variants.length > 0) {
         setSelectedVariantCode(variants[0].examCode);
       }
       setActiveRightTab('SHUFFLED_PREVIEW');
       setStatusBanner({
         type: 'SUCCESS',
-        text: `Đã trộn thành công ${variants.length} mã đề (Times New Roman 12pt, có đánh số trang & mã đề) kèm Bảng Đáp Án Chung tất cả mã đề!`,
+        text: `Đã trộn thành công ${variants.length} mã đề (Times New Roman 12pt, có đánh số trang & mã đề) kèm Bảng Ma Trận Đáp Án & Mã QR Tổng Hợp!`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi trộn đề';
@@ -1004,7 +1023,10 @@ export default function App() {
     setIsProcessing(true);
     try {
       const blob = await exportCleanedMasterDocx(questions, config, false);
-      triggerBrowserDownload(blob, `De_Goc_Khong_Loi_Giai_Chuan_2025_${Date.now()}.docx`);
+      triggerBrowserDownload(
+        blob,
+        buildStandardExportFileName(config, 'docx', 'Đề gốc chuẩn')
+      );
       await executePostDownloadZeroTracePurge('Đề Gốc Chuẩn Không Lời Giải (.docx)');
     } finally {
       setIsProcessing(false);
@@ -1018,11 +1040,25 @@ export default function App() {
       const blob = await exportMasterAnswerSheetDocx(shuffledVariants, config);
       triggerBrowserDownload(
         blob,
-        `Bang_Dap_An_Chung_${shuffledVariants.length}_Ma_De_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`
+        buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí ma trận')
       );
       await executePostDownloadZeroTracePurge(
-        `Bảng Đáp Án Chung ${shuffledVariants.length} Mã Đề (.docx)`
+        `Bảng Đáp Án Ma Trận ${shuffledVariants.length} Mã Đề (.docx)`
       );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDownloadMatrixSpecDocx = async () => {
+    setIsProcessing(true);
+    try {
+      const blob = await exportMatrixAndSpecificationDocx(questions, config);
+      triggerBrowserDownload(
+        blob,
+        buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991')
+      );
+      await executePostDownloadZeroTracePurge('Khung Ma Trận & Bản Đặc Tả CV 7991 (.docx)');
     } finally {
       setIsProcessing(false);
     }
@@ -1039,7 +1075,7 @@ export default function App() {
       );
       triggerBrowserDownload(
         blob,
-        `Bo_${shuffledVariants.length}_De_Thi_Va_Dap_An_THPT_2025.zip`
+        buildStandardExportFileName(config, 'zip')
       );
       await executePostDownloadZeroTracePurge(
         `Trọn Bộ ${shuffledVariants.length} Đề Thi & Đáp Án (.zip)`
@@ -1056,7 +1092,7 @@ export default function App() {
       const blob = await exportQrCodesZip(shuffledVariants, config);
       triggerBrowserDownload(
         blob,
-        `Ma_QR_Cham_Thi_${config.qrFormat}_${shuffledVariants.length}_De.zip`
+        buildStandardExportFileName(config, 'zip', 'Bộ mã QR chấm thi')
       );
       await executePostDownloadZeroTracePurge(
         `Bộ Mã QR Chấm Thi (${shuffledVariants.length} mã đề)`
@@ -1070,7 +1106,10 @@ export default function App() {
     setIsProcessing(true);
     try {
       const blob = await exportSingleVariantDocx(variant, config);
-      triggerBrowserDownload(blob, `De_Thi_Ma_${variant.examCode}_2025.docx`);
+      triggerBrowserDownload(
+        blob,
+        buildStandardExportFileName(config, 'docx', `Mã đề ${variant.examCode}`)
+      );
       await executePostDownloadZeroTracePurge(`Mã Đề ${variant.examCode} (.docx)`);
     } finally {
       setIsProcessing(false);
@@ -1203,6 +1242,237 @@ export default function App() {
     </div>
   );
 
+  // Helper render Bảng Ma Trận Đối Chiếu Đa Mã Đề gọn nhẹ, khoa học, không tốn diện tích
+  const renderCrossReferencingAnswerMatrix = (variants: ShuffledVariant[]) => {
+    if (variants.length === 0) return null;
+    const part1Max = Math.max(0, ...variants.map((v) => v.answerKey.part1.length));
+    const part2Max = Math.max(0, ...variants.map((v) => v.answerKey.part2.length));
+    const part3Max = Math.max(0, ...variants.map((v) => v.answerKey.part3.length));
+
+    return (
+      <div className="space-y-6">
+        {/* PHẦN I: MA TRẬN ĐỐI CHIẾU 4 LỰA CHỌN */}
+        {part1Max > 0 && (
+          <div className="overflow-x-auto rounded-2xl border-2 border-sky-300 bg-white shadow-xs">
+            <div className="bg-sky-900 text-white px-4 py-2.5 flex items-center justify-between">
+              <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wide">
+                PHẦN I: CÂU TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN ({part1Max} CÂU)
+              </span>
+              <span className="text-[11px] font-mono text-sky-200">
+                Mỗi câu đúng: 0.25 điểm · Đối chiếu nhanh tất cả {variants.length} mã đề
+              </span>
+            </div>
+            <table className="w-full text-center border-collapse text-xs">
+              <thead>
+                <tr className="bg-sky-100 text-slate-800 font-extrabold border-b-2 border-sky-300">
+                  <th className="py-2.5 px-3 border-r border-sky-200 w-24">Câu hỏi</th>
+                  {variants.map((v) => (
+                    <th
+                      key={`th-p1-${v.examCode}`}
+                      className="py-2.5 px-3 border-r border-sky-200 font-mono text-sm font-black text-sky-950"
+                    >
+                      Mã {v.examCode}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-sky-100 font-mono">
+                {Array.from({ length: part1Max }, (_, i) => i + 1).map((qNum) => (
+                  <tr key={`matrix-p1-q${qNum}`} className="hover:bg-sky-50/70">
+                    <td className="py-2 px-3 border-r border-sky-200 font-bold text-slate-900 bg-sky-50/60 font-sans">
+                      Câu {qNum}
+                    </td>
+                    {variants.map((v) => {
+                      const item = v.answerKey.part1.find((p) => p.questionNumber === qNum);
+                      const ans = item ? item.answer : '—';
+                      const bgBadge =
+                        ans === 'A'
+                          ? 'bg-blue-100 text-blue-900 border-blue-400'
+                          : ans === 'B'
+                          ? 'bg-emerald-100 text-emerald-900 border-emerald-400'
+                          : ans === 'C'
+                          ? 'bg-amber-100 text-amber-900 border-amber-400'
+                          : ans === 'D'
+                          ? 'bg-purple-100 text-purple-900 border-purple-400'
+                          : 'bg-slate-100 text-slate-600 border-slate-300';
+                      return (
+                        <td
+                          key={`cell-p1-${v.examCode}-${qNum}`}
+                          className="py-2 px-3 border-r border-sky-200"
+                        >
+                          <span
+                            className={`inline-block px-3 py-0.5 rounded-lg font-black text-sm border shadow-2xs ${bgBadge}`}
+                          >
+                            {ans}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* PHẦN II: MA TRẬN ĐỐI CHIẾU ĐÚNG / SAI */}
+        {part2Max > 0 && (
+          <div className="overflow-x-auto rounded-2xl border-2 border-emerald-300 bg-white shadow-xs">
+            <div className="bg-emerald-900 text-white px-4 py-2.5 flex items-center justify-between">
+              <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wide">
+                PHẦN II: CÂU TRẮC NGHIỆM ĐÚNG / SAI ({part2Max} CÂU · MỖI CÂU 4 Ý a, b, c, d)
+              </span>
+              <span className="text-[11px] font-mono text-emerald-200">
+                1 ý=0.1đ · 2 ý=0.25đ · 3 ý=0.5đ · 4 ý=1.0đ
+              </span>
+            </div>
+            <table className="w-full text-center border-collapse text-xs">
+              <thead>
+                <tr className="bg-emerald-100 text-slate-800 font-extrabold border-b-2 border-emerald-300">
+                  <th className="py-2.5 px-3 border-r border-emerald-200 w-32">Câu hỏi & Ý</th>
+                  {variants.map((v) => (
+                    <th
+                      key={`th-p2-${v.examCode}`}
+                      className="py-2.5 px-3 border-r border-emerald-200 font-mono text-sm font-black text-emerald-950"
+                    >
+                      Mã {v.examCode}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-emerald-100 font-mono">
+                {Array.from({ length: part2Max }, (_, i) => i + 1).map((qNum) => {
+                  const subLabels = ['a', 'b', 'c', 'd'];
+                  return (
+                    <React.Fragment key={`matrix-p2-frag-q${qNum}`}>
+                      {/* Dòng tổng hợp chuỗi Đ/S của cả câu */}
+                      <tr className="bg-emerald-50/90 font-sans border-t-2 border-emerald-300">
+                        <td className="py-2 px-3 border-r border-emerald-200 font-black text-emerald-950 text-left">
+                          Câu {qNum} (Tổng hợp)
+                        </td>
+                        {variants.map((v) => {
+                          const item = v.answerKey.part2.find((p) => p.questionNumber === qNum);
+                          return (
+                            <td
+                              key={`cell-p2-summary-${v.examCode}-${qNum}`}
+                              className="py-2 px-3 border-r border-emerald-200 font-bold text-emerald-800 font-mono"
+                            >
+                              {item ? `${item.dsString} (${item.tfString})` : '—'}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {/* 4 dòng chi tiết a, b, c, d */}
+                      {subLabels.map((subLabel, subIdx) => (
+                        <tr
+                          key={`matrix-p2-sub-${qNum}-${subLabel}`}
+                          className="hover:bg-emerald-50/50"
+                        >
+                          <td className="py-1.5 px-3 border-r border-emerald-200 text-slate-700 pl-6 text-left font-sans font-semibold">
+                            Ý {subLabel})
+                          </td>
+                          {variants.map((v) => {
+                            const item = v.answerKey.part2.find((p) => p.questionNumber === qNum);
+                            const ans = item?.answers ? item.answers[subIdx] : undefined;
+                            const badgeClass =
+                              ans === 'Đ'
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-400 font-black'
+                                : ans === 'S'
+                                ? 'bg-rose-100 text-rose-900 border-rose-400 font-black'
+                                : 'bg-slate-100 text-slate-600 border-slate-200';
+                            const text =
+                              ans === 'Đ' ? 'Đúng (Đ)' : ans === 'S' ? 'Sai (S)' : '—';
+                            return (
+                              <td
+                                key={`cell-p2-sub-${v.examCode}-${qNum}-${subLabel}`}
+                                className="py-1.5 px-3 border-r border-emerald-200"
+                              >
+                                <span
+                                  className={`inline-block px-2.5 py-0.5 rounded text-xs border ${badgeClass}`}
+                                >
+                                  {text}
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* PHẦN III: MA TRẬN ĐỐI CHIẾU TRẢ LỜI NGẮN */}
+        {part3Max > 0 && (
+          <div className="overflow-x-auto rounded-2xl border-2 border-amber-300 bg-white shadow-xs">
+            <div className="bg-amber-900 text-white px-4 py-2.5 flex items-center justify-between">
+              <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wide">
+                PHẦN III: CÂU TRẮC NGHIỆM TRẢ LỜI NGẮN ({part3Max} CÂU)
+              </span>
+              <span className="text-[11px] font-mono text-amber-200">
+                Mỗi câu đúng: 0.25 điểm · Điền số hoặc giá trị chính xác
+              </span>
+            </div>
+            <table className="w-full text-center border-collapse text-xs">
+              <thead>
+                <tr className="bg-amber-100 text-slate-800 font-extrabold border-b-2 border-amber-300">
+                  <th className="py-2.5 px-3 border-r border-amber-200 w-24">Câu hỏi</th>
+                  {variants.map((v) => (
+                    <th
+                      key={`th-p3-${v.examCode}`}
+                      className="py-2.5 px-3 border-r border-amber-200 font-mono text-sm font-black text-amber-950"
+                    >
+                      Mã {v.examCode}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-100 font-mono">
+                {Array.from({ length: part3Max }, (_, i) => i + 1).map((qNum) => (
+                  <tr key={`matrix-p3-q${qNum}`} className="hover:bg-amber-50/70">
+                    <td className="py-2 px-3 border-r border-amber-200 font-bold text-slate-900 bg-amber-50/60 font-sans">
+                      Câu {qNum}
+                    </td>
+                    {variants.map((v) => {
+                      const item = v.answerKey.part3.find((p) => p.questionNumber === qNum);
+                      return (
+                        <td
+                          key={`cell-p3-${v.examCode}-${qNum}`}
+                          className="py-2 px-3 border-r border-amber-200"
+                        >
+                          <span className="inline-block px-3 py-1 rounded-lg font-black text-sm bg-amber-100 text-amber-950 border border-amber-300 shadow-2xs">
+                            {item ? item.answer : '—'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Khung chữ ký Khảo thí */}
+        <div className="grid grid-cols-2 gap-4 p-4 border-2 border-slate-300 rounded-2xl text-center text-slate-800 bg-white shadow-xs">
+          <div>
+            <div className="font-bold text-xs uppercase">CÁN BỘ CHẤM THI 1</div>
+            <div className="text-[11px] italic text-slate-500 pt-1">(Ký và ghi rõ họ tên)</div>
+            <div className="h-12" />
+          </div>
+          <div>
+            <div className="font-bold text-xs uppercase">CÁN BỘ CHẤM THI 2 / KHẢO THÍ</div>
+            <div className="text-[11px] italic text-slate-500 pt-1">(Ký và ghi rõ họ tên)</div>
+            <div className="h-12" />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen flex flex-col text-slate-900 pb-11">
       {/* ================= KHỐI TIÊU ĐỀ & THANH ĐIỀU HƯỚNG CỐ ĐỊNH TRÊN CÙNG ================= */}
@@ -1278,7 +1548,7 @@ export default function App() {
                 }`}
               >
                 <BarChart3 className="w-4 h-4 shrink-0" />
-                <span>3. Ma Trận Nhận Thức</span>
+                <span>3. Ma Trận & Đặc Tả (CV 7991)</span>
               </button>
 
               <button
@@ -3066,137 +3336,299 @@ export default function App() {
             </div>
           )}
 
-          {/* ================= TAB 3: MA TRẬN CẤP ĐỘ NHẬN THỨC BLOOM ================= */}
+          {/* ================= TAB 3: MA TRẬN & BẢN ĐẶC TẢ ĐỀ KIỂM TRA (CÔNG VĂN 7991/BGDĐT-GDTrH) ================= */}
           {activeRightTab === 'BLOOM_MATRIX' && (
-            <div className="p-6 rounded-3xl card-3d-panel space-y-5">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-sky-200 pb-4">
-                <div>
+            <div className="p-6 rounded-3xl card-3d-panel space-y-6">
+              {/* Header Tab 3 với Nút Tải Word CV 7991 */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-sky-200 pb-5">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-sky-200 text-sky-900 border border-sky-300">
+                      Chuẩn Chương Trình GDPT 2018 · Công văn 7991/BGDĐT-GDTrH
+                    </span>
+                  </div>
                   <h3 className="text-base sm:text-lg font-black text-sky-950 uppercase">
-                    BẢNG MA TRẬN CẤP ĐỘ NHẬN THỨC ĐỀ THI (CHUẨN THPT 2025)
+                    KHUNG MA TRẬN & BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ
                   </h3>
                   <p className="text-xs text-slate-600 font-semibold">
-                    Thống kê tự động tỷ lệ Nhận biết · Thông hiểu · Vận dụng · Vận dụng cao của bộ đề hiện tại
+                    Đầy đủ Phụ lục 1 (Khung Ma Trận) & Phụ lục 2 (Bản Đặc Tả) chuẩn Sư phạm kèm bảng chữ ký Ban Giám Hiệu
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleRunShuffle}
-                  disabled={!canShuffle || isProcessing}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Shuffle className="w-4 h-4" />
-                  <span>Trộn Đề ({config.numVariants} Mã)</span>
-                </button>
+
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleDownloadMatrixSpecDocx}
+                    disabled={isProcessing}
+                    className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-2 cursor-pointer shadow-md"
+                    title="Xuất file Word (.docx) chuẩn cấu trúc Công văn 7991 gồm Phụ lục 1 và Phụ lục 2"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Tải Word Ma Trận & Bản Đặc Tả (.docx)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRunShuffle}
+                    disabled={!canShuffle || isProcessing}
+                    className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Shuffle className="w-4 h-4" />
+                    <span>Trộn Đề ({config.numVariants} Mã)</span>
+                  </button>
+                </div>
               </div>
 
-              {/* 4 Thẻ Thống Kê Bloom 3D */}
+              {/* 4 Thẻ Tổng Quan Cấp Độ Nhận Thức Chuẩn CV 7991 (40% - 30% - 30%) */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
                 <div className="p-4 rounded-2xl guide-card-3d-blue text-center space-y-1">
                   <div className="text-xs font-extrabold text-blue-900 uppercase">
-                    1. Nhận biết
+                    1. Nhận biết (40% - 4.0đ)
                   </div>
                   <div className="text-2xl font-black text-blue-700 font-mono tabular-nums">
                     {bloomStats.NHAN_BIET} câu
                   </div>
                   <div className="text-[11px] font-bold text-slate-600 font-mono">
-                    {Math.round((bloomStats.NHAN_BIET / Math.max(1, questions.length)) * 100)}% tổng đề
+                    Điểm số: {matrixCv7991Data.summary.nhanBietScore.toFixed(1)} / 10.0đ ({matrixCv7991Data.summary.nhanBietPct}%)
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl guide-card-3d-emerald text-center space-y-1">
                   <div className="text-xs font-extrabold text-emerald-900 uppercase">
-                    2. Thông hiểu
+                    2. Thông hiểu (30% - 3.0đ)
                   </div>
                   <div className="text-2xl font-black text-emerald-700 font-mono tabular-nums">
                     {bloomStats.THONG_HIEU} câu
                   </div>
                   <div className="text-[11px] font-bold text-slate-600 font-mono">
-                    {Math.round((bloomStats.THONG_HIEU / Math.max(1, questions.length)) * 100)}% tổng đề
+                    Điểm số: {matrixCv7991Data.summary.thongHieuScore.toFixed(1)} / 10.0đ ({matrixCv7991Data.summary.thongHieuPct}%)
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl guide-card-3d-amber text-center space-y-1">
                   <div className="text-xs font-extrabold text-amber-900 uppercase">
-                    3. Vận dụng
+                    3. Vận dụng (30% - 3.0đ)
                   </div>
                   <div className="text-2xl font-black text-amber-700 font-mono tabular-nums">
-                    {bloomStats.VAN_DUNG} câu
+                    {bloomStats.VAN_DUNG + bloomStats.VAN_DUNG_CAO} câu
                   </div>
                   <div className="text-[11px] font-bold text-slate-600 font-mono">
-                    {Math.round((bloomStats.VAN_DUNG / Math.max(1, questions.length)) * 100)}% tổng đề
+                    Điểm số: {matrixCv7991Data.summary.vanDungScore.toFixed(1)} / 10.0đ ({matrixCv7991Data.summary.vanDungPct}%)
                   </div>
                 </div>
 
                 <div className="p-4 rounded-2xl guide-card-3d-rose text-center space-y-1">
                   <div className="text-xs font-extrabold text-rose-900 uppercase">
-                    4. Vận dụng cao
+                    Tổng cộng toàn đề
                   </div>
                   <div className="text-2xl font-black text-rose-700 font-mono tabular-nums">
-                    {bloomStats.VAN_DUNG_CAO} câu
+                    {questions.length} câu
                   </div>
                   <div className="text-[11px] font-bold text-slate-600 font-mono">
-                    {Math.round((bloomStats.VAN_DUNG_CAO / Math.max(1, questions.length)) * 100)}% tổng đề
+                    Phần I: {part1Count}c · Phần II: {part2Count}c · Phần III: {part3Count}c
                   </div>
                 </div>
               </div>
 
-              {/* Bảng chi tiết từng câu hỏi (Đã lược bỏ Yêu cầu cần đạt & Lời giải chi tiết cho gọn nhẹ) */}
-              <div className="overflow-x-auto rounded-2xl border-2 border-sky-200 bg-white">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-sky-900 text-white font-extrabold uppercase">
-                      <th className="py-3 px-3.5 border-b border-sky-800">Phần / Câu</th>
-                      <th className="py-3 px-3.5 border-b border-sky-800">Mức độ nhận thức</th>
-                      <th className="py-3 px-3.5 border-b border-sky-800">Nội dung câu dẫn</th>
-                      <th className="py-3 px-3.5 border-b border-sky-800">Đáp án chuẩn</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-sky-100">
-                    {questions.map((q) => {
-                      const correctDisplay =
-                        q.part === 'PART_1'
-                          ? q.options?.find((o) => o.isCorrect)?.currentLabel || '—'
-                          : q.part === 'PART_2'
-                          ? (q.subItems || [])
-                              .map((s) => `${s.currentLabel}:${s.isTrue ? 'Đ' : 'S'}`)
-                              .join(' · ')
-                          : q.shortAnswer || '—';
+              {/* PHỤ LỤC 1: KHUNG MA TRẬN ĐỀ KIỂM TRA ĐỊNH KỲ (CÔNG VĂN 7991) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-6 rounded-full bg-blue-700" />
+                    <h4 className="text-sm sm:text-base font-black text-slate-900 uppercase">
+                      PHỤ LỤC 1: KHUNG MA TRẬN ĐỀ KIỂM TRA ĐỊNH KỲ (CÔNG VĂN 7991)
+                    </h4>
+                  </div>
+                  <span className="text-xs font-mono font-bold text-blue-800 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+                    Thời gian: {config.durationMinutes} phút · Thang điểm 10
+                  </span>
+                </div>
 
-                      return (
-                        <tr key={`matrix-${q.id}`} className="hover:bg-sky-50/70">
-                          <td className="py-2.5 px-3.5 font-mono font-bold text-blue-950 whitespace-nowrap">
-                            {q.part === 'PART_1'
-                              ? 'Phần I'
-                              : q.part === 'PART_2'
-                              ? 'Phần II'
-                              : 'Phần III'}{' '}
-                            · Câu {q.displayIndex}
+                <div className="overflow-x-auto rounded-2xl border-2 border-sky-300 bg-white shadow-xs">
+                  <table className="w-full text-center border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-sky-900 text-white font-extrabold uppercase">
+                        <th rowSpan={3} className="py-2.5 px-2 border border-sky-700 w-10">TT</th>
+                        <th rowSpan={3} className="py-2.5 px-3 border border-sky-700 w-36 text-left">Chủ đề</th>
+                        <th rowSpan={3} className="py-2.5 px-3 border border-sky-700 w-44 text-left">Đơn vị kiến thức</th>
+                        <th colSpan={9} className="py-2 px-2 border border-sky-700">Mức độ đánh giá (Số lượng câu)</th>
+                        <th rowSpan={3} className="py-2.5 px-2 border border-sky-700 w-16">Tổng số</th>
+                        <th rowSpan={3} className="py-2.5 px-2 border border-sky-700 w-16">Tỉ lệ %</th>
+                      </tr>
+                      <tr className="bg-sky-800 text-white font-bold text-[11px]">
+                        <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần I (Nhiều LC)</th>
+                        <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần II (Đúng/Sai)</th>
+                        <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần III (Trả lời ngắn)</th>
+                      </tr>
+                      <tr className="bg-sky-700 text-sky-100 font-bold text-[10px]">
+                        <th className="py-1 px-1 border border-sky-600">NB</th>
+                        <th className="py-1 px-1 border border-sky-600">TH</th>
+                        <th className="py-1 px-1 border border-sky-600">VD</th>
+                        <th className="py-1 px-1 border border-sky-600">NB</th>
+                        <th className="py-1 px-1 border border-sky-600">TH</th>
+                        <th className="py-1 px-1 border border-sky-600">VD</th>
+                        <th className="py-1 px-1 border border-sky-600">NB</th>
+                        <th className="py-1 px-1 border border-sky-600">TH</th>
+                        <th className="py-1 px-1 border border-sky-600">VD</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-sky-100">
+                      {matrixCv7991Data.matrixRows.map((row, idx) => (
+                        <tr key={`matrix-row-${idx}`} className="hover:bg-sky-50/60 font-medium">
+                          <td className="py-2 px-2 border border-sky-200 font-mono font-bold text-slate-800">{row.tt}</td>
+                          <td className="py-2 px-3 border border-sky-200 text-left font-bold text-slate-900">{row.topic}</td>
+                          <td className="py-2 px-3 border border-sky-200 text-left text-slate-700">{row.unit}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-blue-900">{row.p1NhanBiet || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-emerald-900">{row.p1ThongHieu || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-amber-900">{row.p1VanDung || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-blue-900">{row.p2NhanBiet || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-emerald-900">{row.p2ThongHieu || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-amber-900">{row.p2VanDung || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-blue-900">{row.p3NhanBiet || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-emerald-900">{row.p3ThongHieu || '—'}</td>
+                          <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-amber-900">{row.p3VanDung || '—'}</td>
+                          <td className="py-2 px-2 border border-sky-200 font-mono font-black text-rose-700">{row.totalQuestionsOrCommands}</td>
+                          <td className="py-2 px-2 border border-sky-200 font-mono font-bold text-sky-950">{row.ratioPct}%</td>
+                        </tr>
+                      ))}
+                      {/* Dòng Tổng cộng */}
+                      <tr className="bg-sky-100 font-black text-slate-900">
+                        <td colSpan={3} className="py-2.5 px-3 border border-sky-300 uppercase text-center">
+                          Tổng số câu hỏi & Tỉ lệ điểm
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-blue-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p1NhanBiet, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-emerald-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p1ThongHieu, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-amber-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p1VanDung, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-blue-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p2NhanBiet, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-emerald-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p2ThongHieu, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-amber-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p2VanDung, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-blue-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p3NhanBiet, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-emerald-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p3ThongHieu, 0)}
+                        </td>
+                        <td className="py-2 px-1 border border-sky-300 font-mono text-amber-900">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p3VanDung, 0)}
+                        </td>
+                        <td className="py-2 px-2 border border-sky-300 font-mono text-rose-700">
+                          {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.totalQuestionsOrCommands, 0)}
+                        </td>
+                        <td className="py-2 px-2 border border-sky-300 font-mono text-sky-950">
+                          100%
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* PHỤ LỤC 2: BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ (CÔNG VĂN 7991) */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2.5 h-6 rounded-full bg-emerald-700" />
+                    <h4 className="text-sm sm:text-base font-black text-slate-900 uppercase">
+                      PHỤ LỤC 2: BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ (CÔNG VĂN 7991)
+                    </h4>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-600">
+                    Mô tả chi tiết Yêu cầu cần đạt và Vị trí câu hỏi tương ứng trong đề
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border-2 border-emerald-300 bg-white shadow-xs">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-emerald-900 text-white font-extrabold uppercase text-center">
+                        <th className="py-2.5 px-2 border border-emerald-800 w-10">TT</th>
+                        <th className="py-2.5 px-3 border border-emerald-800 w-36 text-left">Chủ đề</th>
+                        <th className="py-2.5 px-3 border border-emerald-800 w-44 text-left">Đơn vị kiến thức</th>
+                        <th className="py-2.5 px-4 border border-emerald-800 text-left">
+                          Mức độ đánh giá / Yêu cầu cần đạt
+                        </th>
+                        <th className="py-2.5 px-2 border border-emerald-800 w-32">Số câu / lệnh</th>
+                        <th className="py-2.5 px-3 border border-emerald-800 w-28 text-center">Cấp độ</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-emerald-100">
+                      {matrixCv7991Data.specRows.map((spec, idx) => (
+                        <tr key={`spec-row-${idx}`} className="hover:bg-emerald-50/60">
+                          <td className="py-2.5 px-2 border border-emerald-200 text-center font-mono font-bold text-slate-800 align-top">
+                            {spec.tt}
                           </td>
-                          <td className="py-2.5 px-3.5 whitespace-nowrap font-bold">
-                            {q.bloomLevel === 'VAN_DUNG_CAO' && (
-                              <span className="text-rose-700">Vận dụng cao</span>
-                            )}
-                            {q.bloomLevel === 'VAN_DUNG' && (
-                              <span className="text-amber-700">Vận dụng</span>
-                            )}
-                            {q.bloomLevel === 'THONG_HIEU' && (
-                              <span className="text-emerald-700">Thông hiểu</span>
-                            )}
-                            {(!q.bloomLevel || q.bloomLevel === 'NHAN_BIET') && (
-                              <span className="text-blue-700">Nhận biết</span>
-                            )}
+                          <td className="py-2.5 px-3 border border-emerald-200 font-bold text-slate-900 align-top">
+                            {spec.topic}
                           </td>
-                          <td className="py-2.5 px-3.5 text-slate-800 font-medium line-clamp-2">
-                            {q.stemText}
+                          <td className="py-2.5 px-3 border border-emerald-200 text-slate-700 align-top font-semibold">
+                            {spec.unit}
                           </td>
-                          <td className="py-2.5 px-3.5 font-mono font-black text-rose-600 whitespace-nowrap">
-                            {correctDisplay}
+                          <td className="py-2.5 px-4 border border-emerald-200 text-slate-800 leading-relaxed align-top">
+                            <div className="font-bold text-emerald-950 mb-1">
+                              Mức độ: <span className="underline decoration-emerald-500">{spec.cognitiveLevel}</span>
+                            </div>
+                            <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-700">
+                              {spec.learningOutcomes.map((lo, lIdx) => (
+                                <li key={lIdx}>{lo}</li>
+                              ))}
+                            </ul>
+                          </td>
+                          <td className="py-2.5 px-2 border border-emerald-200 text-center align-top font-mono font-bold text-emerald-950">
+                            {spec.p1Count > 0 && <div>Phần I: {spec.p1Count} câu</div>}
+                            {spec.p2CommandCount > 0 && <div>Phần II: {spec.p2CommandCount} lệnh</div>}
+                            {spec.p3Count > 0 && <div>Phần III: {spec.p3Count} câu</div>}
+                          </td>
+                          <td className="py-2.5 px-3 border border-emerald-200 text-center align-top font-mono font-bold text-rose-700">
+                            {spec.cognitiveLevel}
                           </td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* KHUNG CHỮ KÝ PHÊ DUYỆT CHUẨN SƯ PHẠM */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-5 rounded-2xl bg-white border-2 border-slate-300 text-center shadow-xs">
+                <div className="space-y-1">
+                  <div className="font-bold text-xs uppercase text-slate-900">
+                    BAN GIÁM HIỆU DUYỆT
+                  </div>
+                  <div className="text-[11px] italic text-slate-500">
+                    (Ký, ghi rõ họ tên và đóng dấu)
+                  </div>
+                  <div className="h-16" />
+                </div>
+                <div className="space-y-1">
+                  <div className="font-bold text-xs uppercase text-slate-900">
+                    TỔ TRƯỞNG CHUYÊN MÔN
+                  </div>
+                  <div className="text-[11px] italic text-slate-500">
+                    (Ký và ghi rõ họ tên)
+                  </div>
+                  <div className="h-16" />
+                </div>
+                <div className="space-y-1">
+                  <div className="font-bold text-xs uppercase text-slate-900">
+                    GIÁO VIÊN RA ĐỀ
+                  </div>
+                  <div className="text-[11px] italic text-slate-500">
+                    (Ký và ghi rõ họ tên)
+                  </div>
+                  <div className="h-16" />
+                </div>
               </div>
             </div>
           )}
@@ -3230,6 +3662,88 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  {/* THẺ MÃ QR TỔNG HỢP TOÀN BỘ ĐÁP ÁN (QUÉT 1 LẦN NẠP ĐỦ TẤT CẢ MÃ ĐỀ) */}
+                  {masterMultiQr && (
+                    <div className="p-5 rounded-3xl guide-card-3d-purple border-2 border-purple-300 space-y-4 shadow-md">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <QrCode className="w-5 h-5 text-purple-700" />
+                            <h4 className="text-base font-black text-purple-950 uppercase">
+                              MÃ QR TỔNG HỢP TOÀN BỘ ĐÁP ÁN (QUÉT 1 LẦN NẠP ĐỦ TẤT CẢ MÃ ĐỀ)
+                            </h4>
+                            <span className="text-[10px] font-black uppercase bg-purple-700 text-white px-2 py-0.5 rounded-md">
+                              Đột Phá Tiện Ích GV
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 font-semibold">
+                            Tích hợp sẵn key chấm thi của {shuffledVariants.length} mã đề ({shuffledVariants.map((v) => v.examCode).join(', ')}). Giáo viên chỉ cần dùng điện thoại quét duy nhất 1 lần để import toàn bộ mã đề vào ứng dụng chấm thi!
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const link = document.createElement('a');
+                              link.href = masterMultiQr.qrDataUrl;
+                              link.download = `Ma_QR_Tong_Hop_${shuffledVariants.length}_Ma_De.png`;
+                              link.click();
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-black text-white btn-3d-purple flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Tải Ảnh QR PNG</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(masterMultiQr.qrPayload);
+                              setStatusBanner({
+                                type: 'SUCCESS',
+                                text: 'Đã sao chép chuỗi mã hóa Master Multi QR vào bộ nhớ tạm!',
+                              });
+                            }}
+                            className="px-3.5 py-2 rounded-xl text-xs font-black text-purple-900 bg-white border border-purple-300 hover:bg-purple-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Key className="w-3.5 h-3.5" />
+                            <span>Sao chép Chuỗi Chấm</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-white/90 p-4 rounded-2xl border border-purple-200">
+                        <div className="md:col-span-3 flex flex-col items-center justify-center p-2 bg-purple-50 rounded-xl border border-purple-200">
+                          <img
+                            src={masterMultiQr.qrDataUrl}
+                            alt="Master Multi-Exam QR Code"
+                            referrerPolicy="no-referrer"
+                            className="w-36 h-36 object-contain rounded-lg border border-purple-300 bg-white p-1.5 shadow-xs"
+                          />
+                          <span className="mt-1.5 text-[11px] font-mono font-black text-purple-950">
+                            ALL-IN-ONE ({shuffledVariants.length} MÃ ĐỀ)
+                          </span>
+                        </div>
+                        <div className="md:col-span-9 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-extrabold text-slate-800">
+                              Chuỗi Payload Chấm Thi Toàn Diện (Tương thích ứng dụng điện thoại):
+                            </span>
+                            <span className="font-mono text-[11px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
+                              Độ dài: {masterMultiQr.qrPayload.length} ký tự
+                            </span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-900 text-emerald-400 font-mono text-[11px] break-all leading-relaxed max-h-24 overflow-y-auto border border-purple-300 shadow-inner">
+                            {masterMultiQr.qrPayload}
+                          </div>
+                          <div className="text-[11px] text-slate-600 italic">
+                            💡 Mẹo: Mã QR Tổng hợp này cũng đã được tự động chèn vào trang cuối của tệp Word Bảng Đáp Án Khảo Thí và đóng gói trong tệp .zip!
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* KHUNG LỚN BAO CHUNG TẤT CẢ CÁC MÃ ĐỀ THEO THỨ TỰ TỪ TRÊN XUỐNG */}
                   <div className="p-6 rounded-3xl card-3d-panel border-4 border-sky-400 space-y-5">
                     <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b-2 border-sky-300">
@@ -3241,13 +3755,24 @@ export default function App() {
                           </h3>
                         </div>
                         <p className="text-xs text-slate-700 font-semibold">
-                          Bên trái là các Mã đề, bên phải là đáp án từng câu và từng phần theo thứ tự từ trên xuống: Phần I · Phần II · Phần III (Times New Roman 12pt).
+                          Bảng đối chiếu ngang giúp tiết kiệm 70% diện tích, không rối mắt khi có nhiều mã đề (Times New Roman 12pt).
                         </p>
                       </div>
 
                       <div className="flex items-center gap-2.5 flex-wrap">
-                        {/* Toggle chế độ xem Bảng Khảo Thí A4 vs Thẻ 3 Cột Màu */}
+                        {/* Toggle 3 chế độ xem Bảng Ma Trận Đối Chiếu vs Bảng Khảo Thí A4 vs Thẻ 3 Cột Màu */}
                         <div className="flex items-center bg-sky-100 p-1 rounded-xl border border-sky-300">
+                          <button
+                            type="button"
+                            onClick={() => setAnswerSheetViewMode('MA_TRAN_DOI_CHIEU')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                              answerSheetViewMode === 'MA_TRAN_DOI_CHIEU'
+                                ? 'bg-blue-700 text-white shadow-xs'
+                                : 'text-slate-700 hover:text-blue-900'
+                            }`}
+                          >
+                            Ma Trận Đối Chiếu (Gọn Nhất)
+                          </button>
                           <button
                             type="button"
                             onClick={() => setAnswerSheetViewMode('KHAO_THI_A4')}
@@ -3257,7 +3782,7 @@ export default function App() {
                                 : 'text-slate-700 hover:text-blue-900'
                             }`}
                           >
-                            Bảng Khảo Thí A4 (Nộp Khảo Thí)
+                            Bảng Khảo Thí A4 (Từng Đề)
                           </button>
                           <button
                             type="button"
@@ -3268,13 +3793,13 @@ export default function App() {
                                 : 'text-slate-700 hover:text-blue-900'
                             }`}
                           >
-                            Thẻ 3 Cột Màu Trực Quan
+                            Thẻ 3 Cột Màu
                           </button>
                         </div>
 
                         <button
                           onClick={handleDownloadMasterAnswerSheetDocx}
-                          className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center gap-2 whitespace-nowrap shrink-0"
+                          className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                           title="Tải về tệp Word bảng đáp án chuẩn trên 1 trang A4 để nộp khảo thí"
                         >
                           <Download className="w-4 h-4" />
@@ -3317,8 +3842,10 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* NỘI DUNG BẢNG ĐÁP ÁN: CHẾ ĐỘ KHẢO THÍ A4 HOẶC THẺ 3 CỘT MÀU */}
-                    {answerSheetViewMode === 'KHAO_THI_A4' ? (
+                    {/* NỘI DUNG BẢNG ĐÁP ÁN: MA TRẬN ĐỐI CHIẾU HOẶC KHẢO THÍ A4 HOẶC THẺ 3 CỘT MÀU */}
+                    {answerSheetViewMode === 'MA_TRAN_DOI_CHIEU' ? (
+                      renderCrossReferencingAnswerMatrix(shuffledVariants)
+                    ) : answerSheetViewMode === 'KHAO_THI_A4' ? (
                       <div
                         style={{ fontFamily: "'Times New Roman', Times, serif" }}
                         className="overflow-x-auto rounded-2xl border-2 border-sky-400 bg-white shadow-xs"
