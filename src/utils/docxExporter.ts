@@ -16,7 +16,10 @@ import {
   healHollowedContextGaps,
 } from './docxParser';
 import { buildCV7991MatrixAndSpecification } from './matrixSpecCv7991';
-import { generateMasterMultiQrCode } from './shuffleEngine';
+import {
+  exportGradingExcelXlsx,
+  generateMasterMultiQrCode,
+} from './shuffleEngine';
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -764,22 +767,24 @@ export function buildVariant3ColumnAnswerCardXml(variant: ShuffledVariant): stri
  * Tạo block XML nhúng hình ảnh Mã QR (DrawingML Inline Image) vào cuối trang đáp án trong Word
  */
 function buildEmbeddedQrDrawingXml(relId: string, examCode: string): string {
-  const extentEmu = 1550000;
+  const extentEmu = 1520000;
+  const extentYEmu = 1680000;
+  const uid = Math.floor(Math.random() * 50000) + 200;
   return `<w:p>
     <w:pPr>
-      <w:spacing w:before="140" w:after="100"/>
+      <w:spacing w:before="80" w:after="60"/>
       <w:jc w:val="center"/>
     </w:pPr>
     <w:r>
       <w:drawing>
         <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
-          <wp:extent cx="${extentEmu}" cy="${extentEmu}"/>
-          <wp:docPr id="101" name="QR_Code_${escapeXml(examCode)}"/>
+          <wp:extent cx="${extentEmu}" cy="${extentYEmu}"/>
+          <wp:docPr id="${uid}" name="QR_Code_${escapeXml(examCode)}"/>
           <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
             <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
               <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
                 <pic:nvPicPr>
-                  <pic:cNvPr id="102" name="qr_${escapeXml(examCode)}.png"/>
+                  <pic:cNvPr id="${uid + 1}" name="qr_${escapeXml(examCode)}.png"/>
                   <pic:cNvPicPr/>
                 </pic:nvPicPr>
                 <pic:blipFill>
@@ -789,7 +794,7 @@ function buildEmbeddedQrDrawingXml(relId: string, examCode: string): string {
                 <pic:spPr>
                   <a:xfrm>
                     <a:off x="0" y="0"/>
-                    <a:ext cx="${extentEmu}" cy="${extentEmu}"/>
+                    <a:ext cx="${extentEmu}" cy="${extentYEmu}"/>
                   </a:xfrm>
                   <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
                 </pic:spPr>
@@ -1704,43 +1709,96 @@ export async function exportMasterAnswerSheetDocx(
   // 1. Tạo bảng ma trận đối chiếu đa mã đề (Cross-Referencing Matrix)
   const matrixTableXml = buildCrossReferencingAnswerMatrixXml(variants);
 
-  // 2. Tạo Mã QR Tổng Hợp Tất Cả Mã Đề (Master Multi-Exam QR Code)
-  const { qrDataUrl: masterQrDataUrl } = await generateMasterMultiQrCode(variants, config);
+  // 2. Tạo Bộ 3 Mã QR Tổng Hợp Tất Cả Mã Đề (1. QM 2025 — 2. TNMaker — 3. Azota)
+  const { tripleQr } = await generateMasterMultiQrCode(variants, config);
+  const qrImagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }> = [];
 
-  // 3. Khung hướng dẫn QR Tổng Hợp và nhúng QR
-  const qrSectionXml = masterQrDataUrl
-    ? `<w:p>
-        <w:pPr>
-          <w:spacing w:before="100" w:after="40"/>
-          <w:jc w:val="center"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
-            <w:b/>
-            <w:color w:val="0F172A"/>
-            <w:sz w:val="22"/><w:szCs w:val="22"/>
-          </w:rPr>
-          <w:t>MÃ QR TỔNG HỢP TOÀN BỘ ĐÁP ÁN (${variants.length} MÃ ĐỀ — QUÉT 1 LẦN NẠP ĐỦ KEY)</w:t>
-        </w:r>
-      </w:p>
-      ${buildEmbeddedQrDrawingXml('rIdQr1', 'MASTER_MULTI_CODES')}
-      <w:p>
-        <w:pPr>
-          <w:spacing w:before="20" w:after="80"/>
-          <w:jc w:val="center"/>
-        </w:pPr>
-        <w:r>
-          <w:rPr>
-            <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
-            <w:i/>
-            <w:color w:val="475569"/>
-            <w:sz w:val="20"/><w:szCs w:val="20"/>
-          </w:rPr>
-          <w:t>(Cán bộ chấm thi dùng ứng dụng quét mã QR để nhập tự động đáp án của tất cả các mã đề vào hệ thống)</w:t>
-        </w:r>
-      </w:p>`
-    : '';
+  if (tripleQr.qm2025.qrDataUrl) {
+    qrImagesToEmbed.push({
+      relId: 'rIdQrQm2025',
+      dataUrl: tripleQr.qm2025.qrDataUrl,
+      fileName: 'qr_master_qm2025.png',
+    });
+  }
+  if (tripleQr.tnmaker.qrDataUrl) {
+    qrImagesToEmbed.push({
+      relId: 'rIdQrTnMaker',
+      dataUrl: tripleQr.tnmaker.qrDataUrl,
+      fileName: 'qr_master_tnmaker.png',
+    });
+  }
+  if (tripleQr.azota.qrDataUrl) {
+    qrImagesToEmbed.push({
+      relId: 'rIdQrAzota',
+      dataUrl: tripleQr.azota.qrDataUrl,
+      fileName: 'qr_master_azota.png',
+    });
+  }
+
+  // 3. Khung bảng 3 cột nhúng đồng thời 3 Mã QR Chấm Thi (QM 2025, TNMaker, Azota)
+  const qrSectionXml =
+    qrImagesToEmbed.length === 3
+      ? `<w:p>
+          <w:pPr>
+            <w:spacing w:before="100" w:after="40"/>
+            <w:jc w:val="center"/>
+          </w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+              <w:b/>
+              <w:color w:val="0F172A"/>
+              <w:sz w:val="22"/><w:szCs w:val="22"/>
+            </w:rPr>
+            <w:t>BỘ 3 MÃ QR CHẤM THI TỔNG HỢP (${variants.length} MÃ ĐỀ — QUÉT 1 LẦN NẠP ĐỦ KEY)</w:t>
+          </w:r>
+        </w:p>
+        <w:tbl>
+          <w:tblPr>
+            <w:tblW w:w="5000" w:type="pct"/>
+            <w:tblBorders>
+              <w:top w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+              <w:left w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+              <w:bottom w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+              <w:right w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+              <w:insideH w:val="single" w:sz="4" w:space="0" w:color="E2E8F0"/>
+              <w:insideV w:val="single" w:sz="6" w:space="0" w:color="CBD5E1"/>
+            </w:tblBorders>
+          </w:tblPr>
+          <w:tr>
+            <w:tc>
+              <w:tcPr><w:tcW w:w="1666" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="92400E"/><w:sz w:val="20"/></w:rPr><w:t>1. APP QM 2025</w:t></w:r></w:p>
+              ${buildEmbeddedQrDrawingXml('rIdQrQm2025', 'QM2025_MASTER')}
+            </w:tc>
+            <w:tc>
+              <w:tcPr><w:tcW w:w="1667" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E40AF"/><w:sz w:val="20"/></w:rPr><w:t>2. APP TNMAKER</w:t></w:r></w:p>
+              ${buildEmbeddedQrDrawingXml('rIdQrTnMaker', 'TNMAKER_MASTER')}
+            </w:tc>
+            <w:tc>
+              <w:tcPr><w:tcW w:w="1667" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="065F46"/><w:sz w:val="20"/></w:rPr><w:t>3. HỆ SINH THÁI AZOTA</w:t></w:r></w:p>
+              ${buildEmbeddedQrDrawingXml('rIdQrAzota', 'AZOTA_MASTER')}
+            </w:tc>
+          </w:tr>
+        </w:tbl>
+        <w:p>
+          <w:pPr>
+            <w:spacing w:before="40" w:after="80"/>
+            <w:jc w:val="center"/>
+          </w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+              <w:i/>
+              <w:color w:val="475569"/>
+              <w:sz w:val="20"/><w:szCs w:val="20"/>
+            </w:rPr>
+            <w:t>(Giáo viên mở phần mềm QM 2025, TNMaker hoặc Azota tương ứng trên điện thoại và quét đúng mã QR của phần mềm đó)</w:t>
+          </w:r>
+        </w:p>`
+      : '';
 
   // 4. Bảng chữ ký Khảo thí & Cán bộ chấm thi
   const signatureTableXml = `<w:tbl>
@@ -1823,7 +1881,8 @@ export async function exportMasterAnswerSheetDocx(
     fullInnerXml,
     config,
     `Bảng đáp án ma trận (${variants.length} mã đề)`,
-    masterQrDataUrl
+    undefined,
+    qrImagesToEmbed
   );
 }
 
@@ -2061,7 +2120,7 @@ function cleanFileSegment(raw: string): string {
  */
 export function buildStandardExportFileName(
   config: ShuffleConfig,
-  extension: 'docx' | 'zip' | 'csv' | 'png' | 'txt',
+  extension: 'docx' | 'zip' | 'csv' | 'png' | 'txt' | 'xlsx',
   suffix?: string
 ): string {
   const subjectPart = cleanFileSegment(config.subjectName || 'Toán học & KHTN');
@@ -2089,7 +2148,7 @@ export async function exportAllVariantsZipBundle(
     masterCleanBlob
   );
 
-  // 2. Lưu file Bảng đáp án ma trận khảo thí (A4)
+  // 2. Lưu file Bảng đáp án ma trận khảo thí (A4) có nhúng đủ 3 mã QR
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
   bundleZip.file(
     buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí ma trận'),
@@ -2107,9 +2166,10 @@ export async function exportAllVariantsZipBundle(
     console.warn('Không thể xuất kèm Ma trận CV 7991 vào zip:', err);
   }
 
-  // 4. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
+  // 4. Lưu từng file đề hoán vị cho học sinh & Bộ 3 Mã QR Chấm Thi (QM 2025, TNMaker, Azota)
   const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
-  const qrFolder = bundleZip.folder('Ma_QR_Cham_Thi_PNG');
+  const qrFolder = bundleZip.folder('Ma_QR_3_Phan_Mem_QM2025_TNMaker_Azota');
+  const excelFolder = bundleZip.folder('File_Excel_Dap_An_Chuan_3_Phan_Mem');
 
   for (const v of variants) {
     const docxBlob = await exportSingleVariantDocx(v, config);
@@ -2118,38 +2178,82 @@ export async function exportAllVariantsZipBundle(
       docxBlob
     );
 
-    if (v.qrDataUrl) {
-      const pngBytes = dataUrlToUint8Array(v.qrDataUrl);
+    if (v.tripleQr) {
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-1-QM2025`),
+        dataUrlToUint8Array(v.tripleQr.qm2025.qrDataUrl)
+      );
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-2-TNMaker`),
+        dataUrlToUint8Array(v.tripleQr.tnmaker.qrDataUrl)
+      );
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-3-Azota`),
+        dataUrlToUint8Array(v.tripleQr.azota.qrDataUrl)
+      );
+    } else if (v.qrDataUrl) {
       qrFolder?.file(
         buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
-        pngBytes
+        dataUrlToUint8Array(v.qrDataUrl)
       );
     }
   }
 
-  // 5. Lưu ảnh Mã QR Tổng Hợp Tất Cả Mã Đề (Master Multi-Exam QR Code)
+  // 5. Lưu Bộ 3 Mã QR Tổng Hợp Tất Cả Mã Đề (1. QM 2025 — 2. TNMaker — 3. Azota) + 3 File Excel .xlsx chuẩn
   try {
-    const { qrDataUrl: masterQrDataUrl } = await generateMasterMultiQrCode(variants, config);
-    if (masterQrDataUrl) {
-      const masterQrBytes = dataUrlToUint8Array(masterQrDataUrl);
+    const { tripleQr } = await generateMasterMultiQrCode(variants, config);
+    if (tripleQr.qm2025.qrDataUrl) {
       qrFolder?.file(
-        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp Tất Cả Mã Đề'),
-        masterQrBytes
+        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 1 - App QM 2025'),
+        dataUrlToUint8Array(tripleQr.qm2025.qrDataUrl)
       );
     }
+    if (tripleQr.tnmaker.qrDataUrl) {
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 2 - App TNMaker'),
+        dataUrlToUint8Array(tripleQr.tnmaker.qrDataUrl)
+      );
+    }
+    if (tripleQr.azota.qrDataUrl) {
+      qrFolder?.file(
+        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 3 - App Azota'),
+        dataUrlToUint8Array(tripleQr.azota.qrDataUrl)
+      );
+    }
+
+    const [xlsxQm, xlsxTn, xlsxAz] = await Promise.all([
+      exportGradingExcelXlsx(variants, 'QM2025'),
+      exportGradingExcelXlsx(variants, 'TNMAKER'),
+      exportGradingExcelXlsx(variants, 'AZOTA'),
+    ]);
+    excelFolder?.file(
+      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn QM 2025'),
+      xlsxQm
+    );
+    excelFolder?.file(
+      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn TNMaker 2025'),
+      xlsxTn
+    );
+    excelFolder?.file(
+      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn Azota 2025'),
+      xlsxAz
+    );
   } catch (err) {
-    console.warn('Không thể lưu ảnh QR tổng hợp vào zip:', err);
+    console.warn('Không thể lưu bộ 3 ảnh QR tổng hợp & Excel vào zip:', err);
   }
 
   // 6. Tạo file CSV tổng hợp key chấm thi
   const csvLines: string[] = [
-    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload',
+    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload_QM2025,QR_Payload_TNMaker,QR_Payload_Azota',
   ];
   for (const v of variants) {
     const p1 = v.answerKey.part1.map((x) => `${x.questionNumber}${x.answer}`).join(' ');
     const p2 = v.answerKey.part2.map((x) => `${x.questionNumber}:${x.dsString}(${x.tfString})`).join(' ');
     const p3 = v.answerKey.part3.map((x) => `${x.questionNumber}=${x.answer}`).join(' ');
-    csvLines.push(`"${v.examCode}","${p1}","${p2}","${p3}","${v.qrPayload}"`);
+    const qmStr = (v.tripleQr?.qm2025.qrPayload || v.qrPayload).replace(/"/g, '""');
+    const tnStr = (v.tripleQr?.tnmaker.qrPayload || '').replace(/"/g, '""');
+    const azStr = (v.tripleQr?.azota.qrPayload || '').replace(/"/g, '""');
+    csvLines.push(`"${v.examCode}","${p1}","${p2}","${p3}","${qmStr}","${tnStr}","${azStr}"`);
   }
   bundleZip.file(
     buildStandardExportFileName(config, 'csv', 'Bảng đáp án tổng hợp'),
@@ -2160,7 +2264,7 @@ export async function exportAllVariantsZipBundle(
 }
 
 /**
- * Tiện ích 5: Tải riêng bộ ảnh Mã QR (.zip)
+ * Tiện ích 5: Tải riêng bộ ảnh 3 Mã QR (QM 2025, TNMaker, Azota) + 3 File Excel chuẩn (.zip)
  */
 export async function exportQrCodesZip(
   variants: ShuffledVariant[],
@@ -2169,18 +2273,71 @@ export async function exportQrCodesZip(
   const qrZip = new JSZip();
   const lines: string[] = [];
 
+  const { tripleQr } = await generateMasterMultiQrCode(variants, config);
+  if (tripleQr.qm2025.qrDataUrl) {
+    qrZip.file(
+      buildStandardExportFileName(config, 'png', '01-QR Tổng Hợp - App QM 2025'),
+      dataUrlToUint8Array(tripleQr.qm2025.qrDataUrl)
+    );
+    lines.push(`=== 1. PAYLOAD TỔNG HỢP APP QM 2025 ===\n${tripleQr.qm2025.qrPayload}\n`);
+  }
+  if (tripleQr.tnmaker.qrDataUrl) {
+    qrZip.file(
+      buildStandardExportFileName(config, 'png', '02-QR Tổng Hợp - App TNMaker'),
+      dataUrlToUint8Array(tripleQr.tnmaker.qrDataUrl)
+    );
+    lines.push(`=== 2. PAYLOAD TỔNG HỢP APP TNMAKER 2025 ===\n${tripleQr.tnmaker.qrPayload}\n`);
+  }
+  if (tripleQr.azota.qrDataUrl) {
+    qrZip.file(
+      buildStandardExportFileName(config, 'png', '03-QR Tổng Hợp - App Azota'),
+      dataUrlToUint8Array(tripleQr.azota.qrDataUrl)
+    );
+    lines.push(`=== 3. PAYLOAD TỔNG HỢP APP AZOTA 2025 ===\n${tripleQr.azota.qrPayload}\n`);
+  }
+
   for (const v of variants) {
-    if (v.qrDataUrl) {
+    if (v.tripleQr) {
+      qrZip.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-1-QM2025`),
+        dataUrlToUint8Array(v.tripleQr.qm2025.qrDataUrl)
+      );
+      qrZip.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-2-TNMaker`),
+        dataUrlToUint8Array(v.tripleQr.tnmaker.qrDataUrl)
+      );
+      qrZip.file(
+        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-3-Azota`),
+        dataUrlToUint8Array(v.tripleQr.azota.qrDataUrl)
+      );
+    } else if (v.qrDataUrl) {
       qrZip.file(
         buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
         dataUrlToUint8Array(v.qrDataUrl)
       );
     }
-    lines.push(v.qrPayload);
   }
 
+  const [xlsxQm, xlsxTn, xlsxAz] = await Promise.all([
+    exportGradingExcelXlsx(variants, 'QM2025'),
+    exportGradingExcelXlsx(variants, 'TNMAKER'),
+    exportGradingExcelXlsx(variants, 'AZOTA'),
+  ]);
   qrZip.file(
-    buildStandardExportFileName(config, 'txt', 'Payload-QR'),
+    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn QM 2025'),
+    xlsxQm
+  );
+  qrZip.file(
+    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn TNMaker 2025'),
+    xlsxTn
+  );
+  qrZip.file(
+    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn Azota 2025'),
+    xlsxAz
+  );
+
+  qrZip.file(
+    buildStandardExportFileName(config, 'txt', 'Payload-3-Phan-Mem-QR'),
     lines.join('\n')
   );
   return qrZip.generateAsync({ type: 'blob' });

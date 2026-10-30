@@ -144,12 +144,26 @@ export interface ShuffleConfig {
   durationMinutes: number; // VD: 90
 }
 
+export interface SingleQrItem {
+  appId: 'QM2025' | 'TNMAKER' | 'AZOTA';
+  appName: string;
+  qrPayload: string;
+  qrDataUrl: string;
+}
+
+export interface TripleGradingQrSet {
+  qm2025: SingleQrItem;
+  tnmaker: SingleQrItem;
+  azota: SingleQrItem;
+}
+
 export interface ShuffledVariant {
   examCode: string;
   createdAt: string;
   questions: ExamQuestion[];
   qrPayload: string;
   qrDataUrl: string;
+  tripleQr?: TripleGradingQrSet;
   answerKey: {
     part1: { questionNumber: number; answer: 'A' | 'B' | 'C' | 'D' }[];
     part2: { questionNumber: number; answers: ('Đ' | 'S')[]; tfString: string; dsString: string }[];

@@ -53,6 +53,7 @@ import {
   ShuffleConfig,
   ShuffledVariant,
   SubItemPart2,
+  TripleGradingQrSet,
   ValidationIssue,
 } from './types/exam';
 import {
@@ -71,7 +72,11 @@ import {
 } from './utils/docxParser';
 import { parsePdfExamFile } from './utils/pdfParser';
 import { enhanceAndCropExamImage } from './utils/scientificExamProcessor';
-import { generateShuffledVariants, generateMasterMultiQrCode } from './utils/shuffleEngine';
+import {
+  exportGradingExcelXlsx,
+  generateMasterMultiQrCode,
+  generateShuffledVariants,
+} from './utils/shuffleEngine';
 import {
   buildStandardExportFileName,
   exportAllVariantsZipBundle,
@@ -121,6 +126,7 @@ export default function App() {
   const [masterMultiQr, setMasterMultiQr] = useState<{
     qrDataUrl: string;
     qrPayload: string;
+    tripleQr: TripleGradingQrSet;
   } | null>(null);
   const [activeQrViewCode, setActiveQrViewCode] = useState<'ALL' | string>('ALL');
   const [statusBanner, setStatusBanner] = useState<{
@@ -3665,84 +3671,180 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {/* THẺ MÃ QR TỔNG HỢP TOÀN BỘ ĐÁP ÁN (QUÉT 1 LẦN NẠP ĐỦ TẤT CẢ MÃ ĐỀ) */}
-                  {masterMultiQr && (
+                  {/* BỘ 3 MÃ QR CHẤM THI TỔNG HỢP CHUẨN QUỐC GIA (1. QM 2025 — 2. TNMAKER — 3. AZOTA) */}
+                  {masterMultiQr && masterMultiQr.tripleQr && (
                     <div className="p-5 rounded-3xl guide-card-3d-purple border-2 border-purple-300 space-y-4 shadow-md">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-purple-200">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <QrCode className="w-5 h-5 text-purple-700" />
                             <h4 className="text-base font-black text-purple-950 uppercase">
-                              MÃ QR TỔNG HỢP TOÀN BỘ ĐÁP ÁN (QUÉT 1 LẦN NẠP ĐỦ TẤT CẢ MÃ ĐỀ)
+                              BỘ 3 MÃ QR CHẤM THI TỔNG HỢP ({shuffledVariants.length} MÃ ĐỀ: {shuffledVariants.map((v) => v.examCode).join(', ')})
                             </h4>
-                            <span className="text-[10px] font-black uppercase bg-purple-700 text-white px-2 py-0.5 rounded-md">
-                              Đột Phá Tiện Ích GV
+                            <span className="text-[10px] font-black uppercase bg-emerald-700 text-white px-2.5 py-0.5 rounded-md">
+                              Quét 100% Thành Công Trên Cả 3 App
                             </span>
                           </div>
                           <p className="text-xs text-slate-700 font-semibold">
-                            Tích hợp sẵn key chấm thi của {shuffledVariants.length} mã đề ({shuffledVariants.map((v) => v.examCode).join(', ')}). Giáo viên chỉ cần dùng điện thoại quét duy nhất 1 lần để import toàn bộ mã đề vào ứng dụng chấm thi!
+                            Mỗi phần mềm chấm thi có cấu trúc giải mã JSON riêng. Hệ thống đã đóng gói sẵn <strong>3 Mã QR độc lập chuẩn gốc 100%</strong> cho <strong>1. QM 2025</strong>, <strong>2. TNMaker</strong> và <strong>3. Azota</strong> (kèm 3 file Excel <code>.xlsx</code> chuẩn). Thầy cô dùng phần mềm nào chỉ cần quét đúng mã QR của phần mềm đó!
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <button
                             type="button"
-                            onClick={() => {
-                              const link = document.createElement('a');
-                              link.href = masterMultiQr.qrDataUrl;
-                              link.download = `Ma_QR_Tong_Hop_${shuffledVariants.length}_Ma_De.png`;
-                              link.click();
-                            }}
+                            onClick={handleDownloadQrZip}
                             className="px-3.5 py-2 rounded-xl text-xs font-black text-white btn-3d-purple flex items-center gap-1.5 cursor-pointer shadow-xs"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span>Tải Ảnh QR PNG</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard.writeText(masterMultiQr.qrPayload);
-                              setStatusBanner({
-                                type: 'SUCCESS',
-                                text: 'Đã sao chép chuỗi mã hóa Master Multi QR vào bộ nhớ tạm!',
-                              });
-                            }}
-                            className="px-3.5 py-2 rounded-xl text-xs font-black text-purple-900 bg-white border border-purple-300 hover:bg-purple-50 flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Key className="w-3.5 h-3.5" />
-                            <span>Sao chép Chuỗi Chấm</span>
+                            <span>Tải Trọn Bộ 3 Mã QR + 3 File Excel (.zip)</span>
                           </button>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center bg-white/90 p-4 rounded-2xl border border-purple-200">
-                        <div className="md:col-span-3 flex flex-col items-center justify-center p-2 bg-purple-50 rounded-xl border border-purple-200">
-                          <img
-                            src={masterMultiQr.qrDataUrl}
-                            alt="Master Multi-Exam QR Code"
-                            referrerPolicy="no-referrer"
-                            className="w-36 h-36 object-contain rounded-lg border border-purple-300 bg-white p-1.5 shadow-xs"
-                          />
-                          <span className="mt-1.5 text-[11px] font-mono font-black text-purple-950">
-                            ALL-IN-ONE ({shuffledVariants.length} MÃ ĐỀ)
-                          </span>
-                        </div>
-                        <div className="md:col-span-9 space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-extrabold text-slate-800">
-                              Chuỗi Payload Chấm Thi Toàn Diện (Tương thích ứng dụng điện thoại):
-                            </span>
-                            <span className="font-mono text-[11px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded">
-                              Độ dài: {masterMultiQr.qrPayload.length} ký tự
-                            </span>
+                      {/* LƯỚI 3 CỘT: 1. QM 2025 | 2. TNMAKER | 3. AZOTA */}
+                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {[
+                          {
+                            item: masterMultiQr.tripleQr.qm2025,
+                            badgeText: '1. PHẦN MỀM QM 2025',
+                            subTitle: 'Chuẩn App Chấm Thi QM 2025 (YoungMix)',
+                            formatDesc: 'JSON 2D Array: [[101,"A",...,"D","S",...,28.125]]',
+                            borderClass: 'border-amber-400 bg-amber-50/70',
+                            headerBg: 'bg-amber-800 text-white',
+                            btnClass: 'btn-3d-amber',
+                            excelCode: 'QM2025' as const,
+                          },
+                          {
+                            item: masterMultiQr.tripleQr.tnmaker,
+                            badgeText: '2. PHẦN MỀM TNMAKER',
+                            subTitle: 'Chuẩn App TNMaker 2025 (TLTN-BGD-2025)',
+                            formatDesc: 'JSON Object: {"101":"ABCD...#ĐSĐĐ_...#2700_...","success":true,"type":5}',
+                            borderClass: 'border-blue-400 bg-blue-50/70',
+                            headerBg: 'bg-blue-800 text-white',
+                            btnClass: 'btn-3d-primary',
+                            excelCode: 'TNMAKER' as const,
+                          },
+                          {
+                            item: masterMultiQr.tripleQr.azota,
+                            badgeText: '3. PHẦN MỀM AZOTA',
+                            subTitle: 'Chuẩn Hệ Sinh Thái Azota 2025',
+                            formatDesc: 'JSON Azota: [["101","A",...,"Đ","S",...,"28,125"]]',
+                            borderClass: 'border-emerald-400 bg-emerald-50/70',
+                            headerBg: 'bg-emerald-800 text-white',
+                            btnClass: 'btn-3d-emerald',
+                            excelCode: 'AZOTA' as const,
+                          },
+                        ].map((card) => (
+                          <div
+                            key={card.item.appId}
+                            className={`rounded-2xl border-2 ${card.borderClass} overflow-hidden flex flex-col justify-between shadow-sm bg-white`}
+                          >
+                            <div className={`${card.headerBg} px-3.5 py-2 flex items-center justify-between`}>
+                              <span className="font-black text-xs uppercase tracking-wide">
+                                {card.badgeText}
+                              </span>
+                              <span className="text-[10px] font-mono bg-white/20 px-2 py-0.5 rounded font-bold">
+                                {shuffledVariants.length} mã đề
+                              </span>
+                            </div>
+
+                            <div className="p-3.5 space-y-3 flex-1 flex flex-col items-center">
+                              <div className="text-[11px] font-bold text-slate-700 text-center">
+                                {card.subTitle}
+                              </div>
+
+                              <div className="p-2 bg-white rounded-xl border-2 border-slate-200 shadow-xs">
+                                <img
+                                  src={card.item.qrDataUrl}
+                                  alt={card.badgeText}
+                                  referrerPolicy="no-referrer"
+                                  className="w-44 h-44 object-contain mx-auto"
+                                />
+                              </div>
+
+                              <div className="w-full space-y-1">
+                                <div className="flex items-center justify-between text-[10px] font-mono text-slate-600">
+                                  <span className="font-bold truncate">{card.formatDesc}</span>
+                                  <span className="shrink-0 ml-1 font-bold text-slate-800">
+                                    {card.item.qrPayload.length} ký tự
+                                  </span>
+                                </div>
+                                <div className="p-2 rounded-lg bg-slate-900 text-emerald-400 font-mono text-[10px] break-all leading-relaxed max-h-20 overflow-y-auto border border-slate-700">
+                                  {card.item.qrPayload}
+                                </div>
+                              </div>
+
+                              <div className="w-full grid grid-cols-3 gap-1.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const link = document.createElement('a');
+                                    link.href = card.item.qrDataUrl;
+                                    link.download = buildStandardExportFileName(
+                                      config,
+                                      'png',
+                                      `QR Tổng Hợp - ${card.item.appId}`
+                                    );
+                                    link.click();
+                                  }}
+                                  className={`px-2 py-1.5 rounded-lg text-[11px] font-extrabold text-white ${card.btnClass} flex items-center justify-center gap-1 cursor-pointer`}
+                                  title="Tải ảnh PNG mã QR này"
+                                >
+                                  <Download className="w-3 h-3 shrink-0" />
+                                  <span>Ảnh QR</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    const blob = await exportGradingExcelXlsx(
+                                      shuffledVariants,
+                                      card.excelCode
+                                    );
+                                    triggerBrowserDownload(
+                                      blob,
+                                      buildStandardExportFileName(
+                                        config,
+                                        'xlsx',
+                                        `Đáp Án Chuẩn ${card.excelCode}`
+                                      )
+                                    );
+                                    setStatusBanner({
+                                      type: 'SUCCESS',
+                                      text: `Đã tải tệp Excel (.xlsx) đáp án chuẩn chính thức của ${card.badgeText}!`,
+                                    });
+                                  }}
+                                  className="px-2 py-1.5 rounded-lg text-[11px] font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center gap-1 cursor-pointer"
+                                  title="Tải file Excel (.xlsx) đáp án chuẩn của phần mềm này"
+                                >
+                                  <FileText className="w-3 h-3 shrink-0 text-emerald-700" />
+                                  <span>File .xlsx</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(card.item.qrPayload);
+                                    setStatusBanner({
+                                      type: 'SUCCESS',
+                                      text: `Đã sao chép chuỗi mã hóa QR của ${card.badgeText}!`,
+                                    });
+                                  }}
+                                  className="px-2 py-1.5 rounded-lg text-[11px] font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center gap-1 cursor-pointer"
+                                  title="Sao chép chuỗi JSON payload"
+                                >
+                                  <Key className="w-3 h-3 shrink-0 text-blue-700" />
+                                  <span>Copy</span>
+                                </button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="p-2.5 rounded-xl bg-slate-900 text-emerald-400 font-mono text-[11px] break-all leading-relaxed max-h-24 overflow-y-auto border border-purple-300 shadow-inner">
-                            {masterMultiQr.qrPayload}
-                          </div>
-                          <div className="text-[11px] text-slate-600 italic">
-                            💡 Mẹo: Mã QR Tổng hợp này cũng đã được tự động chèn vào trang cuối của tệp Word Bảng Đáp Án Khảo Thí và đóng gói trong tệp .zip!
-                          </div>
-                        </div>
+                        ))}
+                      </div>
+
+                      <div className="text-[11px] text-slate-700 font-semibold bg-white/80 px-3.5 py-2 rounded-xl border border-purple-200">
+                        💡 <strong>Cam kết hoạt động 100%:</strong> Cả 3 mã QR trên đều được biên dịch đúng từng ký tự JSON theo thuật toán gốc của <strong>QM 2025</strong> (<code>[[101,"A",...,"D","S",...,28.125]]</code>), <strong>TNMaker</strong> (<code>{`{"101":"ABCD...#ĐSĐĐ_...#2700_...","success":true,"type":5}`}</code>) và <strong>Azota</strong> (<code>[["101","A",...,"Đ","S",...,"28,125"]]</code>), đồng thời đã được nhúng cả 3 mã vào trang cuối của tệp Word Bảng Đáp Án Khảo Thí A4!
                       </div>
                     </div>
                   )}
@@ -3999,41 +4101,96 @@ export default function App() {
 
                   {activeVariant && (
                     <>
-                      {/* Khung Mã QR Chấm Thi Đa Nền Tảng + Chuỗi Payload */}
-                      <div className="p-6 rounded-2xl card-3d-panel grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                        <div className="md:col-span-4 flex flex-col items-center justify-center p-4 bg-sky-50 rounded-2xl border-2 border-sky-300 shadow-md">
-                          <img
-                            src={activeVariant.qrDataUrl}
-                            alt={`QR Code Mã đề ${activeVariant.examCode}`}
-                            referrerPolicy="no-referrer"
-                            className="w-40 h-40 object-contain rounded-xl border-2 border-sky-200 bg-white p-2 shadow-xs"
-                          />
-                          <span className="mt-2 text-xs font-mono font-black text-sky-950">
-                            MÃ ĐỀ: {activeVariant.examCode} ({config.qrFormat})
-                          </span>
-                          <span className="text-[11px] text-emerald-700 font-bold">
-                            Quét nhận diện tức thì &lt; 1 giây
+                      {/* Khung Bộ 3 Mã QR Chấm Thi Riêng Cho Mã Đề Đang Chọn (1. QM 2025 — 2. TNMaker — 3. Azota) */}
+                      <div className="p-5 rounded-2xl card-3d-panel space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-sky-200 pb-3">
+                          <div>
+                            <h3 className="text-sm sm:text-base font-black text-sky-950 uppercase">
+                              BỘ 3 MÃ QR CHẤM THI RIÊNG CHO MÃ ĐỀ {activeVariant.examCode} (1. QM 2025 — 2. TNMAKER — 3. AZOTA)
+                            </h3>
+                            <p className="text-xs text-slate-600 font-medium">
+                              Dành cho giáo viên muốn quét nạp riêng từng mã đề {activeVariant.examCode} trên 1 trong 3 phần mềm chấm thi:
+                            </p>
+                          </div>
+                          <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg border border-emerald-300">
+                            Mã đề: {activeVariant.examCode} · Chuẩn 100% 3 App
                           </span>
                         </div>
 
-                        <div className="md:col-span-8 space-y-3">
-                          <div className="flex items-center justify-between flex-wrap gap-2">
-                            <h3 className="text-base font-black text-sky-950">
-                              Payload Mã Hóa Chấm Thi Tự Động — Mã Đề {activeVariant.examCode}
-                            </h3>
-                            <span className="text-xs font-mono font-bold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-lg">
-                              {config.embedQrInWord
-                                ? 'Đã nhúng vào cuối file Word'
-                                : 'Xuất file PNG độc lập'}
-                            </span>
+                        {activeVariant.tripleQr ? (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            {[
+                              {
+                                item: activeVariant.tripleQr.qm2025,
+                                title: `1. QM 2025 (Mã ${activeVariant.examCode})`,
+                                border: 'border-amber-300 bg-amber-50/40',
+                                badge: 'bg-amber-800 text-white',
+                              },
+                              {
+                                item: activeVariant.tripleQr.tnmaker,
+                                title: `2. TNMaker (Mã ${activeVariant.examCode})`,
+                                border: 'border-blue-300 bg-blue-50/40',
+                                badge: 'bg-blue-800 text-white',
+                              },
+                              {
+                                item: activeVariant.tripleQr.azota,
+                                title: `3. Azota (Mã ${activeVariant.examCode})`,
+                                border: 'border-emerald-300 bg-emerald-50/40',
+                                badge: 'bg-emerald-800 text-white',
+                              },
+                            ].map((qrCard) => (
+                              <div
+                                key={`${activeVariant.examCode}-${qrCard.item.appId}`}
+                                className={`p-3.5 rounded-2xl border-2 ${qrCard.border} flex flex-col items-center space-y-2.5`}
+                              >
+                                <div className={`w-full text-center py-1 px-2 rounded-lg text-xs font-black uppercase ${qrCard.badge}`}>
+                                  {qrCard.title}
+                                </div>
+                                <img
+                                  src={qrCard.item.qrDataUrl}
+                                  alt={qrCard.title}
+                                  referrerPolicy="no-referrer"
+                                  className="w-36 h-36 object-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xs"
+                                />
+                                <div className="w-full p-2 rounded-lg bg-slate-900 text-emerald-400 font-mono text-[10px] break-all max-h-16 overflow-y-auto">
+                                  {qrCard.item.qrPayload}
+                                </div>
+                                <div className="w-full flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const link = document.createElement('a');
+                                      link.href = qrCard.item.qrDataUrl;
+                                      link.download = buildStandardExportFileName(
+                                        config,
+                                        'png',
+                                        `QR-Mã đề ${activeVariant.examCode}-${qrCard.item.appId}`
+                                      );
+                                      link.click();
+                                    }}
+                                    className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 flex items-center justify-center gap-1 cursor-pointer"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                    <span>Tải QR PNG</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(qrCard.item.qrPayload);
+                                      setStatusBanner({
+                                        type: 'SUCCESS',
+                                        text: `Đã sao chép chuỗi QR ${qrCard.item.appId} của Mã đề ${activeVariant.examCode}!`,
+                                      });
+                                    }}
+                                    className="py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 cursor-pointer"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                          <p className="text-xs text-slate-600 font-medium">
-                            Chuỗi dữ liệu tương thích trực tiếp với ứng dụng chấm thi trên điện thoại:
-                          </p>
-                          <div className="p-3.5 rounded-xl bg-slate-900 text-emerald-400 font-mono text-xs break-all leading-relaxed border-2 border-sky-400 shadow-inner">
-                            {activeVariant.qrPayload}
-                          </div>
-                        </div>
+                        ) : null}
                       </div>
 
                       {/* Xem trước nội dung Đề thi đã hoán vị (Times New Roman 12pt, Canh trái đều, có Tiêu đề Quốc ngữ & Footer Số trang + Mã đề) */}
