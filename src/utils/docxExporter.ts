@@ -2228,3 +2228,149 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
+/**
+ * Xuất toàn bộ Vai trò, Tính năng và Hướng dẫn sử dụng hệ thống ra tệp Word (.docx) chuẩn đẹp
+ */
+export async function exportUserManualDocx(features: any[] = []): Promise<Blob> {
+  const zip = new JSZip();
+
+  const titlePara = `<w:p>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="80"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E3A8A"/><w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr><w:t>TÀI LIỆU HƯỚNG DẪN SỬ DỤNG &amp; ĐẶC TẢ TÍNH NĂNG</w:t></w:r>
+  </w:p>
+  <w:p>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="160"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0284C7"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>HỆ THỐNG XỬ LÝ, BIÊN TẬP VÀ TRỘN ĐỀ THI EDUMIX 2025</w:t></w:r>
+  </w:p>
+  <w:p>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:color w:val="475569"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Tác giả: Thầy Hồ Tấn Khải — Giáo viên Trường THPT Mang Thít, Sở GD&amp;ĐT Vĩnh Long</w:t></w:r>
+  </w:p>`;
+
+  const h1 = (title: string, color: string = '1E3A8A') => `<w:p>
+    <w:pPr><w:jc w:val="left"/><w:spacing w:before="240" w:after="100"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="${color}"/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr><w:t>${escapeXml(title)}</w:t></w:r>
+  </w:p>`;
+
+  const h2 = (title: string, color: string = '0369A1') => `<w:p>
+    <w:pPr><w:jc w:val="left"/><w:spacing w:before="160" w:after="60"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="${color}"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(title)}</w:t></w:r>
+  </w:p>`;
+
+  const p = (text: string, isBold: boolean = false, isItalic: boolean = false) => `<w:p>
+    <w:pPr><w:jc w:val="both"/><w:spacing w:line="276" w:lineRule="auto" w:before="40" w:after="60"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>${isBold ? '<w:b/>' : ''}${isItalic ? '<w:i/>' : ''}<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r>
+  </w:p>`;
+
+  const bullet = (title: string, desc: string) => `<w:p>
+    <w:pPr><w:jc w:val="both"/><w:spacing w:before="30" w:after="50"/><w:ind w:left="360" w:hanging="240"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0F172A"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>• ${escapeXml(title)}: </w:t></w:r>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(desc)}</w:t></w:r>
+  </w:p>`;
+
+  const contentBlocks = [
+    titlePara,
+    h1('PHẦN I. VAI TRÒ VÀ SỨ MỆNH CỐT LÕI CỦA HỆ THỐNG'),
+    p('Hệ thống EduMix 2025 là Bộ vi xử lý, phân tích, biên tập và chuẩn hóa tài liệu đề thi cấp độ chuyên sâu (Deep Exam Parser & Word XML Synthesizer), được xây dựng riêng cho giáo viên Việt Nam nhằm phục vụ Chương trình Giáo dục Phổ thông 2018 và Kỳ thi tốt nghiệp THPT theo định hướng mới.'),
+    bullet('Tiếp nhận đa định dạng', 'Xử lý hoàn hảo tệp Word (.docx, .doc), PDF, bản chụp/scan, ảnh sơ đồ đồ thị và cả văn bản dán trực tiếp từ bộ nhớ tạm (HTML Clipboard).'),
+    bullet('Bảo toàn 100% công thức', 'Chống nuốt chữ, chống rỗng đáp án (Strict Non-Empty Rule). Bảo toàn toàn bộ công thức Toán học, Vật lý, Hóa học (chỉ số trên/dưới, mũi tên phản ứng có điều kiện) và Sinh học (phả hệ, phép lai, chuỗi thức ăn).'),
+    bullet('Chuẩn hóa đầu ra Word (.docx)', 'Xuất tệp Word chuẩn khảo thí với font Times New Roman 12pt, căn trái đều, bảng ẩn không viền chống xô lệch, khóa liền kề ảnh và tự động đánh số trang kèm số mã đề.'),
+    bullet('Vận hành an toàn Client-side', 'Toàn bộ luồng giải nén XML và trộn đề diễn ra 100% ngay trên trình duyệt máy tính của thầy cô, không lưu giữ dữ liệu đề thi lên máy chủ (Zero-Trace Verified).'),
+
+    h1('PHẦN II. TỔNG QUAN 8 HỆ THỐNG TÍNH NĂNG VÀ CÔNG NGHỆ ĐỘT PHÁ'),
+    h2('1. Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser)'),
+    bullet('Quét song song Text và Equation', 'Đọc đồng thời thẻ văn bản <w:t>, công thức Office Math Markup (<m:oMath>), MathType OLE và ảnh vector EMF/WMF.'),
+    bullet('Đa kênh nhận diện đáp án đúng', 'Tự động nhận diện đáp án đúng bằng cả 3 phương thức: Gạch chân (<w:u>), Tô màu đỏ (<w:color>) và Bảng đáp án tổng hợp ở cuối đề thi.'),
+    bullet('Nhận diện cấu trúc 3 phần chuẩn 2025', 'Tự động phân nhóm chuẩn xác Phần I (4 lựa chọn A, B, C, D), Phần II (Đúng/Sai 4 ý a, b, c, d) và Phần III (Trả lời ngắn).'),
+
+    h2('2. Trình Biên Tập Trực Tiếp 1 Chạm (Live In-App Editor)'),
+    bullet('Hệ thống tự động phát hiện lỗi', 'Bộ Validator tự động quét và chỉ rõ các câu bị thiếu/thừa đáp án, thiếu phương án lựa chọn hoặc chưa có đáp số Phần III.'),
+    bullet('Nút "Sửa ngay" 1 chạm', 'Tự động cuộn màn hình đến chính xác vị trí câu bị lỗi để giáo viên click chọn đáp án A/B/C/D hoặc gạt Đúng/Sai tức thì.'),
+    bullet('Nút "Tự Động Sửa Nhanh Tất Cả Lỗi"', 'Tự động chuẩn hóa toàn bộ đề chỉ bằng một thao tác duy nhất để mở khóa nút [Trộn đề].'),
+
+    h2('3. Động Cơ Xử Lý Hình Ảnh, Đồ Thị, Sơ Đồ 300 DPI'),
+    bullet('Tự động cắt viền & Khử nhiễu nền', 'Khử sạch nền xám của bản chụp/scan thành nền trắng tinh khiết (#FFFFFF), làm sắc nét đường viền và văn bản.'),
+    bullet('Bảo toàn tỷ lệ khung hình', 'Giữ nguyên 100% aspect ratio gốc ở độ phân giải 300 DPI, gắn thẻ [HINH_ANH_CAU_X] đồng bộ theo từng câu hỏi.'),
+    bullet('Khóa vị trí xuất Word', 'Xuất chuẩn In Line with Text, căn giữa (<w:jc w:val="center"/>) và khóa liền kề câu hỏi (<w:keepNext/>) chống nhảy trang ngoài ý muốn.'),
+
+    h2('4. AI Gemini Studio — Cụm 4 Luồng Chuyên Gia Tạo Đề Tương Đương'),
+    bullet('Tạo cùng lúc 1 đến 4 đề AI', 'Vận hành cụm 4 luồng chuyên gia song song sử dụng Gemini 3.8 Flash / Pro tạo ra các đề thi tương đương hoàn chỉnh.'),
+    bullet('Tùy biến theo chỉ dẫn sư phạm', 'Giáo viên có thể yêu cầu AI đổi số liệu chẵn dễ tính, đảo câu Đúng thành Sai, thay đổi sơ đồ sinh học nhưng giữ nguyên ma trận nhận thức.'),
+    bullet('Bảo mật Zero-Trace', 'Tự động ẩn danh tên trường, tên kỳ thi và xóa sạch bộ nhớ đệm ngay khi giáo viên tải đề về máy.'),
+
+    h2('5. Khung Ma Trận & Bản Đặc Tả Chuẩn Công Văn 7991/BGDĐT-GDTrH'),
+    bullet('Phụ lục 1 — Khung Ma Trận', 'Tự động phân bố tỉ lệ nhận thức chuẩn: Nhận biết 40% (4.0đ) - Thông hiểu 30% (3.0đ) - Vận dụng 30% (3.0đ) cho cả 3 phần.'),
+    bullet('Phụ lục 2 — Bản Đặc Tả', 'Mô tả chi tiết Yêu cầu cần đạt chuẩn GDPT 2018 cho từng chủ đề, đơn vị kiến thức và số lượng câu/lệnh tương ứng.'),
+    bullet('Xuất Word chuẩn Sư phạm', 'Có sẵn nút xuất file Word (.docx) chuyên dụng kèm khung chữ ký duyệt của Ban Giám Hiệu, Tổ trưởng chuyên môn và Giáo viên ra đề.'),
+
+    h2('6. Bảng Ma Trận Đáp Án Đối Chiếu Đa Mã Đề (Gọn Nhất & Không Rối Mắt)'),
+    bullet('Đối chiếu ngang tiết kiệm 70% diện tích', 'Xếp các mã đề (101, 102, 103, 104...) song song theo cột, nằm gọn trên 1 trang giấy duy nhất.'),
+    bullet('Trực quan & Dễ chấm', 'Phần I có badge màu nổi bật A/B/C/D; Phần II có chuỗi tổng hợp và 4 dòng lệnh chi tiết (a, b, c, d); Phần III có đáp số ngắn.'),
+    bullet('Đa chế độ xem', 'Hỗ trợ chuyển đổi linh hoạt giữa Ma Trận Đối Chiếu, Bảng Khảo Thí A4 nộp nhà trường và Thẻ 3 Cột Màu.'),
+
+    h2('7. Mã QR Tổng Hợp Đa Mã Đề (Master Multi-Exam QR Code)'),
+    bullet('Quét 1 lần nạp đủ toàn bộ mã đề', 'Tích hợp key chấm thi của tất cả các mã đề vào 1 mã QR duy nhất. Giáo viên quét 1 lần bằng điện thoại là ứng dụng (QM, Azota, TNMaker) tự động nhận diện toàn bộ các mã đề.'),
+    bullet('Tự động nhúng vào Word', 'Mã QR được nhúng ngay trang cuối của tệp Word Bảng Đáp Án và đóng gói file ảnh PNG vào tệp .zip.'),
+
+    h2('8. Đóng Gói Tệp Nén (.zip) Đồng Nhất Quy Chuẩn Tên File'),
+    bullet('Cấu trúc đặt tên chuẩn hóa', 'Đồng bộ tên file .zip và toàn bộ các tệp Word/PNG bên trong theo mẫu: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] [Hậu tố].docx/.zip.'),
+    bullet('Trọn bộ gói khảo thí', 'Bao gồm: Các đề thi hoán vị, Đề gốc đã làm sạch, Bảng đáp án khảo thí kèm mã QR, Khung ma trận đặc tả CV 7991 và Bộ mã QR chấm thi.'),
+
+    h1('PHẦN III. QUY TRÌNH HƯỚNG DẪN SỬ DỤNG 5 BƯỚC THỰC CHIẾN'),
+    bullet('Bước 1: Chuẩn bị file Word đề gốc', 'Soạn đề thi theo cấu trúc 3 phần (PHẦN I, PHẦN II, PHẦN III). Đánh dấu đáp án đúng bằng cách Gạch chân (Ctrl+U) hoặc Tô chữ màu đỏ.'),
+    bullet('Bước 2: Tải đề lên hệ thống', 'Bấm nút [Tải Word / PDF] màu xanh lam nổi bật để nạp đề. Hệ thống sẽ bóc tách toàn bộ câu hỏi và kiểm tra lỗi tự động.'),
+    bullet('Bước 3: Biên tập & Sửa lỗi (nếu có)', 'Nếu bảng thông báo có câu bị lỗi, bấm nút [Sửa ngay] để gán đáp án hoặc bấm [Tự Động Sửa Nhanh Tất Cả Lỗi] để hoàn tất.'),
+    bullet('Bước 4: Cấu hình thông tin đề thi & Trộn đề', 'Nhập Tên trường, Môn thi, Lớp, Năm học, chọn số lượng mã đề (ví dụ 4 mã: 101, 102, 103, 104) rồi bấm nút [Trộn Đề Ngay].'),
+    bullet('Bước 5: Tải bộ đề hoàn chỉnh', 'Bấm nút [Tải Trọn Bộ 4 Đề (.zip)] để nhận toàn bộ đề thi, bảng đáp án ma trận đối chiếu, mã QR và khung ma trận đặc tả CV 7991.'),
+
+    h1('PHẦN IV. QUY CHUẨN ĐỊNH DẠNG TÀI LIỆU ĐỀ THI 3 PHẦN NĂM 2025'),
+    bullet('PHẦN I: Trắc nghiệm 4 lựa chọn', 'Bắt đầu bằng dòng PHẦN I. Mỗi câu bắt đầu bằng Câu 1., Câu 2... và chứa 4 phương án A., B., C., D. Phương án đúng có Gạch chân hoặc Tô màu đỏ.'),
+    bullet('PHẦN II: Trắc nghiệm Đúng / Sai', 'Bắt đầu bằng dòng PHẦN II. Mỗi câu có 4 ý a), b), c), d). Ý nào Đúng có Gạch chân hoặc Tô màu đỏ; ý nào không gạch chân sẽ là Sai.'),
+    bullet('PHẦN III: Trắc nghiệm Trả lời ngắn', 'Bắt đầu bằng dòng PHẦN III. Mỗi câu hỏi yêu cầu điền con số hoặc từ khóa ngắn. Đáp án ghi ở cuối câu dạng: Đáp án: 150 (hoặc gạch chân/tô đỏ đáp số).'),
+
+    h1('PHẦN V. THÔNG TIN TÁC GIẢ & HỖ TRỢ KỸ THUẬT'),
+    bullet('Tác giả phần mềm', 'Thầy Hồ Tấn Khải — Giáo viên Trường THPT Mang Thít, tỉnh Vĩnh Long.'),
+    bullet('Email liên hệ & góp ý', 'khaibcmt@gmail.com'),
+    bullet('Số điện thoại / Zalo', '0939580982'),
+    bullet('Phiên bản hiện hành', 'EduMix 2025 — Phiên bản đặc biệt chuẩn hóa Công văn 7991/BGDĐT-GDTrH và Mã QR Master Đa Mã Đề.'),
+  ];
+
+  const bodyXml = contentBlocks.join('\n');
+
+  const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <w:body>
+    ${bodyXml}
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="708" w:footer="708" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+  const documentRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+</Relationships>`;
+
+  zip.file('[Content_Types].xml', contentTypesXml);
+  zip.file('_rels/.rels', relsXml);
+  zip.file('word/document.xml', docXml);
+  zip.file('word/_rels/document.xml.rels', documentRelsXml);
+
+  return zip.generateAsync({ type: 'blob' });
+}
+
