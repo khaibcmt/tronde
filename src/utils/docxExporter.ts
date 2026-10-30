@@ -16,14 +16,26 @@ function escapeXml(unsafe: string): string {
 }
 
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
-  const base64 = dataUrl.split(',')[1] || '';
-  const binary = atob(base64);
-  const len = binary.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary.charCodeAt(i);
+  const commaIdx = dataUrl.indexOf(',');
+  const header = commaIdx >= 0 ? dataUrl.slice(0, commaIdx) : '';
+  const payload = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
+
+  if (/;base64/i.test(header)) {
+    const binary = atob(payload.trim());
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
   }
-  return bytes;
+
+  // Hỗ trợ chuỗi data:image/svg+xml;utf8,<svg...> hoặc URI-encoded
+  try {
+    return new TextEncoder().encode(decodeURIComponent(payload));
+  } catch {
+    return new TextEncoder().encode(payload);
+  }
 }
 
 /**
@@ -1044,6 +1056,7 @@ async function packOpenXmlDocx(
   ${hasAnyImage ? '<Default Extension="jpg" ContentType="image/jpeg"/>' : ''}
   ${hasAnyImage ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : ''}
   ${hasAnyImage ? '<Default Extension="gif" ContentType="image/gif"/>' : ''}
+  ${hasAnyImage ? '<Default Extension="svg" ContentType="image/svg+xml"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
 </Types>`
@@ -1071,11 +1084,11 @@ async function packOpenXmlDocx(
   // Nhúng các ảnh minh họa, sơ đồ của đề thi
   if (embeddedImages && embeddedImages.length > 0) {
     for (const img of embeddedImages) {
-      relsItems.push(
-        `<Relationship Id="${img.relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.fileName}"/>`
-      );
       try {
         zip.file(`word/media/${img.fileName}`, dataUrlToUint8Array(img.dataUrl));
+        relsItems.push(
+          `<Relationship Id="${img.relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.fileName}"/>`
+        );
       } catch (err) {
         console.warn('Không thể chuyển đổi dataUrl sang byte array cho ảnh:', img.fileName, err);
       }
