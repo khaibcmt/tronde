@@ -77,7 +77,6 @@ import {
   exportCleanedMasterDocx,
   exportFourAiClonesZipBundle,
   exportMasterAnswerSheetDocx,
-  exportMasterExamWithSolutionsDocx,
   exportQrCodesZip,
   exportSingleVariantDocx,
   formatPedagogicalSubject,
@@ -132,7 +131,7 @@ export default function App() {
     shuffleSubItemsPart2: true,
     qrFormat: 'QM2025',
     embedQrInWord: true,
-    includeSolutionsInExport: true,
+    includeSolutionsInExport: false,
     departmentName: 'SỞ GD&ĐT VĨNH LONG',
     schoolName: 'TRƯỜNG THPT MANG THÍT',
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
@@ -663,13 +662,6 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
-  const handleUpdateExplanation = (questionId: string, newExp: string) => {
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === questionId ? { ...q, explanation: newExp } : q))
-    );
-    setHasUnsavedChanges(true);
-  };
-
   const handleUpdateBloomLevel = (questionId: string, level: BloomLevel) => {
     setQuestions((prev) =>
       prev.map((q) => (q.id === questionId ? { ...q, bloomLevel: level } : q))
@@ -934,20 +926,6 @@ export default function App() {
         String(prev.examCodeDigits === 3 ? 101 + i : 1001 + i)
       ),
     }));
-  };
-
-  const handleDownloadMasterWithSolutions = async () => {
-    setIsProcessing(true);
-    try {
-      const blob = await exportMasterExamWithSolutionsDocx(questions, config);
-      triggerBrowserDownload(
-        blob,
-        `De_Goc_Co_Loi_Giai_Chi_Tiet_${config.subjectName.replace(/\s+/g, '_')}_2025.docx`
-      );
-      await executePostDownloadZeroTracePurge('Đề Gốc Kèm Lời Giải Chi Tiết (.docx)');
-    } finally {
-      setIsProcessing(false);
-    }
   };
 
   const handleDownloadCleanedMaster = async () => {
@@ -1228,7 +1206,7 @@ export default function App() {
                 }`}
               >
                 <BarChart3 className="w-4 h-4 shrink-0" />
-                <span>3. Ma Trận &amp; Đặc Tả</span>
+                <span>3. Ma Trận Nhận Thức</span>
               </button>
 
               <button
@@ -1684,13 +1662,100 @@ export default function App() {
               </div>
             )}
 
-            {/* KHỐI 2: THANH CÔNG CỤ SOẠN THẢO, CHUYỂN NHANH PHẦN & TRỘN ĐỀ (NẰM BÊN TRÁI 1/3 KHUNG HÌNH) */}
+            {/* KHỐI 2: THANH CÔNG CỤ TÁC VỤ KHOA HỌC — NHẬP ĐỀ, TRỘN ĐỀ & LỌC PHẦN (NẰM BÊN TRÁI 1/3 KHUNG HÌNH) */}
             <div className="p-3 rounded-2xl toolbar-3d space-y-2.5">
-              {/* Nhóm 1: Chuyển nhanh các Phần của đề */}
+              {/* Nhóm 1: Các nút tác vụ chính được bố trí khoa học theo quy trình (Tải đề lên -> Trộn đề -> Đề mẫu -> Lưu sửa) */}
+              <div className="space-y-1.5 pb-2.5 border-b border-sky-200/90">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-[11px] font-black text-sky-950 uppercase tracking-wide">
+                    1. Thao tác đề thi &amp; trộn đề:
+                  </span>
+                  <span className="text-[10px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-md border border-orange-300">
+                    Hỗ trợ .docx, .doc, .pdf
+                  </span>
+                </div>
+
+                {/* Hàng 1: 2 Nút quan trọng nhất — [Tải đề lên] siêu nổi bật & [Trộn Đề] */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    title="Tải đề thi từ máy tính (.docx, .doc, .pdf) lên hệ thống"
+                    className="px-3 py-2.5 rounded-xl font-black text-white btn-auto-scale btn-3d-upload-hero flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                    <span className="tracking-wide uppercase">Tải đề lên</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleRunShuffle}
+                    disabled={!canShuffle || isProcessing}
+                    title="Hoán vị câu hỏi & đáp án để sinh bộ mã đề kèm bảng đáp án khảo thí"
+                    className="px-3 py-2.5 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Shuffle className="w-4 h-4 shrink-0" />
+                    <span>Trộn Đề ({config.numVariants} Mã)</span>
+                  </button>
+                </div>
+
+                {/* Hàng 2: 2 Nút tiện ích — [Đề Mẫu 18-4-6] & [Lưu Chỉnh Sửa] */}
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleLoadSampleExam(true)}
+                    title="Nạp đề mẫu chuẩn cấu trúc 2025 (18 câu Phần I, 4 câu Phần II, 6 câu Phần III)"
+                    className="px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span>Đề Mẫu 18-4-6</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveEdits}
+                    title="Lưu mọi chỉnh sửa nội dung câu hỏi và đáp án hiện tại"
+                    className={`px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
+                    }`}
+                  >
+                    <Save className="w-3.5 h-3.5 shrink-0" />
+                    <span>{hasUnsavedChanges ? 'Lưu Chỉnh Sửa*' : 'Lưu Chỉnh Sửa'}</span>
+                  </button>
+                </div>
+
+                {/* Hàng 3 (Tự động xuất hiện sau khi đã trộn đề): Tải trọn bộ ZIP & Bảng Đáp Án */}
+                {shuffledVariants.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleDownloadZipBundle}
+                      disabled={isProcessing}
+                      className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    >
+                      <FileArchive className="w-3.5 h-3.5 shrink-0" />
+                      <span>Tải Bộ {shuffledVariants.length} Đề (.zip)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDownloadMasterAnswerSheetDocx}
+                      disabled={isProcessing}
+                      className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      <span>Bảng Đáp Án (.docx)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Nhóm 2: Chuyển nhanh các Phần của đề & Chế độ hiển thị */}
               <div className="space-y-1.5 pb-2 border-b border-sky-200/90">
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-[11px] font-black text-sky-950 uppercase tracking-wide">
-                    Chuyển nhanh phần câu hỏi:
+                    2. Lọc phần câu hỏi &amp; chế độ xem:
                   </span>
                 </div>
 
@@ -1778,7 +1843,7 @@ export default function App() {
                 </div>
 
                 {/* Chuyển chế độ Thẻ Câu Hỏi 3D / Trang Word A4 */}
-                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
                     type="button"
                     onClick={() => {
@@ -1812,75 +1877,6 @@ export default function App() {
                     <span>Trang Word A4</span>
                   </button>
                 </div>
-              </div>
-
-              {/* Nhóm 2: Các nút tác vụ chính (Mỗi nút 1 màu riêng biệt) */}
-              <div className="space-y-1.5 pb-2 border-b border-sky-200/90">
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessing}
-                    className="px-2 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-primary flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer"
-                  >
-                    <Upload className="w-3.5 h-3.5 shrink-0" />
-                    <span>Tải Word / PDF</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleLoadSampleExam(true)}
-                    className="px-2 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>Đề Mẫu 18-4-6</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveEdits}
-                    className={`px-2 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer ${
-                      hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
-                    }`}
-                  >
-                    <Save className="w-3.5 h-3.5 shrink-0" />
-                    <span>Lưu Sửa</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={handleRunShuffle}
-                    disabled={!canShuffle || isProcessing}
-                    className="px-3 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  >
-                    <Shuffle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Trộn Đề ({config.numVariants} Mã)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleDownloadMasterWithSolutions}
-                    disabled={isProcessing}
-                    className="px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5 shrink-0" />
-                    <span>Đề Gốc Có Lời Giải</span>
-                  </button>
-                </div>
-
-                {shuffledVariants.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleDownloadZipBundle}
-                    disabled={isProcessing}
-                    className="w-full px-3 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                  >
-                    <FileArchive className="w-3.5 h-3.5 shrink-0" />
-                    <span>Tải Trọn Bộ {shuffledVariants.length} Đề Thi &amp; Đáp Án (.zip)</span>
-                  </button>
-                )}
               </div>
 
               {/* Nhóm 3: Khung cảnh báo câu hỏi chưa hợp lệ */}
@@ -2446,33 +2442,6 @@ export default function App() {
                             </span>
                           </div>
                         )}
-
-                        {/* Khung Lời giải chi tiết & Yêu cầu cần đạt */}
-                        <div className="mt-3 pt-3 border-t border-sky-200/80 grid grid-cols-1 md:grid-cols-12 gap-3 text-xs">
-                          <div className="md:col-span-5 bg-sky-50/80 p-2.5 rounded-xl border border-sky-200">
-                            <span className="block font-extrabold text-sky-950 mb-0.5">
-                              Yêu cầu cần đạt (GDPT 2018):
-                            </span>
-                            <span className="text-slate-700 font-medium">
-                              {q.learningOutcome ||
-                                'Đảm bảo đúng chuẩn kiến thức kỹ năng của đề gốc.'}
-                            </span>
-                          </div>
-                          <div className="md:col-span-7">
-                            <label className="block font-extrabold text-indigo-950 mb-1">
-                              Lời giải chi tiết (Xuất kèm trong file Word khi bật):
-                            </label>
-                            <input
-                              type="text"
-                              value={q.explanation || ''}
-                              onChange={(e) =>
-                                handleUpdateExplanation(q.id, e.target.value)
-                              }
-                              placeholder="Nhập lời giải chi tiết hoặc bấm AI Tạo Đề Tương Đương để tự động sinh..."
-                              className="w-full px-3 py-1.5 text-xs bg-white border border-indigo-200 rounded-lg focus:outline-none focus:border-blue-600"
-                            />
-                          </div>
-                        </div>
                       </div>
                     </React.Fragment>
                   );
@@ -2497,7 +2466,7 @@ export default function App() {
                       </h3>
                     </div>
                     <p className="text-xs text-slate-700 font-semibold">
-                      Giữ nguyên 100% <strong>Yêu cầu cần đạt</strong>, ma trận nhận thức và cấu trúc 3 phần của đề gốc; chỉ thay đổi số liệu, hàm số và ngữ cảnh khoa học kèm lời giải chi tiết.
+                      Giữ nguyên 100% ma trận nhận thức và cấu trúc 3 phần (Phần I, Phần II, Phần III) của đề gốc; tự động thay đổi số liệu, hàm số và ngữ cảnh khoa học.
                     </p>
                   </div>
 
@@ -2728,7 +2697,7 @@ export default function App() {
                     Sẵn sàng nhân bản bộ đề tương đương từ {questions.length} câu hỏi gốc
                   </h4>
                   <p className="text-xs text-slate-600 max-w-lg mx-auto">
-                    Nhấn nút <strong>[Bắt Đầu Nhân Bản Đề Tương Đương]</strong> phía trên để hệ thống sinh bộ đề mới giữ nguyên yêu cầu cần đạt, đối chiếu trực quan từng câu với đề gốc và tính sẵn lời giải chi tiết.
+                    Nhấn nút <strong>[Bắt Đầu Sinh Đề AI]</strong> phía trên để hệ thống sinh bộ đề mới giữ nguyên cấu trúc 3 phần và đối chiếu trực quan từng câu với đề gốc.
                   </p>
                 </div>
               ) : (
@@ -2804,9 +2773,6 @@ export default function App() {
                                 : 'Phần III'}{' '}
                               — Câu {cq.displayIndex}
                             </span>
-                            <span className="text-xs font-extrabold text-indigo-900 bg-indigo-100 px-2.5 py-1 rounded-lg">
-                              Yêu cầu cần đạt: {cq.learningOutcome}
-                            </span>
                           </div>
                         </div>
 
@@ -2881,13 +2847,6 @@ export default function App() {
                             )}
                           </div>
                         </div>
-
-                        {cq.explanation && (
-                          <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-950">
-                            <strong>Lời giải chi tiết câu tương đương: </strong>
-                            <span>{cq.explanation}</span>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -2896,24 +2855,26 @@ export default function App() {
             </div>
           )}
 
-          {/* ================= TAB 3 (MỚI): MA TRẬN ĐẶC TẢ ĐỀ THI & CẤP ĐỘ NHẬN THỨC BLOOM ================= */}
+          {/* ================= TAB 3: MA TRẬN CẤP ĐỘ NHẬN THỨC BLOOM ================= */}
           {activeRightTab === 'BLOOM_MATRIX' && (
             <div className="p-6 rounded-3xl card-3d-panel space-y-5">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-sky-200 pb-4">
                 <div>
                   <h3 className="text-base sm:text-lg font-black text-sky-950 uppercase">
-                    BẢNG MA TRẬN ĐẶC TẢ CẤP ĐỘ NHẬN THỨC & YÊU CẦU CẦN ĐẠT (CHUẨN GDPT 2018)
+                    BẢNG MA TRẬN CẤP ĐỘ NHẬN THỨC ĐỀ THI (CHUẨN THPT 2025)
                   </h3>
                   <p className="text-xs text-slate-600 font-semibold">
                     Thống kê tự động tỷ lệ Nhận biết · Thông hiểu · Vận dụng · Vận dụng cao của bộ đề hiện tại
                   </p>
                 </div>
                 <button
-                  onClick={handleDownloadMasterWithSolutions}
-                  className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5"
+                  type="button"
+                  onClick={handleRunShuffle}
+                  disabled={!canShuffle || isProcessing}
+                  className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Tải Đề Kèm Lời Giải (.docx)</span>
+                  <Shuffle className="w-4 h-4" />
+                  <span>Trộn Đề ({config.numVariants} Mã)</span>
                 </button>
               </div>
 
@@ -2968,51 +2929,61 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Bảng chi tiết từng câu hỏi */}
+              {/* Bảng chi tiết từng câu hỏi (Đã lược bỏ Yêu cầu cần đạt & Lời giải chi tiết cho gọn nhẹ) */}
               <div className="overflow-x-auto rounded-2xl border-2 border-sky-200 bg-white">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-sky-900 text-white font-extrabold uppercase">
                       <th className="py-3 px-3.5 border-b border-sky-800">Phần / Câu</th>
                       <th className="py-3 px-3.5 border-b border-sky-800">Mức độ nhận thức</th>
-                      <th className="py-3 px-3.5 border-b border-sky-800">Yêu cầu cần đạt (Đặc tả GDPT 2018)</th>
-                      <th className="py-3 px-3.5 border-b border-sky-800">Lời giải chi tiết</th>
+                      <th className="py-3 px-3.5 border-b border-sky-800">Nội dung câu dẫn</th>
+                      <th className="py-3 px-3.5 border-b border-sky-800">Đáp án chuẩn</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-sky-100">
-                    {questions.map((q) => (
-                      <tr key={`matrix-${q.id}`} className="hover:bg-sky-50/70">
-                        <td className="py-2.5 px-3.5 font-mono font-bold text-blue-950 whitespace-nowrap">
-                          {q.part === 'PART_1'
-                            ? 'Phần I'
-                            : q.part === 'PART_2'
-                            ? 'Phần II'
-                            : 'Phần III'}{' '}
-                          · Câu {q.displayIndex}
-                        </td>
-                        <td className="py-2.5 px-3.5 whitespace-nowrap font-bold">
-                          {q.bloomLevel === 'VAN_DUNG_CAO' && (
-                            <span className="text-rose-700">Vận dụng cao</span>
-                          )}
-                          {q.bloomLevel === 'VAN_DUNG' && (
-                            <span className="text-amber-700">Vận dụng</span>
-                          )}
-                          {q.bloomLevel === 'THONG_HIEU' && (
-                            <span className="text-emerald-700">Thông hiểu</span>
-                          )}
-                          {(!q.bloomLevel || q.bloomLevel === 'NHAN_BIET') && (
-                            <span className="text-blue-700">Nhận biết</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-slate-800 font-medium">
-                          {q.learningOutcome ||
-                            'Đảm bảo chuẩn kiến thức kỹ năng chương trình THPT 2025.'}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-slate-600">
-                          {q.explanation || 'Đã sẵn sàng lời giải.'}
-                        </td>
-                      </tr>
-                    ))}
+                    {questions.map((q) => {
+                      const correctDisplay =
+                        q.part === 'PART_1'
+                          ? q.options?.find((o) => o.isCorrect)?.currentLabel || '—'
+                          : q.part === 'PART_2'
+                          ? (q.subItems || [])
+                              .map((s) => `${s.currentLabel}:${s.isTrue ? 'Đ' : 'S'}`)
+                              .join(' · ')
+                          : q.shortAnswer || '—';
+
+                      return (
+                        <tr key={`matrix-${q.id}`} className="hover:bg-sky-50/70">
+                          <td className="py-2.5 px-3.5 font-mono font-bold text-blue-950 whitespace-nowrap">
+                            {q.part === 'PART_1'
+                              ? 'Phần I'
+                              : q.part === 'PART_2'
+                              ? 'Phần II'
+                              : 'Phần III'}{' '}
+                            · Câu {q.displayIndex}
+                          </td>
+                          <td className="py-2.5 px-3.5 whitespace-nowrap font-bold">
+                            {q.bloomLevel === 'VAN_DUNG_CAO' && (
+                              <span className="text-rose-700">Vận dụng cao</span>
+                            )}
+                            {q.bloomLevel === 'VAN_DUNG' && (
+                              <span className="text-amber-700">Vận dụng</span>
+                            )}
+                            {q.bloomLevel === 'THONG_HIEU' && (
+                              <span className="text-emerald-700">Thông hiểu</span>
+                            )}
+                            {(!q.bloomLevel || q.bloomLevel === 'NHAN_BIET') && (
+                              <span className="text-blue-700">Nhận biết</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3.5 text-slate-800 font-medium line-clamp-2">
+                            {q.stemText}
+                          </td>
+                          <td className="py-2.5 px-3.5 font-mono font-black text-rose-600 whitespace-nowrap">
+                            {correctDisplay}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

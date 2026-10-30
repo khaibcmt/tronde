@@ -549,6 +549,45 @@
   box-shadow: 0 1px 0 #2E1065;
 }
 
+/* Nút "Tải đề lên" siêu nổi bật — Màu Cam Vàng Hồng Lửa 3D kèm viền phát sáng thu hút ánh nhìn ngay lập tức */
+@keyframes uploadHeroPulse {
+  0%, 100% {
+    box-shadow:
+      0 5px 0 #9A3412,
+      0 0 0 2px rgba(254, 240, 138, 0.9),
+      0 8px 20px rgba(234, 88, 12, 0.55);
+  }
+  50% {
+    box-shadow:
+      0 5px 0 #9A3412,
+      0 0 0 4px rgba(253, 224, 71, 1),
+      0 10px 26px rgba(244, 63, 94, 0.75);
+  }
+}
+
+.btn-3d-upload-hero {
+  background: linear-gradient(135deg, #F59E0B 0%, #EA580C 50%, #E11D48 100%);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.65);
+  animation: uploadHeroPulse 2s ease-in-out infinite;
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1), filter 120ms ease;
+}
+.btn-3d-upload-hero:hover:not(:disabled) {
+  background: linear-gradient(135deg, #FBBF24 0%, #F97316 50%, #F43F5E 100%);
+  transform: translateY(-2px) scale(1.01);
+  filter: brightness(1.06);
+}
+.btn-3d-upload-hero:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 #9A3412;
+}
+.btn-3d-upload-hero:disabled {
+  background: linear-gradient(180deg, #CBD5E1 0%, #94A3B8 100%);
+  box-shadow: 0 4px 0 #64748B;
+  animation: none;
+  color: #475569;
+  cursor: not-allowed;
+}
+
 
 /* ================= HIỆU ỨNG KHÓI BỐC LÊN TỪ LY CÀ PHÊ (CSS KEYFRAMES) ================= */
 .coffee-steam-container {

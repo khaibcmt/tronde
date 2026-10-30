@@ -1593,28 +1593,21 @@ export async function exportAllVariantsZipBundle(
 ): Promise<Blob> {
   const bundleZip = new JSZip();
 
-  // 1. Lưu file đề gốc CÓ LỜI GIẢI CHI TIẾT
-  const masterSolutionsBlob = await exportMasterExamWithSolutionsDocx(masterQuestions, config);
-  bundleZip.file(
-    buildStandardExportFileName(config, 'docx', 'Đề gốc có lời giải'),
-    masterSolutionsBlob
-  );
-
-  // 2. Lưu file đề gốc chuẩn KHÔNG LỜI GIẢI (Học sinh làm thử)
+  // 1. Lưu file đề gốc chuẩn
   const masterCleanBlob = await exportCleanedMasterDocx(masterQuestions, config, false);
   bundleZip.file(
-    buildStandardExportFileName(config, 'docx', 'Đề gốc không lời giải'),
+    buildStandardExportFileName(config, 'docx', 'Đề gốc chuẩn'),
     masterCleanBlob
   );
 
-  // 3. Lưu file Bảng đáp án tổng hợp nộp khảo thí (1 trang A4)
+  // 2. Lưu file Bảng đáp án tổng hợp nộp khảo thí (1 trang A4)
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
   bundleZip.file(
     buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí'),
     masterAnswerDocxBlob
   );
 
-  // 4. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
+  // 3. Lưu từng file đề hoán vị cho học sinh (BẮT BUỘC KHÔNG LỜI GIẢI, KHÔNG KHUNG ĐÁP ÁN Ở CUỐI)
   const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
   const qrFolder = bundleZip.folder('Ma_QR_Cham_Thi_PNG');
 
@@ -1634,7 +1627,7 @@ export async function exportAllVariantsZipBundle(
     }
   }
 
-  // 5. Tạo file CSV tổng hợp key chấm thi
+  // 4. Tạo file CSV tổng hợp key chấm thi
   const csvLines: string[] = [
     'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload',
   ];
@@ -1680,15 +1673,14 @@ export async function exportQrCodesZip(
 }
 
 /**
- * Tiện ích 6: Đóng gói trọn bộ 4 Đề AI Tương Đương (kèm cả bản Đề Học Sinh & bản Đề Có Lời Giải Chi Tiết) thành 1 file .ZIP
+ * Tiện ích 6: Đóng gói trọn bộ 4 Đề AI Tương Đương thành 1 file .ZIP
  */
 export async function exportFourAiClonesZipBundle(
   aiVariants: Array<{ examCode: string; title: string; questions: ExamQuestion[] }>,
   config: ShuffleConfig
 ): Promise<Blob> {
   const aiZip = new JSZip();
-  const folderStudent = aiZip.folder('01_De_AI_Cho_Hoc_Sinh_Khong_Loi_Giai');
-  const folderTeacher = aiZip.folder('02_De_AI_Kem_Loi_Giai_Chi_Tiet_Cho_Giao_Vien');
+  const folderStudent = aiZip.folder('Bo_De_AI_Tuong_Duong_Docx');
 
   for (const v of aiVariants) {
     const studentBlob = await exportCleanedMasterDocx(
@@ -1702,15 +1694,6 @@ export async function exportFourAiClonesZipBundle(
     folderStudent?.file(
       buildStandardExportFileName(config, 'docx', `${v.examCode}`),
       studentBlob
-    );
-
-    const teacherBlob = await exportMasterExamWithSolutionsDocx(v.questions, {
-      ...config,
-      examSubtitle: `${v.title.toUpperCase()} (CÓ LỜI GIẢI) — MÃ: ${v.examCode}`,
-    });
-    folderTeacher?.file(
-      buildStandardExportFileName(config, 'docx', `${v.examCode}-Có lời giải`),
-      teacherBlob
     );
   }
 
