@@ -202,40 +202,121 @@ export function detectQuestionTopicAndUnit(q: ExamQuestion): {
     };
   }
 
-  // 4. SINH HỌC
+  // 4. SINH HỌC 12 (CHƯƠNG TRÌNH GDPT 2018 - HỌC KÌ I)
   if (
-    text.includes('gen') ||
-    text.includes('adn') ||
-    text.includes('phiên mã') ||
-    text.includes('dịch mã') ||
-    text.includes('đột biến gen') ||
-    text.includes('nhiễm sắc thể')
+    text.includes('phả hệ') ||
+    text.includes('phenylketone') ||
+    text.includes('pku') ||
+    text.includes('bạch tạng') ||
+    text.includes('tư vấn di truyền') ||
+    text.includes('di truyền học người')
   ) {
     return {
-      topic: 'Sinh học: Cơ chế di truyền và biến dị',
-      unit: 'Cơ chế di truyền ở cấp độ phân tử và tế bào',
+      topic: 'Chủ đề 4: Di truyền học người và Y học tư vấn',
+      unit: 'Phân tích sơ đồ phả hệ và xác suất tư vấn di truyền ở người',
       defaultOutcomes: [
-        'Nhận biết cấu trúc của ADN, ARN, mã di truyền và quá trình nhân đôi ADN.',
-        'Phân tích được hậu quả của các dạng đột biến điểm (thay thế, mất, thêm nuclêôtit) đối với chuỗi pôlipeptit.',
-        'Vận dụng quy luật di truyền giải thích cơ chế biểu hiện kiểu hình ở sinh vật.',
+        'Nhận biết quy ước các kí hiệu trong sơ đồ phả hệ và các bệnh, tật di truyền phổ biến ở người.',
+        'Xác định được quy luật di truyền của tính trạng bệnh (trội/lặn, trên NST thường hay NST giới tính) từ sơ đồ phả hệ.',
+        'Vận dụng quy tắc nhân và cộng xác suất để tư vấn di truyền, tính xác suất sinh con bình thường hoặc mắc bệnh.',
       ],
     };
   }
   if (
-    text.includes('phả hệ') ||
-    text.includes('alen') ||
-    text.includes('phép lai') ||
     text.includes('quần thể') ||
-    text.includes('hôn nhân') ||
-    text.includes('kiểu gen')
+    text.includes('ngẫu phối') ||
+    text.includes('tự thụ phấn') ||
+    text.includes('ưu thế lai') ||
+    text.includes('lai khác dòng') ||
+    text.includes('chọn giống') ||
+    text.includes('hardy')
   ) {
     return {
-      topic: 'Sinh học: Tính quy luật của hiện tượng di truyền',
-      unit: 'Di truyền học người và phân tích sơ đồ phả hệ',
+      topic: 'Chủ đề 3: Di truyền học quần thể và Tạo giống',
+      unit: 'Cấu trúc di truyền quần thể và Ứng dụng tạo giống ưu thế lai',
       defaultOutcomes: [
-        'Nhận biết quy ước các kí hiệu trong sơ đồ phả hệ người.',
-        'Xác định được bệnh do gen trội hay lặn, nằm trên nhiễm sắc thể thường hay nhiễm sắc thể giới tính.',
-        'Vận dụng công thức xác suất phả hệ để tính xác suất sinh con bình thường hoặc bị bệnh.',
+        'Nhận biết đặc điểm cấu trúc di truyền của quần thể tự thụ phấn và quần thể giao phối ngẫu nhiên.',
+        'Giải thích được cơ sở di truyền của hiện tượng ưu thế lai và quy trình lai khác dòng kép.',
+        'Vận dụng định luật Hardy-Weinberg và công thức quần thể tự thụ phấn để tính tần số allele, thành phần kiểu gene qua các thế hệ.',
+      ],
+    };
+  }
+  if (
+    text.includes('nhiễm sắc thể') ||
+    text.includes('nst') ||
+    text.includes('nucleosome') ||
+    text.includes('thể ba') ||
+    text.includes('đa bội') ||
+    text.includes('chuyển đoạn') ||
+    text.includes('mất đoạn') ||
+    text.includes('lặp đoạn') ||
+    text.includes('đảo đoạn')
+  ) {
+    // Kiểm tra nếu là quy luật liên kết giới tính hoặc hoán vị thì ưu tiên sang Chủ đề 2
+    if (
+      !text.includes('ruồi giấm') &&
+      !text.includes('tần số hoán vị') &&
+      !text.includes('mắt đỏ') &&
+      !text.includes('mắt trắng')
+    ) {
+      return {
+        topic: 'Chủ đề 1: Di truyền phân tử và Di truyền nhiễm sắc thể',
+        unit: 'Cấu trúc siêu hiển vi của NST và Đột biến nhiễm sắc thể',
+        defaultOutcomes: [
+          'Nhận biết cấu trúc siêu hiển vi của nhiễm sắc thể qua các mức xoắn (nucleosome, sợi cơ bản, sợi nhiễm sắc, chromatid).',
+          'Phân biệt được các dạng đột biến cấu trúc NST (mất đoạn, lặp đoạn, đảo đoạn, chuyển đoạn) và đột biến lệch bội, đa bội.',
+          'Vận dụng xác định số lượng NST và cơ chế không phân li của NST trong giảm phân.',
+        ],
+      };
+    }
+  }
+  if (
+    text.includes('mendel') ||
+    text.includes('phân li độc lập') ||
+    text.includes('tương tác') ||
+    text.includes('hoán vị') ||
+    text.includes('liên kết hoàn toàn') ||
+    text.includes('liên kết giới tính') ||
+    text.includes('ruồi giấm') ||
+    text.includes('mắt đỏ') ||
+    text.includes('ngoài nhân') ||
+    text.includes('ti thể') ||
+    text.includes('lục lạp') ||
+    text.includes('phép lai') ||
+    text.includes('kiểu hình')
+  ) {
+    return {
+      topic: 'Chủ đề 2: Tính quy luật của hiện tượng di truyền',
+      unit: 'Quy luật Mendel, Tương tác gene, Hoán vị gene, Liên kết giới tính & Di truyền ngoài nhân',
+      defaultOutcomes: [
+        'Nhận biết thí nghiệm của Mendel, Morgan, Correns và các quy luật phân li, phân li độc lập, liên kết gene, di truyền ngoài nhân.',
+        'Giải thích được cơ sở tế bào học của quy luật phân li độc lập, hoán vị gene và sự di truyền chéo/thẳng của gene trên NST giới tính X, Y.',
+        'Vận dụng giải các bài toán phép lai 2-3 cặp tính trạng, tính tần số hoán vị gene và xác định tỉ lệ kiểu gene, kiểu hình ở đời con.',
+      ],
+    };
+  }
+  if (
+    text.includes('dna') ||
+    text.includes('adn') ||
+    text.includes('rna') ||
+    text.includes('mrna') ||
+    text.includes('trna') ||
+    text.includes('phiên mã') ||
+    text.includes('dịch mã') ||
+    text.includes('amino acid') ||
+    text.includes('operon') ||
+    text.includes('đột biến điểm') ||
+    text.includes('liên kết hydrogen') ||
+    text.includes('nucleotide') ||
+    text.includes('gene') ||
+    text.includes('gen')
+  ) {
+    return {
+      topic: 'Chủ đề 1: Di truyền phân tử và Di truyền nhiễm sắc thể',
+      unit: 'Cấu trúc & Tái bản DNA, Phiên mã RNA, Dịch mã Protein, Điều hòa Operon Lac & Đột biến gene',
+      defaultOutcomes: [
+        'Nhận biết cấu trúc hóa học của DNA, các loại RNA, mã di truyền và các thành phần của Operon Lac ở vi khuẩn E. coli.',
+        'Phân tích được cơ chế tái bản DNA, phiên mã, dịch mã và ảnh hưởng của các dạng đột biến điểm đến chuỗi polypeptide.',
+        'Vận dụng các công thức liên hệ giữa chiều dài gene, số lượng nucleotide, số liên kết hydrogen và số phân tử tRNA/amino acid trong dịch mã.',
       ],
     };
   }

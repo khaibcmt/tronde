@@ -101,9 +101,9 @@ import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModa
 import { ScientificContentRenderer } from './components/ScientificContentRenderer';
 
 export default function App() {
-  // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề mẫu Đánh Giá Năng Lực tích hợp 4 môn Toán - Lý - Hóa - Sinh)
+  // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề Kiểm Tra Cuối Học Kì 1 — Môn Sinh Học 12 Chuẩn Cấu Trúc 2025)
   const [fileName, setFileName] = useState<string>(
-    'De_Mau_Danh_Gia_Nang_Luc_Toan_Ly_Hoa_Sinh_2025.docx'
+    'De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx'
   );
   const [questions, setQuestions] = useState<ExamQuestion[]>(() =>
     recalculateQuestionNumbering(SAMPLE_2025_EXAM_WITH_ERRORS, true)
@@ -128,7 +128,7 @@ export default function App() {
     text: string;
   } | null>(null);
 
-  // 2. State cấu hình Trộn đề, Tiêu đề Quốc ngữ, Môn thi (ĐÁNH GIÁ NĂNG LỰC TOÁN - LÝ - HÓA - SINH), Kỳ thi, Số phút (60 phút) & Mã QR
+  // 2. State cấu hình Trộn đề, Tiêu đề Quốc ngữ, Môn thi (SINH HỌC 12 - KIỂM TRA CUỐI KÌ I), Số phút (50 phút) & Mã QR
   const [config, setConfig] = useState<ShuffleConfig>({
     numVariants: 4,
     examCodeDigits: 3,
@@ -145,12 +145,12 @@ export default function App() {
     schoolName: 'TRƯỜNG THPT MANG THÍT',
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
     nationalMotto: 'Độc lập - Tự do - Hạnh phúc',
-    examTitle: 'BÀI THI ĐÁNH GIÁ NĂNG LỰC TỔNG HỢP',
-    examSubtitle: 'ĐỀ THI MẪU CHUẨN CẤU TRÚC 2025',
-    subjectName: 'TOÁN HỌC & KHOA HỌC TỰ NHIÊN (LÝ - HÓA - SINH)',
-    gradeLevel: 'Khảo thí Tuyển sinh',
+    examTitle: 'KIỂM TRA CUỐI KÌ I',
+    examSubtitle: 'ĐỀ KIỂM TRA ĐỊNH KỲ CHUẨN CẤU TRÚC 2025',
+    subjectName: 'SINH HỌC',
+    gradeLevel: 'Lớp 12',
     schoolYear: `Năm học ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
-    durationMinutes: 60,
+    durationMinutes: 50,
   });
   const [isConfigCollapsed, setIsConfigCollapsed] = useState<boolean>(false);
   const [showCustomCodeEditor, setShowCustomCodeEditor] = useState<boolean>(false);
@@ -495,15 +495,18 @@ export default function App() {
     setWordRawDocumentText(serializeQuestionsToWordRawText(numbered));
     setConfig((prev) => ({
       ...prev,
+      examTitle: 'KIỂM TRA CUỐI KÌ I',
+      examSubtitle: 'ĐỀ KIỂM TRA ĐỊNH KỲ CHUẨN CẤU TRÚC 2025',
       subjectName: 'SINH HỌC',
+      gradeLevel: 'Lớp 12',
       durationMinutes: 50,
     }));
-    setFileName('De_Chuan_THPT_2025_Mon_Sinh_Hoc_18_4_6.docx');
+    setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
     setStatusBanner({
       type: 'SUCCESS',
-      text: 'Đã nạp Đề Thi Chuẩn THPT 2025 — Môn Sinh Học (Tỉ lệ 18 - 4 - 6 = 28 câu, chuẩn 100% 4 đáp án mỗi câu Phần I & II). Giáo viên có thể bấm [Trộn Đề Ngay] hoặc [AI Sinh Cùng Lúc 4 Đề]!',
+      text: 'Đã nạp Đề Kiểm Tra Cuối Học Kì 1 — Môn Sinh Học 12 (Tỉ lệ 18 - 4 - 6 = 28 câu, tích hợp sơ đồ DNA, Operon Lac, Sơ đồ Phả hệ, bài tập DNA-RNA-Protein, lai Mendel, liên kết giới tính, di truyền học người & chọn giống, chuẩn 100% không lỗi)!',
     });
   };
 

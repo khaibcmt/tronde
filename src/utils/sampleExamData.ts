@@ -1,130 +1,138 @@
 import { ExamQuestion, FeatureReleaseItem } from '../types/exam';
 
 /**
- * Các chuỗi SVG vector độ phân giải cao (300 DPI, nền trắng tinh khiết #FFFFFF)
- * Dùng làm hình minh họa chuẩn cho đề thi mẫu tổng hợp Đánh Giá Năng Lực (Toán - Lý - Hóa - Sinh)
+ * HỆ THỐNG HÌNH VẼ VECTOR ĐỘ PHÂN GIẢI CAO (300 DPI, NỀN TRẮNG TINH KHIẾT #FFFFFF)
+ * Chuyên dụng cho Đề Kiểm Tra Cuối Học Kì 1 — Môn Sinh Học 12 (Chương trình GDPT 2018)
  */
 
-// 1. Hình khối lập phương ABCD.A'B'C'D' (Toán học không gian)
-const SVG_CUBE_3D = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 340" width="460" height="340" style="background:#FFFFFF">
+// 1. Sơ đồ cấu trúc không gian phân tử DNA xoắn kép & liên kết hydrogen (A=T, G≡C) và quá trình tái bản
+const SVG_DNA_STRUCTURE = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 300" width="520" height="300" style="background:#FFFFFF">
   <rect width="100%" height="100%" fill="#FFFFFF"/>
-  <line x1="80" y1="250" x2="180" y2="180" stroke="#0F172A" stroke-width="2" stroke-dasharray="6,5"/>
-  <line x1="180" y1="180" x2="350" y2="180" stroke="#0F172A" stroke-width="2" stroke-dasharray="6,5"/>
-  <line x1="180" y1="180" x2="180" y2="40" stroke="#0F172A" stroke-width="2" stroke-dasharray="6,5"/>
-  <polygon points="80,250 250,250 250,110 80,110" fill="#F8FAFC" fill-opacity="0.3" stroke="#0F172A" stroke-width="2.5"/>
-  <polygon points="80,110 250,110 350,40 180,40" fill="#F1F5F9" fill-opacity="0.6" stroke="#0F172A" stroke-width="2.5"/>
-  <polygon points="250,250 350,180 350,40 250,110" fill="#E2E8F0" fill-opacity="0.5" stroke="#0F172A" stroke-width="2.5"/>
-  <line x1="80" y1="250" x2="348" y2="42" stroke="#DC2626" stroke-width="2.5" stroke-dasharray="5,4"/>
-  <circle cx="80" cy="250" r="4" fill="#0F172A"/>
-  <circle cx="250" cy="250" r="4" fill="#0F172A"/>
-  <circle cx="350" cy="180" r="4" fill="#0F172A"/>
-  <circle cx="180" cy="180" r="4" fill="#0F172A"/>
-  <circle cx="80" cy="110" r="4" fill="#0F172A"/>
-  <circle cx="250" cy="110" r="4" fill="#0F172A"/>
-  <circle cx="350" cy="40" r="4" fill="#0F172A"/>
-  <circle cx="180" cy="40" r="4" fill="#0F172A"/>
-  <text x="58" y="265" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">A</text>
-  <text x="255" y="268" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">B</text>
-  <text x="358" y="190" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">C</text>
-  <text x="185" y="195" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">D</text>
-  <text x="58" y="105" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">A'</text>
-  <text x="255" y="105" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">B'</text>
-  <text x="358" y="38" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">C'</text>
-  <text x="170" y="35" font-family="Times New Roman, serif" font-size="18" font-weight="bold" fill="#0F172A">D'</text>
-  <text x="210" y="145" font-family="Times New Roman, serif" font-size="15" font-style="italic" font-weight="bold" fill="#DC2626">u = AC'</text>
-  <text x="160" y="270" font-family="Times New Roman, serif" font-size="14" font-style="italic" fill="#334155">cạnh = a</text>
+  <!-- Tiêu đề sơ đồ -->
+  <text x="260" y="24" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#0F172A">SƠ ĐỒ CẤU TRÚC PHÂN TỬ DNA MẠCH KÉP NGƯỢC CHIỀU &amp; LIÊN KẾT HYDROGEN</text>
+  
+  <!-- Khung mạch khuôn 1: Chiều 3' -> 5' -->
+  <rect x="45" y="55" width="430" height="32" rx="6" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="2"/>
+  <text x="25" y="76" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1D4ED8">3'</text>
+  <text x="485" y="76" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1D4ED8">5'</text>
+  <text x="260" y="76" text-anchor="middle" font-family="Times New Roman, serif" font-size="13" font-weight="bold" fill="#1E3A8A">Mạch полиnucleotide khuôn (Khung Đường Deoxyribose - Phosphate)</text>
+
+  <!-- Khung mạch bổ sung 2: Chiều 5' -> 3' -->
+  <rect x="45" y="215" width="430" height="32" rx="6" fill="#DCFCE7" stroke="#15803D" stroke-width="2"/>
+  <text x="25" y="236" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#15803D">5'</text>
+  <text x="485" y="236" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#15803D">3'</text>
+  <text x="260" y="236" text-anchor="middle" font-family="Times New Roman, serif" font-size="13" font-weight="bold" fill="#14532D">Mạch bổ sung ngược chiều (5' → 3')</text>
+
+  <!-- Cặp 1: A = T (2 liên kết H) -->
+  <rect x="75" y="87" width="44" height="34" rx="4" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+  <text x="97" y="109" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1D4ED8">A</text>
+  <line x1="90" y1="123" x2="90" y2="177" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="104" y1="123" x2="104" y2="177" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3"/>
+  <rect x="75" y="181" width="44" height="34" rx="4" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+  <text x="97" y="203" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#DC2626">T</text>
+
+  <!-- Cặp 2: G ≡ C (3 liên kết H) -->
+  <rect x="155" y="87" width="44" height="34" rx="4" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+  <text x="177" y="109" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#B45309">G</text>
+  <line x1="167" y1="123" x2="167" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="177" y1="123" x2="177" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="187" y1="123" x2="187" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <rect x="155" y="181" width="44" height="34" rx="4" fill="#ECFDF5" stroke="#059669" stroke-width="2"/>
+  <text x="177" y="203" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#047857">C</text>
+
+  <!-- Cặp 3: T = A (2 liên kết H) -->
+  <rect x="235" y="87" width="44" height="34" rx="4" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+  <text x="257" y="109" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#DC2626">T</text>
+  <line x1="250" y1="123" x2="250" y2="177" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="264" y1="123" x2="264" y2="177" stroke="#DC2626" stroke-width="2" stroke-dasharray="4,3"/>
+  <rect x="235" y="181" width="44" height="34" rx="4" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+  <text x="257" y="203" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1D4ED8">A</text>
+
+  <!-- Cặp 4: C ≡ G (3 liên kết H) -->
+  <rect x="315" y="87" width="44" height="34" rx="4" fill="#ECFDF5" stroke="#059669" stroke-width="2"/>
+  <text x="337" y="109" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#047857">C</text>
+  <line x1="327" y1="123" x2="327" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="337" y1="123" x2="337" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="347" y1="123" x2="347" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <rect x="315" y="181" width="44" height="34" rx="4" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+  <text x="337" y="203" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#B45309">G</text>
+
+  <!-- Cặp 5: G ≡ C (3 liên kết H) -->
+  <rect x="395" y="87" width="44" height="34" rx="4" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+  <text x="417" y="109" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#B45309">G</text>
+  <line x1="407" y1="123" x2="407" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="417" y1="123" x2="417" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <line x1="427" y1="123" x2="427" y2="177" stroke="#059669" stroke-width="2" stroke-dasharray="4,3"/>
+  <rect x="395" y="181" width="44" height="34" rx="4" fill="#ECFDF5" stroke="#059669" stroke-width="2"/>
+  <text x="417" y="203" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#047857">C</text>
+
+  <!-- Chú thích cuối hình -->
+  <text x="260" y="276" text-anchor="middle" font-family="Times New Roman, serif" font-size="13" font-style="italic" fill="#334155">Nguyên tắc bổ sung: A liên kết với T bằng 2 liên kết hydrogen; G liên kết với C bằng 3 liên kết hydrogen (H = 2A + 3G)</text>
 </svg>`;
 
-// 2. Đồ thị hàm số bậc ba y = x^3 - 3x^2 + 2 (Toán học giải tích)
-const SVG_CUBIC_GRAPH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 340" width="460" height="340" style="background:#FFFFFF">
+// 2. Sơ đồ Operon Lac ở vi khuẩn E. coli (Vùng P, O và nhóm gene cấu trúc Z, Y, A)
+const SVG_LAC_OPERON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 230" width="520" height="230" style="background:#FFFFFF">
   <rect width="100%" height="100%" fill="#FFFFFF"/>
-  <line x1="30" y1="170" x2="430" y2="170" stroke="#334155" stroke-width="2"/>
-  <polygon points="430,170 422,165 422,175" fill="#334155"/>
-  <text x="434" y="174" font-family="Times New Roman, serif" font-size="16" font-style="italic" font-weight="bold">x</text>
-  <line x1="160" y1="320" x2="160" y2="25" stroke="#334155" stroke-width="2"/>
-  <polygon points="160,25 155,33 165,33" fill="#334155"/>
-  <text x="154" y="18" font-family="Times New Roman, serif" font-size="16" font-style="italic" font-weight="bold">y</text>
-  <text x="145" y="186" font-family="Times New Roman, serif" font-size="15" font-weight="bold">O</text>
-  <circle cx="160" cy="50" r="4.5" fill="#DC2626"/>
-  <text x="138" y="55" font-family="Times New Roman, serif" font-size="15" font-weight="bold">2</text>
-  <text x="75" y="45" font-family="Times New Roman, serif" font-size="13" font-weight="bold" fill="#DC2626">Cực đại (0; 2)</text>
-  <circle cx="280" cy="290" r="4.5" fill="#2563EB"/>
-  <line x1="280" y1="170" x2="280" y2="290" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4"/>
-  <line x1="160" y1="290" x2="280" y2="290" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4"/>
-  <text x="276" y="188" font-family="Times New Roman, serif" font-size="15" font-weight="bold">2</text>
-  <text x="138" y="295" font-family="Times New Roman, serif" font-size="15" font-weight="bold">-2</text>
-  <text x="290" y="305" font-family="Times New Roman, serif" font-size="13" font-weight="bold" fill="#2563EB">Cực tiểu (2; -2)</text>
-  <circle cx="220" cy="170" r="3.5" fill="#0F172A"/>
-  <text x="216" y="188" font-family="Times New Roman, serif" font-size="15" font-weight="bold">1</text>
-  <path d="M 85,320 C 130,110 140,50 160,50 C 190,50 210,130 220,170 C 230,210 260,290 280,290 C 300,290 320,170 345,35" fill="none" stroke="#2563EB" stroke-width="3"/>
-  <text x="325" y="28" font-family="Times New Roman, serif" font-size="15" font-style="italic" font-weight="bold" fill="#2563EB">y = f(x)</text>
+  <text x="260" y="26" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#0F172A">SƠ ĐỒ CẤU TRÚC OPERON LAC Ở VI KHUẨN E. COLI (JACOB &amp; MONOD)</text>
+  
+  <!-- Trục DNA -->
+  <line x1="25" y1="95" x2="495" y2="95" stroke="#475569" stroke-width="4"/>
+
+  <!-- Gene điều hòa lacI -->
+  <rect x="35" y="72" width="75" height="46" rx="5" fill="#F3E8FF" stroke="#7E22CE" stroke-width="2"/>
+  <text x="72" y="99" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#6B21A8">lacI (R)</text>
+  <text x="72" y="58" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-weight="bold" fill="#6B21A8">Gene điều hòa</text>
+
+  <!-- Vùng khởi động P -->
+  <rect x="135" y="72" width="60" height="46" rx="5" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+  <text x="165" y="99" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#B45309">P</text>
+  <text x="165" y="58" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-weight="bold" fill="#B45309">Khởi động</text>
+
+  <!-- Vùng vận hành O -->
+  <rect x="195" y="72" width="60" height="46" rx="5" fill="#FEE2E2" stroke="#DC2626" stroke-width="2"/>
+  <text x="225" y="99" text-anchor="middle" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#B91C1C">O</text>
+  <text x="225" y="58" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-weight="bold" fill="#B91C1C">Vận hành</text>
+
+  <!-- Các gene cấu trúc lacZ, lacY, lacA -->
+  <rect x="255" y="72" width="75" height="46" rx="5" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="2"/>
+  <text x="292" y="99" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#1E40AF">lacZ</text>
+
+  <rect x="330" y="72" width="75" height="46" rx="5" fill="#E0F2FE" stroke="#0284C7" stroke-width="2"/>
+  <text x="367" y="99" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#0369A1">lacY</text>
+
+  <rect x="405" y="72" width="75" height="46" rx="5" fill="#DCFCE7" stroke="#15803D" stroke-width="2"/>
+  <text x="442" y="99" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#166534">lacA</text>
+
+  <!-- Ngoặc nhọn cụm Operon Lac -->
+  <line x1="135" y1="135" x2="480" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <line x1="135" y1="127" x2="135" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <line x1="480" y1="127" x2="480" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <text x="307" y="155" text-anchor="middle" font-family="Times New Roman, serif" font-size="14" font-weight="bold" fill="#0F172A">Cấu trúc Operon Lac (P - O - Z - Y - A)</text>
+
+  <!-- Sản phẩm enzyme -->
+  <text x="292" y="182" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-style="italic" fill="#1E40AF">β-galactosidase</text>
+  <text x="367" y="182" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-style="italic" fill="#0369A1">Permease</text>
+  <text x="442" y="182" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-style="italic" fill="#166534">Transacetylase</text>
+  <text x="72" y="182" text-anchor="middle" font-family="Times New Roman, serif" font-size="12" font-style="italic" fill="#6B21A8">Protein ức chế</text>
 </svg>`;
 
-// 3. Đồ thị dao động điều hòa li độ - thời gian x - t (Vật lý học)
-const SVG_OSCILLATION_GRAPH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 280" width="480" height="280" style="background:#FFFFFF">
-  <rect width="100%" height="100%" fill="#FFFFFF"/>
-  <line x1="40" y1="140" x2="445" y2="140" stroke="#334155" stroke-width="2"/>
-  <polygon points="445,140 437,135 437,145" fill="#334155"/>
-  <text x="448" y="144" font-family="Times New Roman, serif" font-size="16" font-style="italic" font-weight="bold">t (s)</text>
-  <line x1="70" y1="260" x2="70" y2="25" stroke="#334155" stroke-width="2"/>
-  <polygon points="70,25 65,33 75,33" fill="#334155"/>
-  <text x="50" y="20" font-family="Times New Roman, serif" font-size="16" font-style="italic" font-weight="bold">x (cm)</text>
-  <text x="55" y="155" font-family="Times New Roman, serif" font-size="15" font-weight="bold">O</text>
-  <text x="46" y="55" font-family="Times New Roman, serif" font-size="15" font-weight="bold">+4</text>
-  <line x1="66" y1="50" x2="74" y2="50" stroke="#334155" stroke-width="1.5"/>
-  <line x1="70" y1="50" x2="420" y2="50" stroke="#E2E8F0" stroke-width="1.5" stroke-dasharray="3,3"/>
-  <text x="48" y="235" font-family="Times New Roman, serif" font-size="15" font-weight="bold">-4</text>
-  <line x1="66" y1="230" x2="74" y2="230" stroke="#334155" stroke-width="1.5"/>
-  <line x1="70" y1="230" x2="420" y2="230" stroke="#E2E8F0" stroke-width="1.5" stroke-dasharray="3,3"/>
-  <path d="M 70,50 C 115,50 125,140 155,140 C 185,140 205,230 240,230 C 275,230 295,140 325,140 C 355,140 380,50 410,50" fill="none" stroke="#059669" stroke-width="3"/>
-  <circle cx="70" cy="50" r="4" fill="#059669"/>
-  <circle cx="155" cy="140" r="3.5" fill="#0F172A"/>
-  <circle cx="240" cy="230" r="4" fill="#059669"/>
-  <circle cx="325" cy="140" r="3.5" fill="#0F172A"/>
-  <circle cx="410" cy="50" r="4" fill="#059669"/>
-  <text x="145" y="162" font-family="Times New Roman, serif" font-size="14" font-weight="bold">0,1</text>
-  <text x="230" y="162" font-family="Times New Roman, serif" font-size="14" font-weight="bold">0,2</text>
-  <text x="315" y="162" font-family="Times New Roman, serif" font-size="14" font-weight="bold">0,3</text>
-  <text x="400" y="162" font-family="Times New Roman, serif" font-size="14" font-weight="bold">0,4</text>
-  <line x1="70" y1="36" x2="410" y2="36" stroke="#4F46E5" stroke-width="1.5"/>
-  <polygon points="70,36 78,33 78,39" fill="#4F46E5"/>
-  <polygon points="410,36 402,33 402,39" fill="#4F46E5"/>
-  <text x="205" y="30" font-family="Times New Roman, serif" font-size="14" font-weight="bold" fill="#4F46E5">Chu kì T = 0,4 s</text>
-</svg>`;
-
-// 4. Sơ đồ thí nghiệm điều chế khí O2 đẩy nước (Hóa học thực nghiệm)
-const SVG_CHEM_APPARATUS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 300" width="460" height="300" style="background:#FFFFFF">
-  <rect width="100%" height="100%" fill="#FFFFFF"/>
-  <rect x="50" y="70" width="160" height="36" rx="10" transform="rotate(-15, 130, 88)" fill="#F8FAFC" stroke="#334155" stroke-width="2"/>
-  <rect x="50" y="76" width="40" height="24" transform="rotate(-15, 70, 88)" fill="#7C3AED" opacity="0.85"/>
-  <text x="35" y="52" font-family="Times New Roman, serif" font-size="14" font-weight="bold" fill="#7C3AED">Thuốc tím KMnO₄</text>
-  <path d="M 75,170 Q 85,130 90,110 Q 100,130 105,170 Z" fill="#EA580C" opacity="0.85"/>
-  <rect x="70" y="170" width="40" height="25" fill="#64748B" rx="3"/>
-  <text x="50" y="215" font-family="Times New Roman, serif" font-size="13" font-weight="bold">Đèn cồn (t°)</text>
-  <path d="M 200,68 L 245,68 L 285,160 L 330,160 L 330,100" fill="none" stroke="#0284C7" stroke-width="4"/>
-  <rect x="270" y="130" width="160" height="85" rx="6" fill="#BAE6FD" fill-opacity="0.45" stroke="#0284C7" stroke-width="2"/>
-  <text x="300" y="235" font-family="Times New Roman, serif" font-size="13" font-weight="bold" fill="#0369A1">Chậu chứa nước H₂O</text>
-  <rect x="315" y="55" width="34" height="95" rx="5" fill="#FFFFFF" fill-opacity="0.9" stroke="#334155" stroke-width="2"/>
-  <circle cx="332" cy="125" r="4" fill="#38BDF8"/>
-  <circle cx="330" cy="105" r="5" fill="#38BDF8"/>
-  <circle cx="332" cy="85" r="5.5" fill="#38BDF8"/>
-  <text x="360" y="75" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#DC2626">Khí O₂ thu được</text>
-  <text x="360" y="95" font-family="Times New Roman, serif" font-size="12" font-style="italic">(bằng cách đẩy nước)</text>
-</svg>`;
-
-// 5. Sơ đồ phả hệ di truyền 3 thế hệ (Sinh học di truyền)
-const SVG_PEDIGREE_CHART = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 280" width="460" height="280" style="background:#FFFFFF">
+// 3. Sơ đồ phả hệ 3 thế hệ (Câu 16 Phần I: Bệnh di truyền gene lặn trên NST thường)
+const SVG_PEDIGREE_CHART_1 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 280" width="480" height="280" style="background:#FFFFFF">
   <rect width="100%" height="100%" fill="#FFFFFF"/>
   <text x="20" y="55" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1E293B">I</text>
   <text x="20" y="140" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1E293B">II</text>
   <text x="20" y="230" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1E293B">III</text>
-  <rect x="290" y="15" width="18" height="18" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
-  <text x="316" y="29" font-family="Times New Roman, serif" font-size="13">: Nam bình thường</text>
-  <circle cx="299" cy="48" r="9" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
-  <text x="316" y="52" font-family="Times New Roman, serif" font-size="13">: Nữ bình thường</text>
-  <rect x="290" y="65" width="18" height="18" fill="#0F172A" stroke="#0F172A" stroke-width="2"/>
-  <text x="316" y="79" font-family="Times New Roman, serif" font-size="13">: Nam bị bệnh</text>
-  <!-- I-1 x I-2 -->
+  <!-- Chú giải -->
+  <rect x="305" y="15" width="18" height="18" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="330" y="29" font-family="Times New Roman, serif" font-size="13">: Nam bình thường</text>
+  <circle cx="314" cy="48" r="9" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="330" y="52" font-family="Times New Roman, serif" font-size="13">: Nữ bình thường</text>
+  <rect x="305" y="65" width="18" height="18" fill="#0F172A" stroke="#0F172A" stroke-width="2"/>
+  <text x="330" y="79" font-family="Times New Roman, serif" font-size="13">: Nam bị bệnh</text>
+  <circle cx="314" cy="98" r="9" fill="#0F172A" stroke="#0F172A" stroke-width="2"/>
+  <text x="330" y="102" font-family="Times New Roman, serif" font-size="13">: Nữ bị bệnh</text>
+
+  <!-- Thế hệ I: I-1 x I-2 bình thường -->
   <rect x="90" y="40" width="22" height="22" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
   <text x="96" y="32" font-family="Times New Roman, serif" font-size="13" font-weight="bold">1</text>
   <line x1="112" y1="51" x2="155" y2="51" stroke="#0F172A" stroke-width="2"/>
@@ -132,20 +140,24 @@ const SVG_PEDIGREE_CHART = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
   <text x="162" y="32" font-family="Times New Roman, serif" font-size="13" font-weight="bold">2</text>
   <line x1="133" y1="51" x2="133" y2="85" stroke="#0F172A" stroke-width="2"/>
   <line x1="75" y1="85" x2="200" y2="85" stroke="#0F172A" stroke-width="2"/>
-  <!-- II-1 (bệnh), II-2 (bình thường), II-3 (bình thường) x II-4 -->
+
+  <!-- Thế hệ II: II-1 (nữ bị bệnh aa), II-2 (nữ bình thường), II-3 (nam bình thường) x II-4 (nữ bình thường) -->
   <line x1="75" y1="85" x2="75" y2="125" stroke="#0F172A" stroke-width="2"/>
-  <rect x="64" y="125" width="22" height="22" fill="#0F172A" stroke="#0F172A" stroke-width="2"/>
-  <text x="70" y="162" font-family="Times New Roman, serif" font-size="13" font-weight="bold">1</text>
+  <circle cx="75" cy="136" r="11" fill="#0F172A" stroke="#0F172A" stroke-width="2"/>
+  <text x="71" y="164" font-family="Times New Roman, serif" font-size="13" font-weight="bold">1</text>
+
   <line x1="133" y1="85" x2="133" y2="125" stroke="#0F172A" stroke-width="2"/>
   <circle cx="133" cy="136" r="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
-  <text x="129" y="162" font-family="Times New Roman, serif" font-size="13" font-weight="bold">2</text>
+  <text x="129" y="164" font-family="Times New Roman, serif" font-size="13" font-weight="bold">2</text>
+
   <line x1="200" y1="85" x2="200" y2="125" stroke="#0F172A" stroke-width="2"/>
   <rect x="189" y="125" width="22" height="22" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
-  <text x="195" y="162" font-family="Times New Roman, serif" font-size="13" font-weight="bold">3</text>
+  <text x="195" y="164" font-family="Times New Roman, serif" font-size="13" font-weight="bold">3</text>
   <line x1="211" y1="136" x2="250" y2="136" stroke="#0F172A" stroke-width="2"/>
   <circle cx="261" cy="136" r="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
-  <text x="257" y="162" font-family="Times New Roman, serif" font-size="13" font-weight="bold">4</text>
-  <!-- Gen III -->
+  <text x="257" y="164" font-family="Times New Roman, serif" font-size="13" font-weight="bold">4</text>
+
+  <!-- Thế hệ III: III-1 (nữ bình thường), III-2 (nam bị bệnh), III-3 (nữ bình thường) -->
   <line x1="230" y1="136" x2="230" y2="190" stroke="#0F172A" stroke-width="2"/>
   <line x1="180" y1="190" x2="280" y2="190" stroke="#0F172A" stroke-width="2"/>
   <line x1="180" y1="190" x2="180" y2="215" stroke="#0F172A" stroke-width="2"/>
@@ -159,146 +171,411 @@ const SVG_PEDIGREE_CHART = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
   <text x="276" y="252" font-family="Times New Roman, serif" font-size="13" font-weight="bold">3</text>
 </svg>`;
 
+// 4. Sơ đồ phả hệ 3 thế hệ chuyên sâu (Câu 4 Phần II: Di truyền học người & Tư vấn di truyền)
+const SVG_PEDIGREE_CHART_2 = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 290" width="500" height="290" style="background:#FFFFFF">
+  <rect width="100%" height="100%" fill="#FFFFFF"/>
+  <text x="250" y="22" text-anchor="middle" font-family="Times New Roman, serif" font-size="14" font-weight="bold" fill="#0F172A">SƠ ĐỒ PHẢ HỆ BỆNH BẠCH TẠNG QUA 3 THẾ HỆ TRONG MỘT GIA ĐÌNH</text>
+  <text x="18" y="65" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1E293B">I</text>
+  <text x="18" y="150" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1E293B">II</text>
+  <text x="18" y="240" font-family="Times New Roman, serif" font-size="16" font-weight="bold" fill="#1E293B">III</text>
+
+  <!-- Cặp I-1 x I-2 (Gia đình 1) -->
+  <rect x="65" y="50" width="22" height="22" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="71" y="43" font-family="Times New Roman, serif" font-size="13" font-weight="bold">1</text>
+  <line x1="87" y1="61" x2="125" y2="61" stroke="#0F172A" stroke-width="2"/>
+  <circle cx="136" cy="61" r="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="132" y="43" font-family="Times New Roman, serif" font-size="13" font-weight="bold">2</text>
+  <line x1="106" y1="61" x2="106" y2="95" stroke="#0F172A" stroke-width="2"/>
+  <line x1="65" y1="95" x2="155" y2="95" stroke="#0F172A" stroke-width="2"/>
+
+  <!-- Con của I-1 x I-2: II-1 (nữ bệnh aa), II-2 (nam bình thường) -->
+  <line x1="65" y1="95" x2="65" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <circle cx="65" cy="146" r="11" fill="#DC2626" stroke="#991B1B" stroke-width="2"/>
+  <text x="61" y="174" font-family="Times New Roman, serif" font-size="13" font-weight="bold">1</text>
+
+  <line x1="155" y1="95" x2="155" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <rect x="144" y="135" width="22" height="22" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="150" y="174" font-family="Times New Roman, serif" font-size="13" font-weight="bold">2</text>
+
+  <!-- Cặp I-3 x I-4 (Gia đình 2) -->
+  <rect x="265" y="50" width="22" height="22" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="271" y="43" font-family="Times New Roman, serif" font-size="13" font-weight="bold">3</text>
+  <line x1="287" y1="61" x2="325" y2="61" stroke="#0F172A" stroke-width="2"/>
+  <circle cx="336" cy="61" r="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="332" y="43" font-family="Times New Roman, serif" font-size="13" font-weight="bold">4</text>
+  <line x1="306" y1="61" x2="306" y2="95" stroke="#0F172A" stroke-width="2"/>
+  <line x1="255" y1="95" x2="355" y2="95" stroke="#0F172A" stroke-width="2"/>
+
+  <!-- Con của I-3 x I-4: II-3 (nữ bình thường), II-4 (nam bệnh aa) -->
+  <line x1="255" y1="95" x2="255" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <circle cx="255" cy="146" r="11" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="251" y="174" font-family="Times New Roman, serif" font-size="13" font-weight="bold">3</text>
+
+  <line x1="355" y1="95" x2="355" y2="135" stroke="#0F172A" stroke-width="2"/>
+  <rect x="344" y="135" width="22" height="22" fill="#DC2626" stroke="#991B1B" stroke-width="2"/>
+  <text x="350" y="174" font-family="Times New Roman, serif" font-size="13" font-weight="bold">4</text>
+
+  <!-- Kết hôn II-2 x II-3 -->
+  <line x1="166" y1="146" x2="244" y2="146" stroke="#0F172A" stroke-width="2"/>
+  <line x1="205" y1="146" x2="205" y2="215" stroke="#0F172A" stroke-width="2"/>
+  <circle cx="205" cy="228" r="13" fill="#FEF3C7" stroke="#D97706" stroke-width="2.5"/>
+  <text x="205" y="233" text-anchor="middle" font-family="Times New Roman, serif" font-size="15" font-weight="bold" fill="#B45309">?</text>
+  <text x="205" y="262" text-anchor="middle" font-family="Times New Roman, serif" font-size="13" font-weight="bold" fill="#0F172A">III-1 (Xác suất?)</text>
+
+  <!-- Chú thích bên phải -->
+  <rect x="385" y="55" width="16" height="16" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="407" y="68" font-family="Times New Roman, serif" font-size="12">: Nam bình thường</text>
+  <circle cx="393" cy="88" r="8" fill="#FFFFFF" stroke="#0F172A" stroke-width="2"/>
+  <text x="407" y="92" font-family="Times New Roman, serif" font-size="12">: Nữ bình thường</text>
+  <rect x="385" y="110" width="16" height="16" fill="#DC2626" stroke="#991B1B" stroke-width="2"/>
+  <text x="407" y="123" font-family="Times New Roman, serif" font-size="12">: Nam bị bệnh</text>
+  <circle cx="393" cy="143" r="8" fill="#DC2626" stroke="#991B1B" stroke-width="2"/>
+  <text x="407" y="147" font-family="Times New Roman, serif" font-size="12">: Nữ bị bệnh</text>
+</svg>`;
+
 const toSvgDataUrl = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
 /**
- * ĐỀ THI MẪU ĐÁNH GIÁ NĂNG LỰC TỔNG HỢP (TOÁN - LÝ - HÓA - SINH) NĂM 2025
- * Cấu trúc chuẩn 3 phần (28 câu = 16 Phần I + 4 Phần II + 8 Phần III):
- * - Mỗi môn chia đều đúng 7 câu (4 Phần I, 1 Phần II [4 ý a, b, c, d], 2 Phần III).
- * - Tích hợp đầy đủ: Công thức phân số, căn bậc n, tích phân, ma trận, véc-tơ, góc, tam giác,
- *   khối lập phương, đồ thị hàm số, đồ thị sóng cơ/dao động, ký hiệu vật lý, phương trình hóa học,
- *   chỉ số trên/dưới, mũi tên phản ứng có điều kiện, bảng ghép đôi Cột A - Cột B, sơ đồ phả hệ, phép lai.
- * - Sạch 100% lỗi, sẵn sàng trộn đề 4 mã đề chuẩn xác.
+ * ĐỀ KIỂM TRA CUỐI HỌC KÌ 1 — MÔN SINH HỌC LỚP 12 (CHƯƠNG TRÌNH GDPT 2018)
+ * Cấu trúc chuẩn Bộ GD&ĐT (28 câu = 18 câu Phần I + 4 câu Phần II [16 lệnh hỏi] + 6 câu Phần III):
+ * - Bao phủ trọn vẹn kiến thức Học kì 1 Sinh học 12:
+ *   + Cơ chế di truyền phân tử: Cấu trúc DNA (hình vẽ), tái bản DNA, phiên mã RNA, dịch mã Protein, điều hòa biểu hiện gene Operon Lac (hình vẽ), đột biến gene.
+ *   + Cơ chế di truyền NST: Cấu trúc siêu hiển vi NST, đột biến cấu trúc & số lượng NST.
+ *   + Quy luật di truyền: Lai một & hai cặp tính trạng Mendel, tương tác gene, liên kết gene & hoán vị gene (Morgan), di truyền liên kết giới tính (NST X, Y), di truyền ngoài nhân (ti thể, lục lạp).
+ *   + Di truyền quần thể & Tạo giống: Cấu trúc di truyền quần thể tự thụ/ngẫu phối (Hardy-Weinberg), ưu thế lai, lai giống thực vật/động vật.
+ *   + Di truyền học người: Phân tích sơ đồ phả hệ (2 hình phả hệ chuẩn), xác suất tư vấn di truyền, liệu pháp gene.
+ * - Sạch 100% lỗi, công thức LaTeX chuẩn xác, sẵn sàng trộn 4 mã đề ngay lập tức.
  */
 export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
   // =========================================================================
-  // PHẦN I: TRẮC NGHIỆM 4 PHƯƠNG ÁN LỰA CHỌN (16 CÂU — TỪ CÂU 1 ĐẾN CÂU 16)
-  // Chia đều 4 môn: Toán (Câu 1-4), Vật lý (Câu 5-8), Hóa học (Câu 9-12), Sinh học (Câu 13-16)
+  // PHẦN I: TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN (18 CÂU — TỪ CÂU 1 ĐẾN CÂU 18)
   // =========================================================================
 
-  // --- MÔN TOÁN HỌC (CÂU 1 -> CÂU 4) ---
   {
-    id: 'math-p1-1',
+    id: 'bio12-p1-1',
     part: 'PART_1',
     originalIndex: 1,
     displayIndex: 1,
-    stemText: 'Cho hình khối lập phương $ABCD.A\'B\'C\'D\'$ có cạnh bằng $a$ (như hình vẽ bên). Trong không gian, độ dài của véc-tơ tổng $\\vec{u} = \\overrightarrow{AB} + \\overrightarrow{AD} + \\overrightarrow{AA\'}$ bằng bao nhiêu?',
+    stemText: 'Quan sát sơ đồ cấu trúc phân tử DNA mạch kép ở hình bên. Theo nguyên tắc bổ sung (NTBS) giữa hai mạch đơn đối song song ($3\' \\to 5\'$ và $5\' \\to 3\'$), cặp base nitrogenous nào sau đây luôn liên kết đặc hiệu với nhau bằng 3 liên kết hydrogen?',
     hasFormula: true,
-    formulaLatex: '\\vec{u} = \\overrightarrow{AB} + \\overrightarrow{AD} + \\overrightarrow{AA\'} = \\overrightarrow{AC\'} \\implies |\\vec{u}| = a\\sqrt{3}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng quy tắc hình hộp để tính độ dài véc-tơ trong không gian ba chiều.',
-    explanation: 'Theo quy tắc hình hộp trong không gian, ta có $\\overrightarrow{AB} + \\overrightarrow{AD} + \\overrightarrow{AA\'} = \\overrightarrow{AC\'}$. Do $AC\'$ là đường chéo của khối lập phương cạnh $a$ nên $|\\vec{u}| = AC\' = a\\sqrt{3}$.',
+    formulaLatex: 'A = T \\;(2\\text{ liên kết H}); \\quad G \\equiv C \\;(3\\text{ liên kết H})',
+    bloomLevel: 'NHAN_BIET',
+    learningOutcome: 'Nhận biết được cấu trúc hóa học và nguyên tắc bổ sung trong phân tử DNA xoắn kép.',
+    explanation: 'Trong phân tử DNA mạch kép, Adenine ($A$) liên kết với Thymine ($T$) bằng 2 liên kết hydrogen ($A=T$), còn Guanine ($G$) liên kết với Cytosine ($C$) bằng 3 liên kết hydrogen ($G \\equiv C$).',
     images: [
       {
-        id: 'img-math-cube',
-        dataUrl: toSvgDataUrl(SVG_CUBE_3D),
-        fileName: 'hinh_khoi_lap_phuong.svg',
+        id: 'img-bio12-dna',
+        dataUrl: toSvgDataUrl(SVG_DNA_STRUCTURE),
+        fileName: 'so_do_cau_truc_dna.svg',
         tagId: '[HINH_ANH_CAU_1]',
-        caption: 'Hình khối lập phương ABCD.A\'B\'C\'D\' cạnh a',
+        caption: 'Sơ đồ cấu trúc phân tử DNA mạch kép và các liên kết hydrogen giữa các cặp base',
         dpi: 300,
-        aspectRatio: 460 / 340,
-        widthTwips: 4200,
-        heightTwips: 3100,
+        aspectRatio: 520 / 300,
+        widthTwips: 4500,
+        heightTwips: 2600,
       },
     ],
     options: [
-      { id: 'math-p1-1-a', originalLabel: 'A', currentLabel: 'A', text: '$a\\sqrt{3}$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'math-p1-1-b', originalLabel: 'B', currentLabel: 'B', text: '$a\\sqrt{2}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-1-c', originalLabel: 'C', currentLabel: 'C', text: '$2a$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-1-d', originalLabel: 'D', currentLabel: 'D', text: '$3a$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-1-a', originalLabel: 'A', currentLabel: 'A', text: 'Guanine ($G$) và Cytosine ($C$).', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-1-b', originalLabel: 'B', currentLabel: 'B', text: 'Adenine ($A$) và Thymine ($T$).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-1-c', originalLabel: 'C', currentLabel: 'C', text: 'Adenine ($A$) và Uracil ($U$).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-1-d', originalLabel: 'D', currentLabel: 'D', text: 'Guanine ($G$) và Thymine ($T$).', isUnderline: false, isRed: false, isCorrect: false },
     ],
-    computedLayout: '1_ROW_4_COL',
+    computedLayout: '2_ROW_2_COL',
   },
   {
-    id: 'math-p1-2',
+    id: 'bio12-p1-2',
     part: 'PART_1',
     originalIndex: 2,
     displayIndex: 2,
-    stemText: 'Cho hàm số bậc ba $y = f(x) = ax^3 + bx^2 + cx + d$ có đồ thị như hình vẽ bên. Tọa độ điểm cực đại của đồ thị hàm số đã cho là:',
+    stemText: 'Trong quá trình tái bản DNA ở sinh vật nhân sơ và nhân thực, enzyme DNA polymerase chỉ tổng hợp mạch polynucleotide mới theo một chiều cố định là:',
     hasFormula: true,
-    formulaLatex: 'y = f(x) \\implies y\' = 0 \\implies x_{CD} = 0, y_{CD} = 2',
+    formulaLatex: '5\' \\to 3\'',
     bloomLevel: 'NHAN_BIET',
-    learningOutcome: 'Nhận biết điểm cực trị của hàm số thông qua đồ thị.',
-    explanation: 'Quan sát đồ thị hàm số bậc ba, ta thấy điểm uốn cực đại nằm trên trục tung tại vị trí có hoành độ $x = 0$ và tung độ $y = 2$. Do đó tọa độ điểm cực đại là $(0; 2)$.',
-    images: [
-      {
-        id: 'img-math-graph',
-        dataUrl: toSvgDataUrl(SVG_CUBIC_GRAPH),
-        fileName: 'do_thi_ham_bac_ba.svg',
-        tagId: '[HINH_ANH_CAU_2]',
-        caption: 'Đồ thị hàm số bậc ba y = f(x)',
-        dpi: 300,
-        aspectRatio: 460 / 340,
-        widthTwips: 4200,
-        heightTwips: 3100,
-      },
-    ],
+    learningOutcome: 'Trình bày được vai trò của enzyme DNA polymerase trong cơ chế tái bản DNA.',
+    explanation: 'Enzyme DNA polymerase chỉ có khả năng gắn nucleotide tự do vào đầu $3\'\\text{-OH}$ của mạch đang tổng hợp, do đó mạch mới luôn được kéo dài theo chiều $5\' \\to 3\'$.',
     options: [
-      { id: 'math-p1-2-a', originalLabel: 'A', currentLabel: 'A', text: '$(0; 2)$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'math-p1-2-b', originalLabel: 'B', currentLabel: 'B', text: '$(2; -2)$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-2-c', originalLabel: 'C', currentLabel: 'C', text: '$(-2; 2)$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-2-d', originalLabel: 'D', currentLabel: 'D', text: '$(1; 0)$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-2-a', originalLabel: 'A', currentLabel: 'A', text: 'Chiều $5\' \\to 3\'$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-2-b', originalLabel: 'B', currentLabel: 'B', text: 'Chiều $3\' \\to 5\'$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-2-c', originalLabel: 'C', currentLabel: 'C', text: 'Cả hai chiều $5\' \\to 3\'$ và $3\' \\to 5\'$ trên cùng một mạch đơn.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-2-d', originalLabel: 'D', currentLabel: 'D', text: 'Chiều từ điểm kết thúc về điểm khởi đầu tái bản.', isUnderline: false, isRed: false, isCorrect: false },
     ],
-    computedLayout: '1_ROW_4_COL',
+    computedLayout: '2_ROW_2_COL',
   },
   {
-    id: 'math-p1-3',
+    id: 'bio12-p1-3',
     part: 'PART_1',
     originalIndex: 3,
     displayIndex: 3,
-    stemText: 'Biết tích phân $I = \\int_{0}^{1} \\frac{2x + 3}{x + 1} \\, dx = a + b \\ln 2$ với $a, b$ là các số nguyên. Giá trị của biểu thức $P = a^2 + b^2$ bằng:',
+    stemText: 'Một đoạn mạch gốc của gene có trình tự các nucleotide là $3\'\\text{-TAC GGA CCT GCA ACT-5\'}$. Trình tự các bộ ba (codon) trên phân tử mRNA được phiên mã từ đoạn mạch gốc này là:',
     hasFormula: true,
-    formulaLatex: 'I = \\int_{0}^{1} \\left(2 + \\frac{1}{x+1}\\right) dx = [2x + \\ln(x+1)]_{0}^{1} = 2 + \\ln 2 \\implies a = 2, b = 1 \\implies P = 5',
+    formulaLatex: '3\'\\text{-TAC GGA CCT GCA ACT-5\'} \\xrightarrow{\\text{Phiên mã}} 5\'\\text{-AUG CCU GGA CGU UGA-3\'}',
     bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính tích phân của hàm phân thức hữu tỉ bằng phương pháp tách đa thức.',
-    explanation: 'Ta có $\\frac{2x+3}{x+1} = 2 + \\frac{1}{x+1}$. Khi đó $I = [2x + \\ln|x+1|]_{0}^{1} = (2 + \\ln 2) - 0 = 2 + \\ln 2$. Suy ra $a = 2, b = 1 \\implies P = 2^2 + 1^2 = 5$.',
+    learningOutcome: 'Xác định được trình tự phân tử mRNA tạo thành từ mạch khuôn của gene qua phiên mã.',
+    explanation: 'Theo nguyên tắc bổ sung trong phiên mã ($A_{\\text{gốc}} - U,\\; T_{\\text{gốc}} - A,\\; G_{\\text{gốc}} - C,\\; C_{\\text{gốc}} - G$), mạch gốc $3\'\\text{-TAC GGA CCT GCA ACT-5\'}$ tổng hợp nên mRNA có trình tự $5\'\\text{-AUG CCU GGA CGU UGA-3\'}$.',
     options: [
-      { id: 'math-p1-3-a', originalLabel: 'A', currentLabel: 'A', text: '$5$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'math-p1-3-b', originalLabel: 'B', currentLabel: 'B', text: '$13$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-3-c', originalLabel: 'C', currentLabel: 'C', text: '$10$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-3-d', originalLabel: 'D', currentLabel: 'D', text: '$8$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-3-a', originalLabel: 'A', currentLabel: 'A', text: '$5\'\\text{-AUG CCU GGA CGU UGA-3\'}$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-3-b', originalLabel: 'B', currentLabel: 'B', text: '$5\'\\text{-ATG CCT GGA CGT TGA-3\'}$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-3-c', originalLabel: 'C', currentLabel: 'C', text: '$3\'\\text{-AUG CCU GGA CGU UGA-5\'}$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-3-d', originalLabel: 'D', currentLabel: 'D', text: '$5\'\\text{-UAC GGA CCU GCA ACU-3\'}$.', isUnderline: false, isRed: false, isCorrect: false },
     ],
-    computedLayout: '1_ROW_4_COL',
+    computedLayout: '2_ROW_2_COL',
   },
   {
-    id: 'math-p1-4',
+    id: 'bio12-p1-4',
     part: 'PART_1',
     originalIndex: 4,
     displayIndex: 4,
-    stemText: 'Cho tam giác $\\triangle ABC$ vuông tại đỉnh $A$ có góc $\\widehat{BAC} = 90^\\circ$, độ dài các cạnh $AB = 3$ và $AC = 4$. Tích vô hướng của hai véc-tơ $\\overrightarrow{BA} \\cdot \\overrightarrow{BC}$ có giá trị bằng:',
-    hasFormula: true,
-    formulaLatex: '\\overrightarrow{BA} \\cdot \\overrightarrow{BC} = \\overrightarrow{BA} \\cdot (\\overrightarrow{BA} + \\overrightarrow{AC}) = |\\overrightarrow{BA}|^2 + \\overrightarrow{BA} \\cdot \\overrightarrow{AC} = 3^2 + 0 = 9',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng định nghĩa và tính chất tích vô hướng của hai véc-tơ trong hình học phẳng.',
-    explanation: 'Ta phân tích $\\overrightarrow{BC} = \\overrightarrow{BA} + \\overrightarrow{AC}$. Khi đó $\\overrightarrow{BA} \\cdot \\overrightarrow{BC} = \\overrightarrow{BA} \\cdot (\\overrightarrow{BA} + \\overrightarrow{AC}) = |\\overrightarrow{BA}|^2 + \\overrightarrow{BA} \\cdot \\overrightarrow{AC} = 3^2 + 0 = 9$ (vì $AB \\perp AC$).',
+    stemText: 'Trong quá trình dịch mã tổng hợp chuỗi polypeptide ở tế bào, loại nucleic acid nào đóng vai trò như "người phiên dịch" trực tiếp mang bộ ba đối mã (anticodon) khớp bổ sung với codon trên mRNA?',
+    hasFormula: false,
+    bloomLevel: 'NHAN_BIET',
+    learningOutcome: 'Phân biệt được chức năng của các loại RNA (mRNA, tRNA, rRNA) trong quá trình dịch mã.',
+    explanation: 'Phân tử tRNA (RNA vận chuyển) mang một đầu gắn amino acid đặc hiệu và một thùy mang bộ ba đối mã (anticodon) khớp bổ sung với bộ ba mã sao (codon) trên mRNA.',
     options: [
-      { id: 'math-p1-4-a', originalLabel: 'A', currentLabel: 'A', text: '$9$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'math-p1-4-b', originalLabel: 'B', currentLabel: 'B', text: '$12$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-4-c', originalLabel: 'C', currentLabel: 'C', text: '$15$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'math-p1-4-d', originalLabel: 'D', currentLabel: 'D', text: '$0$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-4-a', originalLabel: 'A', currentLabel: 'A', text: 'tRNA (RNA vận chuyển).', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-4-b', originalLabel: 'B', currentLabel: 'B', text: 'mRNA (RNA thông tin).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-4-c', originalLabel: 'C', currentLabel: 'C', text: 'rRNA (RNA ribosome).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-4-d', originalLabel: 'D', currentLabel: 'D', text: 'DNA mạch kép trong nhân.', isUnderline: false, isRed: false, isCorrect: false },
     ],
-    computedLayout: '1_ROW_4_COL',
+    computedLayout: '2_ROW_2_COL',
   },
-
-  // --- MÔN VẬT LÝ (CÂU 5 -> CÂU 8) ---
   {
-    id: 'phys-p1-5',
+    id: 'bio12-p1-5',
     part: 'PART_1',
     originalIndex: 5,
     displayIndex: 5,
-    stemText: 'Một vật nhỏ dao động điều hòa dọc theo trục $Ox$. Đồ thị biểu diễn sự phụ thuộc của li độ $x\\text{ (cm)}$ vào thời gian $t\\text{ (s)}$ được cho như hình vẽ bên. Biên độ dao động $A$ và chu kì dao động $T$ của vật lần lượt là:',
+    stemText: 'Một phân tử mRNA trưởng thành ở sinh vật nhân sơ có vùng mã hóa liên tục dài $900$ nucleotide (tính từ bộ ba mở đầu $5\'\\text{-AUG-3\'}$ đến hết bộ ba kết thúc $5\'\\text{-UAA-3\'}$). Số lượng amino acid có trong chuỗi polypeptide hoàn chỉnh sau khi cắt bỏ amino acid mở đầu là:',
     hasFormula: true,
-    formulaLatex: 'x = A\\cos(\\omega t + \\varphi) \\implies A = 4\\text{ cm},\\; T = 0,4\\text{ s}',
-    bloomLevel: 'NHAN_BIET',
-    learningOutcome: 'Đọc và xác định được biên độ, chu kì dao động điều hòa từ đồ thị li độ - thời gian.',
-    explanation: 'Từ đồ thị dao động, điểm cao nhất của li độ là $x_{max} = A = 4\\text{ cm}$. Khoảng thời gian để vật thực hiện trọn vẹn 1 chu kì dao động (từ đỉnh $t = 0$ đến đỉnh kế tiếp) là $T = 0,4\\text{ s}$.',
+    formulaLatex: 'N_{\\text{codon}} = \\frac{900}{3} = 300 \\implies N_{\\text{aa hoàn chỉnh}} = 300 - 2 = 298',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Vận dụng mối quan hệ giữa số ribonucleotide trên mRNA và số amino acid trong chuỗi polypeptide.',
+    explanation: 'Tổng số bộ ba trên vùng mã hóa của mRNA là $900 : 3 = 300$ bộ ba. Trong đó có 1 bộ ba kết thúc không mã hóa amino acid và 1 bộ ba mở đầu được cắt bỏ sau dịch mã, nên số amino acid trong chuỗi polypeptide hoàn chỉnh là $300 - 2 = 298$.',
+    options: [
+      { id: 'bio12-p1-5-a', originalLabel: 'A', currentLabel: 'A', text: '$298$ amino acid.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-5-b', originalLabel: 'B', currentLabel: 'B', text: '$299$ amino acid.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-5-c', originalLabel: 'C', currentLabel: 'C', text: '$300$ amino acid.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-5-d', originalLabel: 'D', currentLabel: 'D', text: '$297$ amino acid.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '1_ROW_4_COL',
+  },
+  {
+    id: 'bio12-p1-6',
+    part: 'PART_1',
+    originalIndex: 6,
+    displayIndex: 6,
+    stemText: 'Quan sát sơ đồ cấu trúc Operon Lac ở vi khuẩn $E.\\;coli$ (hình bên). Khi môi trường nuôi cấy hoàn toàn không có đường lactose, protein ức chế (do gene điều hòa $lacI$ tổng hợp) sẽ liên kết vào vùng nào để ngăn cản quá trình phiên mã của nhóm gene cấu trúc $lacZ, lacY, lacA$?',
+    hasFormula: false,
+    bloomLevel: 'THONG_HIEU',
+    learningOutcome: 'Giải thích được cơ chế điều hòa biểu hiện gene của Operon Lac ở vi khuẩn E. coli.',
+    explanation: 'Khi môi trường không có lactose, protein ức chế ở trạng thái hoạt động sẽ gắn đặc hiệu vào vùng vận hành ($O$ - Operator), làm enzyme RNA polymerase không thể trượt qua để phiên mã các gene cấu trúc $lacZ, lacY, lacA$.',
     images: [
       {
-        id: 'img-phys-wave',
-        dataUrl: toSvgDataUrl(SVG_OSCILLATION_GRAPH),
-        fileName: 'do_thi_dao_dong_dieu_hoa.svg',
-        tagId: '[HINH_ANH_CAU_5]',
-        caption: 'Đồ thị dao động điều hòa li độ x theo thời gian t',
+        id: 'img-bio12-operon',
+        dataUrl: toSvgDataUrl(SVG_LAC_OPERON),
+        fileName: 'so_do_operon_lac.svg',
+        tagId: '[HINH_ANH_CAU_6]',
+        caption: 'Sơ đồ cấu trúc Operon Lac ở vi khuẩn E. coli',
+        dpi: 300,
+        aspectRatio: 520 / 230,
+        widthTwips: 4500,
+        heightTwips: 2000,
+      },
+    ],
+    options: [
+      { id: 'bio12-p1-6-a', originalLabel: 'A', currentLabel: 'A', text: 'Vùng vận hành ($O$ — Operator).', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-6-b', originalLabel: 'B', currentLabel: 'B', text: 'Vùng khởi động ($P$ — Promoter).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-6-c', originalLabel: 'C', currentLabel: 'C', text: 'Gene điều hòa ($lacI$).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-6-d', originalLabel: 'D', currentLabel: 'D', text: 'Gene cấu trúc $lacZ$.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-7',
+    part: 'PART_1',
+    originalIndex: 7,
+    displayIndex: 7,
+    stemText: 'Một gene có $480$ cặp base Adenine - Thymine ($A=T$) và $720$ cặp base Guanine - Cytosine ($G \\equiv C$) bị đột biến điểm làm tăng thêm $1$ liên kết hydrogen nhưng chiều dài của gene không thay đổi. Dạng đột biến điểm đã xảy ra ở gene này là:',
+    hasFormula: true,
+    formulaLatex: '\\Delta L = 0,\\; \\Delta H = +1 \\implies \\text{Thay thế 1 cặp } A-T \\text{ bằng 1 cặp } G-C',
+    bloomLevel: 'THONG_HIEU',
+    learningOutcome: 'Xác định được dạng đột biến điểm dựa vào sự thay đổi chiều dài và số liên kết hydrogen của gene.',
+    explanation: 'Chiều dài của gene không đổi chứng tỏ đây là đột biến thay thế cặp nucleotide. Số liên kết hydrogen tăng thêm $1$ chứng tỏ 1 cặp $A-T$ (2 liên kết H) đã bị thay thế bằng 1 cặp $G-C$ (3 liên kết H).',
+    options: [
+      { id: 'bio12-p1-7-a', originalLabel: 'A', currentLabel: 'A', text: 'Thay thế 1 cặp $A-T$ bằng 1 cặp $G-C$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-7-b', originalLabel: 'B', currentLabel: 'B', text: 'Thay thế 1 cặp $G-C$ bằng 1 cặp $A-T$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-7-c', originalLabel: 'C', currentLabel: 'C', text: 'Thêm 1 cặp nucleotide $A-T$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-7-d', originalLabel: 'D', currentLabel: 'D', text: 'Mất 1 cặp nucleotide $G-C$.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-8',
+    part: 'PART_1',
+    originalIndex: 8,
+    displayIndex: 8,
+    stemText: 'Trong cấu trúc siêu hiển vi của nhiễm sắc thể ở sinh vật nhân thực, sợi cơ bản (đường kính $10\\text{ nm}$) được cấu tạo từ các đơn vị cơ sở là nucleosome. Mỗi nucleosome bao gồm:',
+    hasFormula: true,
+    formulaLatex: '8\\text{ phân tử protein histone} + 1\\frac{3}{4}\\text{ vòng DNA } (146\\text{ cặp nucleotide})',
+    bloomLevel: 'NHAN_BIET',
+    learningOutcome: 'Mô tả được cấu trúc siêu hiển vi của nhiễm sắc thể ở sinh vật nhân thực.',
+    explanation: 'Mỗi đơn vị nucleosome gồm một lõi có $8$ phân tử protein histone được quấn quanh bởi $1\\frac{3}{4}$ vòng xoắn DNA (tương ứng khoảng $146$ cặp nucleotide).',
+    options: [
+      { id: 'bio12-p1-8-a', originalLabel: 'A', currentLabel: 'A', text: 'Lõi $8$ phân tử protein histone được quấn quanh bởi $1\\frac{3}{4}$ vòng DNA ($146$ cặp nucleotide).', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-8-b', originalLabel: 'B', currentLabel: 'B', text: 'Lõi $6$ phân tử protein histone được quấn quanh bởi $2$ vòng DNA ($200$ cặp nucleotide).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-8-c', originalLabel: 'C', currentLabel: 'C', text: 'Một phân tử DNA mạch đơn liên kết với enzyme RNA polymerase.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-8-d', originalLabel: 'D', currentLabel: 'D', text: 'Lõi $4$ phân tử protein không phải histone quấn quanh bởi sợi nhiễm sắc $30\\text{ nm}$.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '4_ROW_1_COL',
+  },
+  {
+    id: 'bio12-p1-9',
+    part: 'PART_1',
+    originalIndex: 9,
+    displayIndex: 9,
+    stemText: 'Ở người, hội chứng bệnh lý hoặc tật di truyền nào sau đây là hậu quả của đột biến mất một đoạn trên nhiễm sắc thể số 5?',
+    hasFormula: false,
+    bloomLevel: 'NHAN_BIET',
+    learningOutcome: 'Nhận biết được các hội chứng di truyền ở người liên quan đến đột biến cấu trúc và số lượng nhiễm sắc thể.',
+    explanation: 'Mất một đoạn ở cánh ngắn nhiễm sắc thể số 5 ở người gây ra hội chứng tiếng mèo kêu (Cri-du-chat). Hội chứng Down là thể ba NST 21, Klinefelter là $XXY$, Turner là $XO$.',
+    options: [
+      { id: 'bio12-p1-9-a', originalLabel: 'A', currentLabel: 'A', text: 'Hội chứng tiếng mèo kêu (Cri-du-chat).', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-9-b', originalLabel: 'B', currentLabel: 'B', text: 'Hội chứng Down (3 nhiễm sắc thể số 21).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-9-c', originalLabel: 'C', currentLabel: 'C', text: 'Hội chứng Klinefelter ($47, XXY$).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-9-d', originalLabel: 'D', currentLabel: 'D', text: 'Hội chứng Turner ($45, XO$).', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-10',
+    part: 'PART_1',
+    originalIndex: 10,
+    displayIndex: 10,
+    stemText: 'Ở cây đậu hà lan ($Pisum\\;sativum$), allele $A$ quy định hạt vàng trội hoàn toàn so với allele $a$ quy định hạt xanh; allele $B$ quy định vỏ hạt trơn trội hoàn toàn so với allele $b$ quy định vỏ hạt nhăn. Hai cặp gene này phân li độc lập. Phép lai phân tích $P: AaBb \\times aabb$ cho đời con $F_a$ có tỉ lệ phân li kiểu hình là:',
+    hasFormula: true,
+    formulaLatex: 'P: AaBb \\times aabb \\implies F_a: (1Aa:1aa)(1Bb:1bb) = 1:1:1:1',
+    bloomLevel: 'THONG_HIEU',
+    learningOutcome: 'Vận dụng quy luật phân li độc lập của Mendel để xác định tỉ lệ kiểu hình của phép lai phân tích.',
+    explanation: 'Xét riêng từng cặp tính trạng: $Aa \\times aa \\to 1\\text{ vàng} : 1\\text{ xanh}$; $Bb \\times bb \\to 1\\text{ trơn} : 1\\text{ nhăn}$. Do hai cặp gene phân li độc lập nên tỉ lệ kiểu hình chung ở $F_a$ là $(1:1)(1:1) = 1 : 1 : 1 : 1$.',
+    options: [
+      { id: 'bio12-p1-10-a', originalLabel: 'A', currentLabel: 'A', text: '$1 : 1 : 1 : 1$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-10-b', originalLabel: 'B', currentLabel: 'B', text: '$9 : 3 : 3 : 1$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-10-c', originalLabel: 'C', currentLabel: 'C', text: '$3 : 3 : 1 : 1$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-10-d', originalLabel: 'D', currentLabel: 'D', text: '$3 : 1$.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '1_ROW_4_COL',
+  },
+  {
+    id: 'bio12-p1-11',
+    part: 'PART_1',
+    originalIndex: 11,
+    displayIndex: 11,
+    stemText: 'Ở một loài thực vật, màu sắc hoa do hai cặp gene không allele ($A, a$ và $B, b$) phân li độc lập cùng quy định theo kiểu tương tác bổ sung. Kiểu gene có mặt đồng thời cả hai allele trội $A$ và $B$ ($A\\text{-}B\\text{-}$) quy định hoa đỏ; các kiểu gene còn lại ($A\\text{-}bb, aaB\\text{-}, aabb$) đều quy định hoa trắng. Cho cây dị hợp hai cặp gene ($AaBb$) tự thụ phấn, tỉ lệ kiểu hình ở đời con $F_1$ là:',
+    hasFormula: true,
+    formulaLatex: 'P: AaBb \\times AaBb \\implies F_1: 9 A\\text{-}B\\text{-}\\;(\\text{đỏ}) : 7\\;(\\text{trắng})',
+    bloomLevel: 'THONG_HIEU',
+    learningOutcome: 'Xác định được tỉ lệ phân li kiểu hình trong quy luật tương tác bổ sung giữa các gene không allele.',
+    explanation: 'Phép lai $AaBb \\times AaBb$ tạo ra $9/16 A\\text{-}B\\text{-}$ (hoa đỏ) và $(3/16 A\\text{-}bb + 3/16 aaB\\text{-} + 1/16 aabb) = 7/16$ (hoa trắng). Tỉ lệ kiểu hình là $9$ cây hoa đỏ : $7$ cây hoa trắng.',
+    options: [
+      { id: 'bio12-p1-11-a', originalLabel: 'A', currentLabel: 'A', text: '$9$ cây hoa đỏ : $7$ cây hoa trắng.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-11-b', originalLabel: 'B', currentLabel: 'B', text: '$9$ cây hoa đỏ : $6$ cây hoa hồng : $1$ cây hoa trắng.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-11-c', originalLabel: 'C', currentLabel: 'C', text: '$15$ cây hoa đỏ : $1$ cây hoa trắng.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-11-d', originalLabel: 'D', currentLabel: 'D', text: '$13$ cây hoa trắng : $3$ cây hoa đỏ.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-12',
+    part: 'PART_1',
+    originalIndex: 12,
+    displayIndex: 12,
+    stemText: 'Trong quá trình giảm phân tạo giao tử của một cơ thể có kiểu gene $\\frac{AB}{ab}$, nếu xảy ra hoán vị gene giữa hai allele $B$ và $b$ với tần số $f = 20\\%$ thì tỉ lệ các loại giao tử được tạo ra là:',
+    hasFormula: true,
+    formulaLatex: '\\underline{AB} = \\underline{ab} = \\frac{1 - f}{2} = 40\\%; \\quad \\underline{Ab} = \\underline{aB} = \\frac{f}{2} = 10\\%',
+    bloomLevel: 'THONG_HIEU',
+    learningOutcome: 'Tính được tỉ lệ các loại giao tử liên kết và giao tử hoán vị khi biết tần số hoán vị gene.',
+    explanation: 'Với tần số hoán vị gene $f = 20\\%$, giao tử hoán vị chiếm $\\underline{Ab} = \\underline{aB} = \\frac{f}{2} = 10\\%$, còn giao tử liên kết chiếm $\\underline{AB} = \\underline{ab} = 50\\% - 10\\% = 40\\%$.',
+    options: [
+      { id: 'bio12-p1-12-a', originalLabel: 'A', currentLabel: 'A', text: '$\\underline{AB} = \\underline{ab} = 40\\%;\\; \\underline{Ab} = \\underline{aB} = 10\\%$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-12-b', originalLabel: 'B', currentLabel: 'B', text: '$\\underline{AB} = \\underline{ab} = 30\\%;\\; \\underline{Ab} = \\underline{aB} = 20\\%$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-12-c', originalLabel: 'C', currentLabel: 'C', text: '$\\underline{AB} = \\underline{ab} = 10\\%;\\; \\underline{Ab} = \\underline{aB} = 40\\%$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-12-d', originalLabel: 'D', currentLabel: 'D', text: '$\\underline{AB} = \\underline{ab} = \\underline{Ab} = \\underline{aB} = 25\\%$.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-13',
+    part: 'PART_1',
+    originalIndex: 13,
+    displayIndex: 13,
+    stemText: 'Ở ruồi giấm ($Drosophila\\;melanogaster$), allele $W$ quy định mắt đỏ là trội hoàn toàn so với allele $w$ quy định mắt trắng; gene nằm trên vùng không tương đồng của nhiễm sắc thể giới tính $X$. Phép lai $P: ♀ X^W X^w \\times ♂ X^W Y$ cho đời con $F_1$ có tỉ lệ kiểu hình là:',
+    hasFormula: true,
+    formulaLatex: 'P: ♀ X^W X^w \\times ♂ X^W Y \\implies F_1: 1 X^W X^W : 1 X^W X^w : 1 X^W Y : 1 X^w Y',
+    bloomLevel: 'THONG_HIEU',
+    learningOutcome: 'Vận dụng quy luật di truyền liên kết giới tính của Morgan để xác định tỉ lệ kiểu hình ở đời con.',
+    explanation: 'Đời con $F_1$ có $100\\%$ ruồi cái mắt đỏ ($X^W X^W, X^W X^w$), $50\\%$ ruồi đực mắt đỏ ($X^W Y$) và $50\\%$ ruồi đực mắt trắng ($X^w Y$), tức là $3$ mắt đỏ : $1$ mắt trắng (ruồi mắt trắng toàn là con đực).',
+    options: [
+      { id: 'bio12-p1-13-a', originalLabel: 'A', currentLabel: 'A', text: '$3$ mắt đỏ : $1$ mắt trắng (ruồi mắt trắng đều là ruồi đực).', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-13-b', originalLabel: 'B', currentLabel: 'B', text: '$3$ mắt đỏ : $1$ mắt trắng (ruồi mắt trắng đều là ruồi cái).', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-13-c', originalLabel: 'C', currentLabel: 'C', text: '$1$ ruồi cái mắt đỏ : $1$ ruồi đực mắt trắng.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-13-d', originalLabel: 'D', currentLabel: 'D', text: '$100\\%$ ruồi mắt đỏ ở cả hai giới.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-14',
+    part: 'PART_1',
+    originalIndex: 14,
+    displayIndex: 14,
+    stemText: 'Ở người, bệnh máu khó đông (Hemophilia) do một allele lặn $h$ nằm trên vùng không tương đồng của nhiễm sắc thể giới tính $X$ quy định, allele trội $H$ quy định máu đông bình thường. Một cặp vợ chồng có kiểu hình máu đông bình thường nhưng người vợ mang allele gây bệnh ($X^H X^h$), người chồng bình thường ($X^H Y$). Xác suất cặp vợ chồng này sinh ra một người con bị bệnh máu khó đông là:',
+    hasFormula: true,
+    formulaLatex: 'P: ♀ X^H X^h \\times ♂ X^H Y \\implies P(X^h Y) = \\frac{1}{2} X^h \\times \\frac{1}{2} Y = \\frac{1}{4} = 25\\%',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Tính được xác suất sinh con mắc bệnh di truyền liên kết với nhiễm sắc thể giới tính X ở người.',
+    explanation: 'Người vợ $X^H X^h$ cho giao tử $0,5 X^H : 0,5 X^h$; người chồng $X^H Y$ cho giao tử $0,5 X^H : 0,5 Y$. Chỉ có tổ hợp $X^h Y$ (con trai) mới biểu hiện bệnh, chiếm tỉ lệ $0,5 \\times 0,5 = 0,25 = 25\\%$.',
+    options: [
+      { id: 'bio12-p1-14-a', originalLabel: 'A', currentLabel: 'A', text: '$25\\%$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-14-b', originalLabel: 'B', currentLabel: 'B', text: '$50\\%$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-14-c', originalLabel: 'C', currentLabel: 'C', text: '$12,5\\%$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-14-d', originalLabel: 'D', currentLabel: 'D', text: '$75\\%$.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '1_ROW_4_COL',
+  },
+  {
+    id: 'bio12-p1-15',
+    part: 'PART_1',
+    originalIndex: 15,
+    displayIndex: 15,
+    stemText: 'Theo quy luật di truyền ngoài nhân (di truyền qua tế bào chất của Correns) ở cây hoa phấn ($Mirabilis\\;jalapa$), khi lấy hạt phấn của cây lá đốm thụ phấn cho hoa của cây lá xanh (P: ♀ Cây lá xanh $\\times$ ♂ Cây lá đốm) thì toàn bộ đời con $F_1$ sẽ có kiểu hình là:',
+    hasFormula: true,
+    formulaLatex: 'P: ♀\\;\\text{Lá xanh} \\times ♂\\;\\text{Lá đốm} \\implies F_1: 100\\%\\;\\text{Cây lá xanh}',
+    bloomLevel: 'NHAN_BIET',
+    learningOutcome: 'Nhận biết đặc điểm di truyền theo dòng mẹ của các gene nằm trong bào quan lục lạp và ti thể.',
+    explanation: 'Trong di truyền ngoài nhân (gene trong lục lạp), hợp tử nhận hầu hết tế bào chất từ giao tử cái (noãn), nên kiểu hình của đời con $F_1$ luôn giống 100% kiểu hình của cây mẹ (100% cây lá xanh).',
+    options: [
+      { id: 'bio12-p1-15-a', originalLabel: 'A', currentLabel: 'A', text: '$100\\%$ cây lá xanh.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-15-b', originalLabel: 'B', currentLabel: 'B', text: '$100\\%$ cây lá đốm.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-15-c', originalLabel: 'C', currentLabel: 'C', text: '$3$ cây lá xanh : $1$ cây lá trắng.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-15-d', originalLabel: 'D', currentLabel: 'D', text: 'Gồm cả 3 loại cây: lá xanh, lá trắng và lá đốm.', isUnderline: false, isRed: false, isCorrect: false },
+    ],
+    computedLayout: '2_ROW_2_COL',
+  },
+  {
+    id: 'bio12-p1-16',
+    part: 'PART_1',
+    originalIndex: 16,
+    displayIndex: 16,
+    stemText: 'Sơ đồ phả hệ ở hình bên mô tả sự di truyền của một bệnh hiếm gặp ở người qua 3 thế hệ. Biết rằng bệnh do một trong hai allele của một gene quy định và không phát sinh đột biến mới. Quy luật di truyền chi phối tính trạng bệnh này là:',
+    hasFormula: false,
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Phân tích sơ đồ phả hệ để xác định tính trạng trội/lặn và vị trí của gene quy định bệnh ở người.',
+    explanation: 'Cặp bố mẹ bình thường ở thế hệ I (I-1 và I-2) sinh ra con gái II-1 bị bệnh $\\implies$ Bệnh do allele lặn quy định và gene không thể nằm trên NST giới tính $X$ (vì nếu nằm trên $X$ thì bố I-1 bình thường $X^A Y$ không thể sinh con gái $X^a X^a$ bị bệnh). Do đó gene lặn nằm trên nhiễm sắc thể thường.',
+    images: [
+      {
+        id: 'img-bio12-pedigree-1',
+        dataUrl: toSvgDataUrl(SVG_PEDIGREE_CHART_1),
+        fileName: 'so_do_pha_he_cau_16.svg',
+        tagId: '[HINH_ANH_CAU_16]',
+        caption: 'Sơ đồ phả hệ di truyền bệnh qua 3 thế hệ ở người',
         dpi: 300,
         aspectRatio: 480 / 280,
         widthTwips: 4400,
@@ -306,478 +583,246 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
       },
     ],
     options: [
-      { id: 'phys-p1-5-a', originalLabel: 'A', currentLabel: 'A', text: '$A = 4\\text{ cm};\\; T = 0,4\\text{ s}$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'phys-p1-5-b', originalLabel: 'B', currentLabel: 'B', text: '$A = 8\\text{ cm};\\; T = 0,2\\text{ s}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-5-c', originalLabel: 'C', currentLabel: 'C', text: '$A = 4\\text{ cm};\\; T = 0,8\\text{ s}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-5-d', originalLabel: 'D', currentLabel: 'D', text: '$A = 2\\text{ cm};\\; T = 0,4\\text{ s}$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '2_ROW_2_COL',
-  },
-  {
-    id: 'phys-p1-6',
-    part: 'PART_1',
-    originalIndex: 6,
-    displayIndex: 6,
-    stemText: 'Một sóng cơ hình sin truyền trong môi trường đàn hồi với bước sóng $\\lambda = 20\\text{ cm}$. Hai điểm $M$ và $N$ nằm trên cùng một phương truyền sóng cách nhau một khoảng cách $d = 5\\text{ cm}$. Độ lệch pha dao động $\\Delta \\varphi$ giữa hai điểm $M$ và $N$ bằng:',
-    hasFormula: true,
-    formulaLatex: '\\Delta \\varphi = \\frac{2\\pi d}{\\lambda} = \\frac{2\\pi \\times 5}{20} = \\frac{\\pi}{2}\\text{ rad}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng công thức tính độ lệch pha giữa hai điểm trên cùng một phương truyền sóng.',
-    explanation: 'Độ lệch pha dao động giữa hai điểm cách nhau khoảng $d$ trên phương truyền sóng là $\\Delta \\varphi = \\frac{2\\pi d}{\\lambda} = \\frac{2\\pi \\cdot 5}{20} = \\frac{\\pi}{2}\\text{ rad}$ (hai dao động vuông pha).',
-    options: [
-      { id: 'phys-p1-6-a', originalLabel: 'A', currentLabel: 'A', text: '$\\frac{\\pi}{2}\\text{ rad}$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'phys-p1-6-b', originalLabel: 'B', currentLabel: 'B', text: '$\\pi\\text{ rad}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-6-c', originalLabel: 'C', currentLabel: 'C', text: '$\\frac{\\pi}{4}\\text{ rad}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-6-d', originalLabel: 'D', currentLabel: 'D', text: '$2\\pi\\text{ rad}$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '1_ROW_4_COL',
-  },
-  {
-    id: 'phys-p1-7',
-    part: 'PART_1',
-    originalIndex: 7,
-    displayIndex: 7,
-    stemText: 'Đặt điện áp xoay chiều $u = 220\\sqrt{2}\\cos(100\\pi t)\\text{ (V)}$ vào hai đầu đoạn mạch gồm điện trở thuần $R = 50\\,\\Omega$ mắc nối tiếp với cuộn cảm thuần có độ tự cảm $L = \\frac{0,5}{\\pi}\\text{ H}$. Tổng trở $Z$ của đoạn mạch này bằng:',
-    hasFormula: true,
-    formulaLatex: 'Z_L = \\omega L = 100\\pi \\times \\frac{0,5}{\\pi} = 50\\,\\Omega \\implies Z = \\sqrt{R^2 + Z_L^2} = 50\\sqrt{2}\\,\\Omega',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính tổng trở của đoạn mạch xoay chiều R - L nối tiếp.',
-    explanation: 'Cảm kháng $Z_L = \\omega L = 100\\pi \\cdot \\frac{0,5}{\\pi} = 50\\,\\Omega$. Tổng trở đoạn mạch là $Z = \\sqrt{R^2 + Z_L^2} = \\sqrt{50^2 + 50^2} = 50\\sqrt{2}\\,\\Omega$.',
-    options: [
-      { id: 'phys-p1-7-a', originalLabel: 'A', currentLabel: 'A', text: '$50\\sqrt{2}\\,\\Omega$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'phys-p1-7-b', originalLabel: 'B', currentLabel: 'B', text: '$100\\,\\Omega$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-7-c', originalLabel: 'C', currentLabel: 'C', text: '$50\\,\\Omega$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-7-d', originalLabel: 'D', currentLabel: 'D', text: '$25\\sqrt{2}\\,\\Omega$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '1_ROW_4_COL',
-  },
-  {
-    id: 'phys-p1-8',
-    part: 'PART_1',
-    originalIndex: 8,
-    displayIndex: 8,
-    stemText: 'Một hạt mang điện tích $q = 3,2 \\times 10^{-19}\\text{ C}$ bay với vận tốc $\\vec{v}$ có độ lớn $v = 10^6\\text{ m/s}$ vào trong từ trường đều $\\vec{B}$ có độ lớn $B = 0,5\\text{ T}$ theo phương vuông góc với đường sức từ (góc $\\alpha = 90^\\circ$). Độ lớn lực Lorentz $f$ tác dụng lên hạt điện tích là:',
-    hasFormula: true,
-    formulaLatex: 'f = |q| v B \\sin \\alpha = 3,2 \\times 10^{-19} \\times 10^6 \\times 0,5 \\times \\sin(90^\\circ) = 1,6 \\times 10^{-13}\\text{ N}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng định luật Lorentz để tính độ lớn lực từ tác dụng lên hạt mang điện chuyển động trong từ trường.',
-    explanation: 'Độ lớn lực Lorentz tác dụng lên điện tích chuyển động trong từ trường là $f = |q|vB\\sin\\alpha = (3,2 \\cdot 10^{-19}) \\cdot 10^6 \\cdot 0,5 \\cdot \\sin(90^\\circ) = 1,6 \\times 10^{-13}\\text{ N}$.',
-    options: [
-      { id: 'phys-p1-8-a', originalLabel: 'A', currentLabel: 'A', text: '$1,6 \\times 10^{-13}\\text{ N}$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'phys-p1-8-b', originalLabel: 'B', currentLabel: 'B', text: '$3,2 \\times 10^{-13}\\text{ N}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-8-c', originalLabel: 'C', currentLabel: 'C', text: '$0,8 \\times 10^{-13}\\text{ N}$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'phys-p1-8-d', originalLabel: 'D', currentLabel: 'D', text: '$6,4 \\times 10^{-13}\\text{ N}$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '2_ROW_2_COL',
-  },
-
-  // --- MÔN HÓA HỌC (CÂU 9 -> CÂU 12) ---
-  {
-    id: 'chem-p1-9',
-    part: 'PART_1',
-    originalIndex: 9,
-    displayIndex: 9,
-    stemText: 'Cho kim loại sắt ($Fe$) tác dụng hoàn toàn với dung dịch axit sunfuric đặc, nóng: $2Fe + 6H_2SO_4 \\xrightarrow{t^\\circ} Fe_2(SO_4)_3 + 3SO_2\\uparrow + 6H_2O$. Trong phản ứng trên, tỉ lệ giữa số phân tử $H_2SO_4$ đóng vai trò chất oxi hóa so với số phân tử $H_2SO_4$ tham gia tạo môi trường muối sunfat $SO_4^{2-}$ là:',
-    hasFormula: true,
-    formulaLatex: '2Fe + 6H_{2}SO_{4} \\xrightarrow{t^{\\circ}} Fe_{2}(SO_{4})_{3} + 3SO_{2} + 6H_{2}O',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Phân tích vai trò chất oxi hóa và chất tạo môi trường của axit sunfuric đặc trong phản ứng oxi hóa - khử.',
-    explanation: 'Trong 6 phân tử $H_2SO_4$ tham gia phản ứng, có 3 phân tử bị khử thành $SO_2$ (đóng vai trò chất oxi hóa) và 3 phân tử tạo gốc sunfat $SO_4^{2-}$ trong muối $Fe_2(SO_4)_3$ (đóng vai trò môi trường). Tỉ lệ là $3 : 3 = 1 : 1$.',
-    options: [
-      { id: 'chem-p1-9-a', originalLabel: 'A', currentLabel: 'A', text: '$1 : 1$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'chem-p1-9-b', originalLabel: 'B', currentLabel: 'B', text: '$1 : 2$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-9-c', originalLabel: 'C', currentLabel: 'C', text: '$2 : 1$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-9-d', originalLabel: 'D', currentLabel: 'D', text: '$1 : 3$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '1_ROW_4_COL',
-  },
-  {
-    id: 'chem-p1-10',
-    part: 'PART_1',
-    originalIndex: 10,
-    displayIndex: 10,
-    stemText: 'Cho cân bằng hóa học sau trong bình kín: $N_2\\text{(k)} + 3H_2\\text{(k)} \\xrightleftharpoons{xt, t^\\circ, p} 2NH_3\\text{(k)}$ (phản ứng tỏa nhiệt có $\\Delta_r H_{298}^0 = -92\\text{ kJ} < 0$). Để cân bằng chuyển dịch theo chiều thuận (tăng hiệu suất tổng hợp khí $NH_3$), biện pháp kĩ thuật nào sau đây là phù hợp?',
-    hasFormula: true,
-    formulaLatex: 'N_{2(k)} + 3H_{2(k)} \\xrightleftharpoons{xt, t^{\\circ}, p} 2NH_{3(k)},\\; \\Delta_r H_{298}^{0} = -92\\text{ kJ}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng nguyên lí chuyển dịch cân bằng Le Chatelier để đề xuất biện pháp nâng cao hiệu suất phản ứng tổng hợp hóa học.',
-    explanation: 'Phản ứng thuận tỏa nhiệt ($\\Delta H < 0$) và làm giảm số mol khí ($4\\text{ mol} \\to 2\\text{ mol}$). Theo nguyên lí Le Chatelier, để cân bằng chuyển dịch theo chiều thuận cần tăng áp suất chung và hạ nhiệt độ thích hợp của hệ.',
-    options: [
-      { id: 'chem-p1-10-a', originalLabel: 'A', currentLabel: 'A', text: 'Tăng áp suất chung của hệ và hạ nhiệt độ thích hợp.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'chem-p1-10-b', originalLabel: 'B', currentLabel: 'B', text: 'Giảm áp suất và tăng nhiệt độ của hệ phản ứng.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-10-c', originalLabel: 'C', currentLabel: 'C', text: 'Chỉ thêm chất xúc tác bột sắt ($Fe$) vào bình kín.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-10-d', originalLabel: 'D', currentLabel: 'D', text: 'Liên tục giảm nồng độ khí $N_2$ và $H_2$ trong bình.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-16-a', originalLabel: 'A', currentLabel: 'A', text: 'Do allele lặn nằm trên nhiễm sắc thể thường quy định.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-16-b', originalLabel: 'B', currentLabel: 'B', text: 'Do allele trội nằm trên nhiễm sắc thể thường quy định.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-16-c', originalLabel: 'C', currentLabel: 'C', text: 'Do allele lặn nằm trên vùng không tương đồng của NST giới tính $X$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-16-d', originalLabel: 'D', currentLabel: 'D', text: 'Do gene nằm trên vùng không tương đồng của NST giới tính $Y$.', isUnderline: false, isRed: false, isCorrect: false },
     ],
     computedLayout: '4_ROW_1_COL',
   },
   {
-    id: 'chem-p1-11',
+    id: 'bio12-p1-17',
     part: 'PART_1',
-    originalIndex: 11,
-    displayIndex: 11,
-    stemText: 'Cho bảng ghép đôi giữa các dung dịch muối vô cơ (Cột A) và hiện tượng phản ứng khi nhỏ từ từ dung dịch barium hydroxide $Ba(OH)_2$ đến dư vào (Cột B) dưới đây. Hiện tượng nhận biết đúng nhất đối với dung dịch muối ở vị trí (I) nhôm sunfat $Al_2(SO_4)_3$ là:',
-    hasFormula: false,
-    stemTables: [
-      {
-        id: 'tbl-chem-match',
-        isMatchingColumns: true,
-        caption: 'Bảng đối chiếu phản ứng nhận biết muối vô cơ với dung dịch Ba(OH)2',
-        rows: [
-          [
-            { text: 'Cột A (Dung dịch muối vô cơ)', align: 'center', isHeader: true, isBold: true },
-            { text: 'Cột B (Hiện tượng khi nhỏ dung dịch Ba(OH)2 đến dư)', align: 'center', isHeader: true, isBold: true },
-          ],
-          [
-            { text: 'I. Nhôm sunfat Al2(SO4)3', align: 'left', isBold: true },
-            { text: 'Xuất hiện đồng thời kết tủa trắng không tan BaSO4 và kết tủa keo Al(OH)3, sau đó kết tủa keo Al(OH)3 tan dần do tính lưỡng tính.', align: 'left' },
-          ],
-          [
-            { text: 'II. Sắt(III) clorua FeCl3', align: 'left', isBold: true },
-            { text: 'Xuất hiện kết tủa màu nâu đỏ của Fe(OH)3 không tan trong dung dịch kiềm dư.', align: 'left' },
-          ],
-        ],
-      },
-    ],
+    originalIndex: 17,
+    displayIndex: 17,
+    stemText: 'Một quần thể thực vật ngẫu phối đang ở trạng thái cân bằng di truyền Hardy - Weinberg có cấu trúc di truyền là $0,36AA : 0,48Aa : 0,16aa$. Tần số tương đối của allele trội $A$ ($p_A$) và allele lặn $a$ ($q_a$) trong quần thể này lần lượt là:',
+    hasFormula: true,
+    formulaLatex: 'p^2(AA) + 2pq(Aa) + q^2(aa) = 1 \\implies p_A = \\sqrt{0,36} = 0,60;\\; q_a = \\sqrt{0,16} = 0,40',
     bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Nhận biết hiện tượng tạo kết tủa và tính chất lưỡng tính của hiđroxit nhôm.',
-    explanation: 'Khi cho $Ba(OH)_2$ vào $Al_2(SO_4)_3$, tạo kết tủa trắng $BaSO_4$ và kết tủa keo $Al(OH)_3$. Do $Ba(OH)_2$ dư nên kết tủa lưỡng tính $Al(OH)_3$ tan tạo phức aluminat $Ba[Al(OH)_4]_2$, để lại kết tủa trắng $BaSO_4$ không tan.',
+    learningOutcome: 'Tính được tần số tương đối của các allele trong quần thể cân bằng di truyền Hardy - Weinberg.',
+    explanation: 'Tần số allele $A$ là $p_A = 0,36 + \\frac{0,48}{2} = 0,60$; tần số allele $a$ là $q_a = 1 - 0,60 = 0,40$.',
     options: [
-      { id: 'chem-p1-11-a', originalLabel: 'A', currentLabel: 'A', text: 'Có kết tủa trắng và kết tủa keo, sau đó kết tủa keo tan bớt khi kiềm dư.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'chem-p1-11-b', originalLabel: 'B', currentLabel: 'B', text: 'Chỉ xuất hiện kết tủa màu nâu đỏ không tan trong kiềm.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-11-c', originalLabel: 'C', currentLabel: 'C', text: 'Chỉ xuất hiện bọt khí không màu thoát ra mãnh liệt.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-11-d', originalLabel: 'D', currentLabel: 'D', text: 'Không xuất hiện bất kì hiện tượng kết tủa hay đổi màu nào.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-17-a', originalLabel: 'A', currentLabel: 'A', text: '$p_A = 0,60;\\; q_a = 0,40$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-17-b', originalLabel: 'B', currentLabel: 'B', text: '$p_A = 0,36;\\; q_a = 0,64$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-17-c', originalLabel: 'C', currentLabel: 'C', text: '$p_A = 0,40;\\; q_a = 0,60$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-17-d', originalLabel: 'D', currentLabel: 'D', text: '$p_A = 0,70;\\; q_a = 0,30$.', isUnderline: false, isRed: false, isCorrect: false },
     ],
-    computedLayout: '4_ROW_1_COL',
+    computedLayout: '2_ROW_2_COL',
   },
   {
-    id: 'chem-p1-12',
+    id: 'bio12-p1-18',
     part: 'PART_1',
-    originalIndex: 12,
-    displayIndex: 12,
-    stemText: 'Hình vẽ bên mô tả bộ dụng cụ thí nghiệm điều chế và thu khí trong phòng thí nghiệm bằng phương pháp đẩy nước. Với hóa chất ban đầu là potassium permanganate $KMnO_4$, phản ứng xảy ra khi đun nóng: $2KMnO_4 \\xrightarrow{t^\\circ} K_2MnO_4 + MnO_2 + O_2\\uparrow$. Khí thu được trong ống nghiệm úp ngược là:',
+    originalIndex: 18,
+    displayIndex: 18,
+    stemText: 'Trong công tác chọn và tạo giống cây trồng, vật nuôi bằng phương pháp lai giống, phép lai giữa hai dòng thuần chủng khác nhau ($P: AAbbDD \\times aaBBdd$) để tạo ra con lai $F_1$ đồng loạt dị hợp tử ($AaBbDd$) có sức sống, năng suất cao vượt trội so với bố mẹ nhưng không dùng $F_1$ để nhân giống cho đời sau được gọi là:',
     hasFormula: true,
-    formulaLatex: '2KMnO_{4} \\xrightarrow{t^{\\circ}} K_{2}MnO_{4} + MnO_{2} + O_{2}\\uparrow',
+    formulaLatex: 'P: AAbbDD \\times aaBBdd \\implies F_1: AaBbDd \\;(\\text{Ưu thế lai cao nhất ở } F_1)',
     bloomLevel: 'NHAN_BIET',
-    learningOutcome: 'Nhận biết phương pháp điều chế và thu khí oxi trong phòng thí nghiệm.',
-    explanation: 'Phản ứng nhiệt phân thuốc tím $KMnO_4$ sinh ra khí oxi ($O_2$). Vì khí $O_2$ ít tan trong nước nên được thu bằng phương pháp đẩy nước như trong hình vẽ.',
-    images: [
-      {
-        id: 'img-chem-o2',
-        dataUrl: toSvgDataUrl(SVG_CHEM_APPARATUS),
-        fileName: 'thi_nghiem_thu_khi_oxi.svg',
-        tagId: '[HINH_ANH_CAU_12]',
-        caption: 'Bộ dụng cụ điều chế và thu khí oxi bằng phương pháp đẩy nước',
-        dpi: 300,
-        aspectRatio: 460 / 300,
-        widthTwips: 4400,
-        heightTwips: 2800,
-      },
-    ],
+    learningOutcome: 'Trình bày được khái niệm và cơ sở di truyền của hiện tượng ưu thế lai trong chọn giống.',
+    explanation: 'Phép lai khác dòng tạo ưu thế lai cao nhất ở thế hệ $F_1$ (mục đích thương phẩm), nếu lấy $F_1$ làm giống thì sang $F_2$ tỉ lệ dị hợp giảm, xuất hiện các kiểu gene đồng hợp lặn gây thoái hóa.',
     options: [
-      { id: 'chem-p1-12-a', originalLabel: 'A', currentLabel: 'A', text: 'Khí oxi ($O_2$).', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'chem-p1-12-b', originalLabel: 'B', currentLabel: 'B', text: 'Khí hiđro clorua ($HCl$).', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-12-c', originalLabel: 'C', currentLabel: 'C', text: 'Khí amoniac ($NH_3$).', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'chem-p1-12-d', originalLabel: 'D', currentLabel: 'D', text: 'Khí lưu huỳnh đioxit ($SO_2$).', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '2_ROW_2_COL',
-  },
-
-  // --- MÔN SINH HỌC (CÂU 13 -> CÂU 16) ---
-  {
-    id: 'bio-p1-13',
-    part: 'PART_1',
-    originalIndex: 13,
-    displayIndex: 13,
-    stemText: 'Ở một loài thực vật, hai cặp gene $(A, a)$ và $(B, b)$ cùng nằm trên một cặp nhiễm sắc thể thường. Cho cây dị hợp tử đều có kiểu gene $\\frac{AB}{ab}$ lai phân tích với cây có kiểu gene $\\frac{ab}{ab}$. Biết tần số hoán vị gene $f = 20\\%$. Tỉ lệ kiểu hình mang hai tính trạng trội ($A-B-$) ở đời con $F_a$ là:',
-    hasFormula: true,
-    formulaLatex: 'P: \\frac{AB}{ab} \\times \\frac{ab}{ab},\\; f = 20\\% \\implies AB = \\frac{1-f}{2} = 40\\% \\implies A\\text{-}B\\text{-} = 40\\%',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính tỉ lệ kiểu hình đời con trong phép lai phân tích có hoán vị gene.',
-    explanation: 'Cây dị hợp tử đều $\\frac{AB}{ab}$ giảm phân có hoán vị gene với $f = 20\\%$ sẽ tạo ra giao tử liên kết $AB = ab = \\frac{1 - 0,2}{2} = 40\\%$. Khi thụ tinh với giao tử $ab$, tỉ lệ cá thể mang kiểu hình trội cả 2 tính trạng ($A-B-$) là $40\\%$.',
-    options: [
-      { id: 'bio-p1-13-a', originalLabel: 'A', currentLabel: 'A', text: '$40\\%$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'bio-p1-13-b', originalLabel: 'B', currentLabel: 'B', text: '$10\\%$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-13-c', originalLabel: 'C', currentLabel: 'C', text: '$25\\%$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-13-d', originalLabel: 'D', currentLabel: 'D', text: '$50\\%$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '1_ROW_4_COL',
-  },
-  {
-    id: 'bio-p1-14',
-    part: 'PART_1',
-    originalIndex: 14,
-    displayIndex: 14,
-    stemText: 'Ở người, bệnh mù màu đỏ - xanh lục do một allele lặn $a$ nằm trên vùng không tương đồng của nhiễm sắc thể giới tính $X$ quy định, allele trội $A$ quy định mắt nhìn màu bình thường. Một cặp vợ chồng có kiểu hình bình thường, người vợ mang gene gây bệnh ($X^A X^a$), người chồng bình thường ($X^A Y$). Xác suất họ sinh ra con trai bị mù màu ($X^a Y$) là:',
-    hasFormula: true,
-    formulaLatex: 'P: ♀ X^A X^a \\times ♂ X^A Y \\implies P(X^a Y) = \\frac{1}{2} X^a \\times \\frac{1}{2} Y = \\frac{1}{4} = 25\\%',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng quy luật di truyền liên kết giới tính để tính xác suất sinh con mang tính trạng bệnh.',
-    explanation: 'Phép lai: $P: ♀ X^A X^a \\times ♂ X^A Y$. Giao tử của mẹ: $0,5 X^A : 0,5 X^a$; giao tử của bố: $0,5 X^A : 0,5 Y$. Xác suất sinh con trai bị mù màu ($X^a Y$) là $0,5 X^a \\times 0,5 Y = 0,25 = 25\\%$.',
-    options: [
-      { id: 'bio-p1-14-a', originalLabel: 'A', currentLabel: 'A', text: '$25\\%$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'bio-p1-14-b', originalLabel: 'B', currentLabel: 'B', text: '$50\\%$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-14-c', originalLabel: 'C', currentLabel: 'C', text: '$12,5\\%$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-14-d', originalLabel: 'D', currentLabel: 'D', text: '$0\\%$.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '1_ROW_4_COL',
-  },
-  {
-    id: 'bio-p1-15',
-    part: 'PART_1',
-    originalIndex: 15,
-    displayIndex: 15,
-    stemText: 'Sơ đồ phả hệ ở hình bên mô tả sự di truyền của một bệnh hiếm gặp ở người qua 3 thế hệ. Biết rằng bệnh do một trong hai allele của một gene quy định và không xảy ra đột biến mới. Dựa vào phả hệ, quy luật di truyền chi phối tính trạng bệnh này là:',
-    hasFormula: false,
-    bloomLevel: 'VAN_DUNG',
-    learningOutcome: 'Phân tích sơ đồ phả hệ để xác định tính trạng trội/lặn và vị trí của gene trên nhiễm sắc thể.',
-    explanation: 'Cặp bố mẹ bình thường (I-1 và I-2) sinh ra con trai bị bệnh (II-1) $\\implies$ Bệnh do allele lặn quy định. Ở thế hệ II, cặp vợ chồng II-3 và II-4 đều bình thường sinh con trai III-2 bị bệnh $\\implies$ Gene lặn nằm trên nhiễm sắc thể thường quy định.',
-    images: [
-      {
-        id: 'img-bio-pedigree',
-        dataUrl: toSvgDataUrl(SVG_PEDIGREE_CHART),
-        fileName: 'so_do_pha_he_3_the_he.svg',
-        tagId: '[HINH_ANH_CAU_15]',
-        caption: 'Sơ đồ phả hệ di truyền bệnh qua 3 thế hệ ở người',
-        dpi: 300,
-        aspectRatio: 460 / 280,
-        widthTwips: 4400,
-        heightTwips: 2600,
-      },
-    ],
-    options: [
-      { id: 'bio-p1-15-a', originalLabel: 'A', currentLabel: 'A', text: 'Gene lặn nằm trên nhiễm sắc thể thường quy định.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'bio-p1-15-b', originalLabel: 'B', currentLabel: 'B', text: 'Gene trội nằm trên nhiễm sắc thể thường quy định.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-15-c', originalLabel: 'C', currentLabel: 'C', text: 'Gene lặn nằm trên vùng không tương đồng của NST X.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-15-d', originalLabel: 'D', currentLabel: 'D', text: 'Gene nằm trên vùng không tương đồng của NST Y.', isUnderline: false, isRed: false, isCorrect: false },
-    ],
-    computedLayout: '4_ROW_1_COL',
-  },
-  {
-    id: 'bio-p1-16',
-    part: 'PART_1',
-    originalIndex: 16,
-    displayIndex: 16,
-    stemText: 'Một quần thể động vật ngẫu phối đang ở trạng thái cân bằng di truyền có cấu trúc $0,49AA : 0,42Aa : 0,09aa$ (thỏa mãn đẳng thức Hardy - Weinberg $p^2 + 2pq + q^2 = 1$). Tần số tương đối của allele $A$ và allele $a$ trong quần thể này lần lượt là:',
-    hasFormula: true,
-    formulaLatex: 'p^2(AA) + 2pq(Aa) + q^2(aa) = 1 \\implies q(a) = \\sqrt{0,09} = 0,30;\\; p(A) = 1 - 0,30 = 0,70',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính tần số tương đối của các allele trong quần thể cân bằng di truyền.',
-    explanation: 'Quần thể cân bằng di truyền có $q^2(aa) = 0,09 \\implies q(a) = \\sqrt{0,09} = 0,30$. Do $p + q = 1 \\implies p(A) = 1 - 0,30 = 0,70$.',
-    options: [
-      { id: 'bio-p1-16-a', originalLabel: 'A', currentLabel: 'A', text: '$p(A) = 0,70;\\; q(a) = 0,30$.', isUnderline: true, isRed: true, isCorrect: true },
-      { id: 'bio-p1-16-b', originalLabel: 'B', currentLabel: 'B', text: '$p(A) = 0,49;\\; q(a) = 0,51$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-16-c', originalLabel: 'C', currentLabel: 'C', text: '$p(A) = 0,30;\\; q(a) = 0,70$.', isUnderline: false, isRed: false, isCorrect: false },
-      { id: 'bio-p1-16-d', originalLabel: 'D', currentLabel: 'D', text: '$p(A) = 0,60;\\; q(a) = 0,40$.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-18-a', originalLabel: 'A', currentLabel: 'A', text: 'Lai khác dòng tạo ưu thế lai thương phẩm ở thế hệ $F_1$.', isUnderline: true, isRed: true, isCorrect: true },
+      { id: 'bio12-p1-18-b', originalLabel: 'B', currentLabel: 'B', text: 'Tự thụ phấn bắt buộc qua nhiều thế hệ liên tiếp.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-18-c', originalLabel: 'C', currentLabel: 'C', text: 'Giao phối cận huyết nhằm củng cố tính trạng mong muốn.', isUnderline: false, isRed: false, isCorrect: false },
+      { id: 'bio12-p1-18-d', originalLabel: 'D', currentLabel: 'D', text: 'Nuôi cấy hạt phấn đơn bội kết hợp lưỡng bội hóa.', isUnderline: false, isRed: false, isCorrect: false },
     ],
     computedLayout: '2_ROW_2_COL',
   },
 
   // =========================================================================
   // PHẦN II: TRẮC NGHIỆM ĐÚNG / SAI (4 CÂU — TỪ CÂU 1 ĐẾN CÂU 4, MỖI CÂU 4 Ý a, b, c, d)
-  // Chia đều 4 môn: Câu 1 (Toán), Câu 2 (Vật lý), Câu 3 (Hóa học), Câu 4 (Sinh học)
   // =========================================================================
 
-  // --- CÂU 1 (MÔN TOÁN HỌC): KHẢO SÁT HÀM SỐ, TIỆM CẬN VÀ BẤT ĐẲNG THỨC ---
+  // --- CÂU 1 (PHẦN II): CẤU TRÚC DNA, PHIÊN MÃ RNA & DỊCH MÃ PROTEIN ---
   {
-    id: 'math-p2-1',
-    part: 'PART_2',
-    originalIndex: 17,
-    displayIndex: 1,
-    stemText: 'Cho hàm số phân thức bậc nhất trên bậc nhất $y = f(x) = \\frac{2x - 1}{x + 1}$ có đồ thị là $(C)$. Xét tính đúng hoặc sai của các mệnh đề sau đây:',
-    hasFormula: true,
-    formulaLatex: 'y = \\frac{2x-1}{x+1} \\implies y\' = \\frac{3}{(x+1)^2} > 0',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Khảo sát sự biến thiên, cực trị và đường tiệm cận của đồ thị hàm phân thức hữu tỉ.',
-    explanation: 'a) Đúng vì tập xác định là $D = \\mathbb{R} \\setminus \\{-1\\}$. b) Đúng vì $y\' = \\frac{2(1) - (-1)(1)}{(x+1)^2} = \\frac{3}{(x+1)^2} > 0,\\; \\forall x \\neq -1$. c) Đúng vì $\\lim_{x \\to \\pm\\infty} f(x) = 2$ nên đường thẳng $y = 2$ là tiệm cận ngang. d) Sai vì $\\lim_{x \\to -1^+} f(x) = -\\infty$ nên đường tiệm cận đứng là $x = -1$ (không phải $x = 1$).',
-    subItems: [
-      { id: 'math-p2-1-a', originalLabel: 'a', currentLabel: 'a', text: 'Tập xác định của hàm số đã cho là $D = \\mathbb{R} \\setminus \\{-1\\}$.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'math-p2-1-b', originalLabel: 'b', currentLabel: 'b', text: 'Đạo hàm $y\' = \\frac{3}{(x+1)^2} > 0$ với mọi $x \\in D$, do đó hàm số đồng biến trên từng khoảng xác định.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'math-p2-1-c', originalLabel: 'c', currentLabel: 'c', text: 'Đồ thị $(C)$ của hàm số có đường tiệm cận ngang là đường thẳng $y = 2$.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'math-p2-1-d', originalLabel: 'd', currentLabel: 'd', text: 'Đồ thị $(C)$ của hàm số có đường tiệm cận đứng là đường thẳng $x = 1$.', isUnderline: false, isRed: false, isTrue: false },
-    ],
-  },
-
-  // --- CÂU 2 (MÔN VẬT LÝ): CON LẮC LÒ XO, CƠ NĂNG VÀ VẬN TỐC BIÊN ---
-  {
-    id: 'phys-p2-2',
-    part: 'PART_2',
-    originalIndex: 18,
-    displayIndex: 2,
-    stemText: 'Một con lắc lò xo gồm vật nhỏ có khối lượng $m = 200\\text{ g}$ gắn vào lò xo nhẹ có độ cứng $k = 50\\,\\text{N/m}$ dao động điều hòa trên mặt phẳng nằm ngang với biên độ $A = 4\\text{ cm} = 0,04\\text{ m}$. Bỏ qua mọi ma sát. Xét tính đúng hoặc sai của các phát biểu sau:',
-    hasFormula: true,
-    formulaLatex: '\\omega = \\sqrt{\\frac{k}{m}} = \\sqrt{\\frac{50}{0,2}} = 5\\sqrt{10} \\approx 5\\pi\\text{ rad/s},\\; W = \\frac{1}{2}kA^2 = 0,04\\text{ J}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính toán tần số góc, chu kì, vận tốc cực đại và cơ năng của con lắc lò xo dao động điều hòa.',
-    explanation: 'a) Đúng vì $\\omega = \\sqrt{k/m} = \\sqrt{50/0,2} = \\sqrt{250} \\approx 15,8\\text{ rad/s} = 5\\pi\\text{ rad/s}$. b) Sai vì cơ năng $W = \\frac{1}{2}kA^2 = \\frac{1}{2} \\cdot 50 \\cdot (0,04)^2 = 0,04\\text{ J} = 40\\text{ mJ}$ (không phải $400\\text{ mJ}$). c) Đúng vì khi qua vị trí cân bằng vận tốc có độ lớn cực đại $v_{max} = \\omega A$. d) Đúng vì tại hai vị trí biên lực kéo về đạt độ lớn cực đại $F_{max} = kA = 50 \\cdot 0,04 = 2\\text{ N}$.',
-    subItems: [
-      { id: 'phys-p2-2-a', originalLabel: 'a', currentLabel: 'a', text: 'Tần số góc dao động của con lắc lò xo được tính theo công thức $\\omega = \\sqrt{\\frac{k}{m}}$ và có giá trị xấp xỉ $5\\pi\\text{ rad/s}$.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'phys-p2-2-b', originalLabel: 'b', currentLabel: 'b', text: 'Cơ năng dao động toàn phần của con lắc lò xo có giá trị bằng $400\\text{ mJ}$.', isUnderline: false, isRed: false, isTrue: false },
-      { id: 'phys-p2-2-c', originalLabel: 'c', currentLabel: 'c', text: 'Khi vật nhỏ đi qua vị trí cân bằng ($x = 0$), tốc độ của vật đạt giá trị cực đại và gia tốc bằng $0$.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'phys-p2-2-d', originalLabel: 'd', currentLabel: 'd', text: 'Độ lớn lực kéo về cực đại tác dụng lên vật tại hai biên là $F_{max} = kA = 2\\text{ N}$.', isUnderline: true, isRed: true, isTrue: true },
-    ],
-  },
-
-  // --- CÂU 3 (MÔN HÓA HỌC): PHẢN ỨNG ESTE HÓA VÀ HỢP CHẤT HỮU CƠ ---
-  {
-    id: 'chem-p2-3',
+    id: 'bio12-p2-1',
     part: 'PART_2',
     originalIndex: 19,
-    displayIndex: 3,
-    stemText: 'Thực hiện phản ứng este hóa giữa axit axetic ($CH_3COOH$) và ancol etylic ($C_2H_5OH$) trong điều kiện đun hồi lưu có mặt axit sunfuric đặc xúc tác: $CH_3COOH + C_2H_5OH \\xrightleftharpoons{H_2SO_4\\,\\text{đặc},\\, t^\\circ} CH_3COOC_2H_5 + H_2O$. Xét tính đúng hoặc sai của các nhận định dưới đây:',
+    displayIndex: 1,
+    stemText: 'Một gene cấu trúc $B$ ở sinh vật nhân sơ có chiều dài $L = 4080\\;\\text{\\AA}$ và có số nucleotide loại Adenine chiếm $20\\%$ tổng số nucleotide của gene. Gene $B$ thực hiện phiên mã tạo phân tử mRNA và dịch mã tổng hợp chuỗi polypeptide. Xét tính đúng hoặc sai của các nhận định sau đây:',
     hasFormula: true,
-    formulaLatex: 'CH_{3}COOH + C_{2}H_{5}OH \\xrightleftharpoons{H_{2}SO_{4}\\,\\text{đặc},\\, t^{\\circ}} CH_{3}COOC_{2}H_{5} + H_{2}O',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Phân tích cơ chế phản ứng este hóa, vai trò của chất xúc tác H2SO4 đặc và đặc điểm tính chất este.',
-    explanation: 'a) Đúng vì đây là phản ứng thuận nghịch, hiệu suất không đạt $100\\%$. b) Đúng vì axit $H_2SO_4$ đặc đóng vai trò vừa là chất xúc tác vừa hút nước để chuyển dịch cân bằng theo chiều thuận. c) Sai vì este etyl axetat có nhiệt độ sôi thấp hơn ancol etylic và axit axetic (do không có liên kết hiđro liên phân tử). d) Đúng vì etyl axetat nhẹ hơn nước và ít tan trong nước nên tách lớp khi làm lạnh.',
+    formulaLatex: 'N = \\frac{2L}{3,4} = 2400; \\quad A = T = 480,\\; G = C = 720; \\quad H = 2A + 3G = 3120',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Vận dụng công thức cấu trúc DNA, phiên mã và dịch mã để phân tích thông số của gene.',
+    explanation: 'a) Đúng vì $N = \\frac{2 \\times 4080}{3,4} = 2400$ nucleotide. b) Đúng vì $A = T = 20\\% \\times 2400 = 480$, $G = C = 30\\% \\times 2400 = 720 \\implies H = 2A + 3G = 2(480) + 3(720) = 3120$. c) Đúng vì phân tử mRNA có chiều dài bằng chiều dài gene có $\\frac{2400}{2 \\times 3} = 400$ bộ ba (codon). d) Sai vì nếu gene $B$ nhân đôi liên tiếp 3 lần thì số nucleotide loại $A$ môi trường cung cấp là $A_{\\text{mt}} = A \\times (2^3 - 1) = 480 \\times 7 = 3360$ (không phải $3840$).',
     subItems: [
-      { id: 'chem-p2-3-a', originalLabel: 'a', currentLabel: 'a', text: 'Phản ứng este hóa giữa axit axetic và ancol etylic là phản ứng thuận nghịch hai chiều và tỏa nhiệt nhẹ.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'chem-p2-3-b', originalLabel: 'b', currentLabel: 'b', text: 'Axit sunfuric đặc ($H_2SO_4$) vừa đóng vai trò là chất xúc tác, vừa có tính háo nước làm cân bằng chuyển dịch theo chiều tạo este.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'chem-p2-3-c', originalLabel: 'c', currentLabel: 'c', text: 'Este etyl axetat ($CH_3COOC_2H_5$) có nhiệt độ sôi cao hơn axit axetic ($CH_3COOH$) do có liên kết hiđro liên phân tử bền hơn.', isUnderline: false, isRed: false, isTrue: false },
-      { id: 'chem-p2-3-d', originalLabel: 'd', currentLabel: 'd', text: 'Sau khi kết thúc phản ứng este hóa, este $CH_3COOC_2H_5$ nhẹ hơn nước, ít tan trong nước và nổi lên thành một lớp chất lỏng không màu ở phía trên.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-1-a', originalLabel: 'a', currentLabel: 'a', text: 'Tổng số nucleotide trên cả hai mạch đơn của gene $B$ là $N = 2400$ nucleotide.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-1-b', originalLabel: 'b', currentLabel: 'b', text: 'Gene $B$ có $A = T = 480$ nucleotide, $G = C = 720$ nucleotide và tổng số liên kết hydrogen là $H = 3120$.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-1-c', originalLabel: 'c', currentLabel: 'c', text: 'Phân tử mRNA được phiên mã từ gene $B$ có tổng cộng $400$ bộ ba mã sao (codon).', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-1-d', originalLabel: 'd', currentLabel: 'd', text: 'Khi gene $B$ nhân đôi liên tiếp $3$ lần thì số nucleotide tự do loại Adenine ($A$) môi trường nội bào cần cung cấp là $3840$.', isUnderline: false, isRed: false, isTrue: false },
     ],
   },
 
-  // --- CÂU 4 (MÔN SINH HỌC): PHIÊN MÃ mRNA VÀ ĐIỀU HÒA HOẠT ĐỘNG GENE ---
+  // --- CÂU 2 (PHẦN II): QUY LUẬT DI TRUYỀN MENDEL & TƯƠNG TÁC PHÂN LI ĐỘC LẬP ---
   {
-    id: 'bio-p2-4',
+    id: 'bio12-p2-2',
     part: 'PART_2',
     originalIndex: 20,
-    displayIndex: 4,
-    stemText: 'Trong tế bào sinh vật nhân thực, quá trình truyền đạt thông tin di truyền từ phân tử DNA trong nhân ra tế bào chất diễn ra thông qua quá trình phiên mã tạo phân tử tiền mRNA, sau đó cắt bỏ intron nối exon để tạo mRNA trưởng thành. Xét tính đúng hoặc sai của các phát biểu sau:',
-    hasFormula: false,
+    displayIndex: 2,
+    stemText: 'Ở một loài thực vật lưỡng bội, allele $A$ quy định thân cao trội hoàn toàn so với allele $a$ quy định thân thấp; allele $B$ quy định hoa đỏ trội hoàn toàn so với allele $b$ quy định hoa trắng; hai cặp gene nằm trên hai cặp nhiễm sắc thể thường khác nhau. Cho phép lai $P: AaBb \\times Aabb$ thu được đời con $F_1$. Xét tính đúng hoặc sai của các nhận định sau:',
+    hasFormula: true,
+    formulaLatex: 'P: AaBb \\times Aabb \\implies F_1: (3 A\\text{-} : 1 aa)(1 Bb : 1 bb)',
     bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Trình bày cơ chế phiên mã, chế bản mRNA và dịch mã ở sinh vật nhân thực.',
-    explanation: 'a) Đúng vì enzyme RNA polymerase chỉ tổng hợp mạch mới theo chiều 5\' → 3\' bằng cách trượt trên mạch khuôn theo chiều 3\' → 5\'. b) Sai vì quá trình cắt bỏ intron và nối các exon chỉ diễn ra ở sinh vật nhân thực, sinh vật nhân sơ không có intron trong vùng mã hóa. c) Đúng vì các exon có thể được nối theo nhiều trật tự khác nhau (alternative splicing) giúp 1 gene tạo ra nhiều chuỗi polypeptide khác nhau. d) Đúng vì codon kết thúc (UAA, UAG, UGA) là tín hiệu dừng dịch mã.',
+    learningOutcome: 'Phân tích số loại kiểu gene, số loại kiểu hình và tỉ lệ phân li trong phép lai hai cặp tính trạng Mendel.',
+    explanation: 'a) Đúng vì $(Aa \\times Aa)$ cho 3 kiểu gene, $(Bb \\times bb)$ cho 2 kiểu gene $\\implies$ Tổng số kiểu gene là $3 \\times 2 = 6$, tổng số kiểu hình là $2 \\times 2 = 4$. b) Đúng vì tỉ lệ thân cao, hoa đỏ ($A\\text{-}Bb$) là $\\frac{3}{4} \\times \\frac{1}{2} = \\frac{3}{8} = 37,5\\%$. c) Đúng vì tỉ lệ cá thể thuần chủng ($AAbb + aabb$) là $\\frac{1}{4} \\times \\frac{1}{2} + \\frac{1}{4} \\times \\frac{1}{2} = \\frac{2}{8} = 25\\%$. d) Sai vì trong số các cây thân cao, hoa đỏ ($A\\text{-}Bb$) ở $F_1$, tất cả đều dị hợp về cặp $Bb$ nên tỉ lệ cây thuần chủng bằng $0\\%$.',
     subItems: [
-      { id: 'bio-p2-4-a', originalLabel: 'a', currentLabel: 'a', text: 'Enzyme RNA polymerase trượt trên mạch khuôn của gene theo chiều $3\' \\to 5\'$ để tổng hợp phân tử RNA theo chiều $5\' \\to 3\'$.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'bio-p2-4-b', originalLabel: 'b', currentLabel: 'b', text: 'Quá trình cắt bỏ đoạn không mã hóa (intron) và nối các đoạn mã hóa (exon) diễn ra phổ biến ở cả tế bào vi khuẩn (nhân sơ) và sinh vật nhân thực.', isUnderline: false, isRed: false, isTrue: false },
-      { id: 'bio-p2-4-c', originalLabel: 'c', currentLabel: 'c', text: 'Hiện tượng ghép nối các exon theo các trật tự khác nhau từ một tiền mRNA giúp một gene có thể mã hóa cho nhiều loại chuỗi polypeptide khác nhau.', isUnderline: true, isRed: true, isTrue: true },
-      { id: 'bio-p2-4-d', originalLabel: 'd', currentLabel: 'd', text: 'Trên phân tử mRNA trưởng thành, các bộ ba kết thúc (5\'UAA3\', 5\'UAG3\', 5\'UGA3\') không mã hóa cho amino acid nào mà đóng vai trò phát tín hiệu dừng dịch mã.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-2-a', originalLabel: 'a', currentLabel: 'a', text: 'Ở đời con $F_1$, có tối đa $6$ loại kiểu gene và $4$ loại kiểu hình khác nhau.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-2-b', originalLabel: 'b', currentLabel: 'b', text: 'Tỉ lệ cây có kiểu hình thân cao, hoa đỏ ($A\\text{-}B\\text{-}$) ở đời con $F_1$ chiếm $37,5\\%$ ($3/8$).', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-2-c', originalLabel: 'c', currentLabel: 'c', text: 'Tỉ lệ cây có kiểu gene đồng hợp (thuần chủng về cả hai cặp gene) ở $F_1$ chiếm $25\\%$.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-2-d', originalLabel: 'd', currentLabel: 'd', text: 'Lấy ngẫu nhiên 1 cây thân cao, hoa đỏ ở $F_1$, xác suất thu được cây thuần chủng là $1/3$.', isUnderline: false, isRed: false, isTrue: false },
+    ],
+  },
+
+  // --- CÂU 3 (PHẦN II): HOÁN VỊ GENE & DI TRUYỀN LIÊN KẾT GIỚI TÍNH ---
+  {
+    id: 'bio12-p2-3',
+    part: 'PART_2',
+    originalIndex: 21,
+    displayIndex: 3,
+    stemText: 'Ở ruồi giấm ($2n = 8$), xét hai cặp gene quy định kích thước thân ($A$: thân xám, $a$: thân đen) và chiều dài cánh ($B$: cánh dài, $b$: cánh cụt) cùng nằm trên một cặp nhiễm sắc thể thường; cặp gene quy định màu mắt ($D$: mắt đỏ, $d$: mắt trắng) nằm trên vùng không tương đồng của nhiễm sắc thể giới tính $X$. Thực hiện phép lai $P: ♀ \\frac{AB}{ab} X^D X^d \\times ♂ \\frac{AB}{ab} X^D Y$, biết tần số hoán vị gene ở ruồi cái là $f = 20\\%$ (ruồi đực không xảy ra hoán vị gene). Xét tính đúng hoặc sai của các nhận định sau:',
+    hasFormula: true,
+    formulaLatex: 'P(aabb) = 0,4\\underline{ab}\\;(♀) \\times 0,5\\underline{ab}\\;(♂) = 0,20 \\implies P(A\\text{-}B\\text{-}) = 0,5 + 0,20 = 0,70',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Giải bài toán tích hợp quy luật hoán vị gene trên NST thường và di truyền liên kết giới tính ở ruồi giấm.',
+    explanation: 'a) Đúng vì phép lai $\\frac{AB}{ab} \\;(f=20\\%) \\times \\frac{AB}{ab}\\;(f=0)$ tạo ra 7 kiểu gene, còn $X^D X^d \\times X^D Y$ tạo ra 4 kiểu gene $\\implies$ Tổng số kiểu gene ở $F_1$ là $7 \\times 4 = 28$ kiểu gene. b) Đúng vì tỉ lệ kiểu gene đồng hợp lặn $\\frac{ab}{ab}$ là $0,4 \\times 0,5 = 0,20 = 20\\%$, suy ra tỉ lệ thân xám, cánh dài ($A\\text{-}B\\text{-}$) là $50\\% + 20\\% = 70\\%$. c) Đúng vì tỉ lệ mắt đỏ ($X^D\\text{-}$) là $3/4 = 0,75$, nên tỉ lệ ruồi thân xám, cánh dài, mắt đỏ ở $F_1$ là $0,70 \\times 0,75 = 0,525 = 52,5\\%$. d) Sai vì ở $F_1$, ruồi mắt trắng ($X^d Y$) chỉ xuất hiện ở giới đực, hoàn toàn không có ruồi cái mắt trắng.',
+    subItems: [
+      { id: 'bio12-p2-3-a', originalLabel: 'a', currentLabel: 'a', text: 'Số loại kiểu gene tối đa được tạo ra ở đời con $F_1$ là $28$ loại kiểu gene.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-3-b', originalLabel: 'b', currentLabel: 'b', text: 'Ở đời con $F_1$, tỉ lệ ruồi có kiểu hình thân đen, cánh cụt ($\\frac{ab}{ab}$) chiếm $20\\%$.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-3-c', originalLabel: 'c', currentLabel: 'c', text: 'Tỉ lệ ruồi có kiểu hình trội về cả 3 tính trạng (thân xám, cánh dài, mắt đỏ) ở $F_1$ chiếm $52,5\\%$.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-3-d', originalLabel: 'd', currentLabel: 'd', text: 'Ở đời con $F_1$, tỉ lệ ruồi cái có kiểu hình thân đen, cánh cụt, mắt trắng chiếm $5\\%$.', isUnderline: false, isRed: false, isTrue: false },
+    ],
+  },
+
+  // --- CÂU 4 (PHẦN II): DI TRUYỀN HỌC NGƯỜI & TƯ VẤN SƠ ĐỒ PHẢ HỆ (CÓ HÌNH PHẢ HỆ 2) ---
+  {
+    id: 'bio12-p2-4',
+    part: 'PART_2',
+    originalIndex: 22,
+    displayIndex: 4,
+    stemText: 'Sơ đồ phả hệ ở hình bên mô tả sự di truyền bệnh bạch tạng ở một gia đình qua 3 thế hệ. Biết rằng bệnh bạch tạng do một gene có hai allele ($A$ và $a$) nằm trên nhiễm sắc thể thường quy định và không xảy ra đột biến mới ở tất cả các cá thể trong phả hệ. Xét tính đúng hoặc sai của các nhận định sau:',
+    hasFormula: true,
+    formulaLatex: '\\text{II-2 } (\\frac{1}{3}AA : \\frac{2}{3}Aa) \\times \\text{II-3 } (\\frac{1}{3}AA : \\frac{2}{3}Aa) \\implies P(aa) = \\frac{2}{3} \\times \\frac{2}{3} \\times \\frac{1}{4} = \\frac{1}{9}',
+    bloomLevel: 'VAN_DUNG_CAO',
+    learningOutcome: 'Vận dụng sơ đồ phả hệ để xác định kiểu gene các cá thể và tính xác suất sinh con trong tư vấn di truyền.',
+    explanation: 'a) Đúng vì bố mẹ I-1 $\\times$ I-2 bình thường sinh con gái II-1 bị bệnh ($aa$) $\\implies$ Bệnh do allele lặn $a$ trên NST thường quy định. b) Đúng vì bố mẹ I-1, I-2, I-3, I-4 đều bình thường nhưng sinh con bị bệnh ($aa$) nên cả 4 người ở thế hệ I đều có kiểu gene dị hợp $Aa$. c) Đúng vì người II-2 và II-3 có kiểu hình bình thường nên đều có xác suất kiểu gene là $\\frac{1}{3}AA : \\frac{2}{3}Aa$; xác suất họ sinh con đầu lòng III-1 bị bệnh ($aa$) là $\\frac{2}{3} \\times \\frac{2}{3} \\times \\frac{1}{4} = \\frac{1}{9}$. d) Sai vì xác suất sinh con đầu lòng III-1 là con gái và không bị bệnh là $\\frac{1}{2} \\times (1 - \\frac{1}{9}) = \\frac{4}{9}$ (không phải $\\frac{8}{9}$).',
+    images: [
+      {
+        id: 'img-bio12-pedigree-2',
+        dataUrl: toSvgDataUrl(SVG_PEDIGREE_CHART_2),
+        fileName: 'so_do_pha_he_bach_tang_phan_2.svg',
+        tagId: '[HINH_ANH_CAU_22]',
+        caption: 'Sơ đồ phả hệ di truyền bệnh bạch tạng qua 3 thế hệ phục vụ tư vấn di truyền',
+        dpi: 300,
+        aspectRatio: 500 / 290,
+        widthTwips: 4500,
+        heightTwips: 2600,
+      },
+    ],
+    subItems: [
+      { id: 'bio12-p2-4-a', originalLabel: 'a', currentLabel: 'a', text: 'Bệnh bạch tạng trong phả hệ trên do allele lặn $a$ nằm trên nhiễm sắc thể thường quy định.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-4-b', originalLabel: 'b', currentLabel: 'b', text: 'Cả 4 cá thể ở thế hệ thứ nhất (I-1, I-2, I-3 và I-4) đều chắc chắn có kiểu gene dị hợp tử $Aa$.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-4-c', originalLabel: 'c', currentLabel: 'c', text: 'Xác suất để cặp vợ chồng II-2 và II-3 sinh người con đầu lòng (III-1) bị mắc bệnh bạch tạng ($aa$) là $1/9$.', isUnderline: true, isRed: true, isTrue: true },
+      { id: 'bio12-p2-4-d', originalLabel: 'd', currentLabel: 'd', text: 'Xác suất để cặp vợ chồng II-2 và II-3 sinh con đầu lòng (III-1) là con gái không bị bệnh bằng $8/9$.', isUnderline: false, isRed: false, isTrue: false },
     ],
   },
 
   // =========================================================================
-  // PHẦN III: TRẮC NGHIỆM TRẢ LỜI NGẮN (8 CÂU — TỪ CÂU 1 ĐẾN CÂU 8)
-  // Chia đều 4 môn: Toán (Câu 1-2), Vật lý (Câu 3-4), Hóa học (Câu 5-6), Sinh học (Câu 7-8)
+  // PHẦN III: TRẮC NGHIỆM TRẢ LỜI NGẮN (6 CÂU — TỪ CÂU 1 ĐẾN CÂU 6)
   // =========================================================================
 
-  // --- MÔN TOÁN HỌC (CÂU 1 -> CÂU 2) ---
+  // --- CÂU 1 (PHẦN III): BÀI TẬP TÁI BẢN DNA ---
   {
-    id: 'math-p3-1',
-    part: 'PART_3',
-    originalIndex: 21,
-    displayIndex: 1,
-    stemText: 'Cho hình chóp tam giác $S.ABC$ có đáy $ABC$ là tam giác vuông tại $B$ với $AB = 3$, $BC = 4$. Cạnh bên $SA$ vuông góc với mặt phẳng đáy $(ABC)$ và $SA = 12$. Tính thể tích $V$ của khối chóp $S.ABC$.',
-    hasFormula: true,
-    formulaLatex: 'S_{\\triangle ABC} = \\frac{1}{2} \\times 3 \\times 4 = 6 \\implies V = \\frac{1}{3} S_{\\triangle ABC} \\cdot SA = \\frac{1}{3} \\times 6 \\times 12 = 24',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính thể tích của khối chóp có cạnh bên vuông góc với mặt phẳng đáy.',
-    explanation: 'Diện tích đáy tam giác vuông là $S = \\frac{1}{2} \\cdot 3 \\cdot 4 = 6$. Thể tích khối chóp là $V = \\frac{1}{3} \\cdot S \\cdot h = \\frac{1}{3} \\cdot 6 \\cdot 12 = 24$.',
-    shortAnswer: '24',
-    shortAnswerDetectedBy: 'UNDERLINE_RED',
-  },
-  {
-    id: 'math-p3-2',
-    part: 'PART_3',
-    originalIndex: 22,
-    displayIndex: 2,
-    stemText: 'Tìm giá trị lớn nhất ($M = \\max f(x)$) của hàm số $f(x) = x^3 - 3x + 13$ trên đoạn $[-1; 2]$.',
-    hasFormula: true,
-    formulaLatex: 'f\'(x) = 3x^2 - 3 = 0 \\implies x = \\pm 1;\\; f(-1) = 15,\\; f(1) = 11,\\; f(2) = 15 \\implies M = 15',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tìm giá trị lớn nhất và nhỏ nhất của hàm số bậc ba trên một đoạn đóng.',
-    explanation: 'Ta có $f\'(x) = 3x^2 - 3 = 0 \\implies x = \\pm 1 \\in [-1; 2]$. Tính các giá trị: $f(-1) = 15$, $f(1) = 11$, $f(2) = 15$. Giá trị lớn nhất trên đoạn là $M = 15$.',
-    shortAnswer: '15',
-    shortAnswerDetectedBy: 'UNDERLINE_RED',
-  },
-
-  // --- MÔN VẬT LÝ (CÂU 3 -> CÂU 4) ---
-  {
-    id: 'phys-p3-3',
+    id: 'bio12-p3-1',
     part: 'PART_3',
     originalIndex: 23,
-    displayIndex: 3,
-    stemText: 'Một con lắc đơn có chiều dài dây treo $l = 1\\text{ m}$ dao động điều hòa tại nơi có gia tốc trọng trường $g = \\pi^2 = 9,87\\text{ m/s}^2$. Hãy tính chu kì dao động riêng $T$ của con lắc đơn này (tính theo đơn vị giây, làm tròn kết quả đến số nguyên gần nhất).',
+    displayIndex: 1,
+    stemText: 'Một phân tử DNA có tổng số $N = 3000$ nucleotide, trong đó số nucleotide loại Adenine ($A$) chiếm $20\\%$ tổng số nucleotide. Khi phân tử DNA này thực hiện tái bản (nhân đôi) liên tiếp $2$ lần trong môi trường nội bào thì tổng số nucleotide tự do loại Guanine ($G$) mà môi trường cần cung cấp là bao nhiêu?',
     hasFormula: true,
-    formulaLatex: 'T = 2\\pi \\sqrt{\\frac{l}{g}} = 2\\pi \\sqrt{\\frac{1}{\\pi^2}} = 2\\text{ s}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính chu kì dao động điều hòa của con lắc đơn.',
-    explanation: 'Chu kì con lắc đơn là $T = 2\\pi \\sqrt{\\frac{l}{g}} = 2\\pi \\sqrt{\\frac{1}{\\pi^2}} = 2\\text{ s}$.',
-    shortAnswer: '2',
-    shortAnswerDetectedBy: 'UNDERLINE_RED',
-  },
-  {
-    id: 'phys-p3-4',
-    part: 'PART_3',
-    originalIndex: 24,
-    displayIndex: 4,
-    stemText: 'Một khung dây phẳng kín có diện tích $S = 200\\text{ cm}^2 = 0,02\\text{ m}^2$ gồm $N = 100$ vòng dây được đặt trong từ trường đều có cảm ứng từ $B = 0,4\\text{ T}$. Vectơ pháp tuyến $\\vec{n}$ của mặt phẳng khung hợp với $\\vec{B}$ một góc $\\alpha = 0^\\circ$. Hãy tính độ lớn của từ thông cực đại $\\Phi$ xuyên qua khung dây (tính theo đơn vị Weber - Wb, kết quả viết dạng số thập phân).',
-    hasFormula: true,
-    formulaLatex: '\\Phi = N B S \\cos \\alpha = 100 \\times 0,4 \\times 0,02 \\times \\cos(0^\\circ) = 0,8\\text{ Wb}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính từ thông qua khung dây dẫn đặt trong từ trường đều.',
-    explanation: 'Từ thông qua khung dây là $\\Phi = NBS\\cos\\alpha = 100 \\cdot 0,4 \\cdot 0,02 \\cdot \\cos(0^\\circ) = 0,8\\text{ Wb}$.',
-    shortAnswer: '0,8',
+    formulaLatex: 'G = 30\\% \\times 3000 = 900 \\implies G_{\\text{mt}} = G \\times (2^2 - 1) = 900 \\times 3 = 2700',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Tính được số lượng từng loại nucleotide môi trường cung cấp cho quá trình tái bản DNA.',
+    explanation: 'Trong phân tử DNA, ta có $\%G = 50\\% - \%A = 50\\% - 20\\% = 30\\% \\implies G = 0,3 \\times 3000 = 900$ nucleotide. Khi DNA tái bản 2 lần, số nucleotide loại $G$ môi trường cung cấp là $G_{\\text{mt}} = 900 \\times (2^2 - 1) = 2700$.',
+    shortAnswer: '2700',
     shortAnswerDetectedBy: 'UNDERLINE_RED',
   },
 
-  // --- MÔN HÓA HỌC (CÂU 5 -> CÂU 6) ---
+  // --- CÂU 2 (PHẦN III): BÀI TẬP PHIÊN MÃ RNA & DỊCH MÃ PROTEIN ---
   {
-    id: 'chem-p3-5',
+    id: 'bio12-p3-2',
+    part: 'PART_3',
+    originalIndex: 24,
+    displayIndex: 2,
+    stemText: 'Một phân tử mRNA trưởng thành ở sinh vật nhân sơ có chiều dài vùng mã hóa là $L = 3060\\;\\text{\\AA}$ (tính từ bộ ba mở đầu đến hết bộ ba kết thúc). Khi $1$ ribosome trượt qua phân tử mRNA này một lần để tổng hợp một chuỗi polypeptide thì tổng số phân tử tRNA mang amino acid đến ribosome tham gia dịch mã là bao nhiêu?',
+    hasFormula: true,
+    formulaLatex: 'rN = \\frac{3060}{3,4} = 900 \\implies N_{\\text{codon}} = \\frac{900}{3} = 300 \\implies N_{\\text{tRNA}} = 300 - 1 = 299',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Tính được số phân tử tRNA tham gia dịch mã tổng hợp chuỗi polypeptide từ phân tử mRNA.',
+    explanation: 'Số ribonucleotide của vùng mã hóa trên mRNA là $rN = 3060 : 3,4 = 900$. Số bộ ba trên vùng mã hóa là $900 : 3 = 300$ codon. Vì bộ ba kết thúc không có tRNA tương ứng nên tổng số lượt tRNA tham gia dịch mã là $300 - 1 = 299$.',
+    shortAnswer: '299',
+    shortAnswerDetectedBy: 'UNDERLINE_RED',
+  },
+
+  // --- CÂU 3 (PHẦN III): BÀI TẬP LAI MENDEL ĐA TÍNH TRẠNG ---
+  {
+    id: 'bio12-p3-3',
     part: 'PART_3',
     originalIndex: 25,
-    displayIndex: 5,
-    stemText: 'Dẫn toàn bộ $4,958\\text{ lít}$ khí $CO_2$ (ở điều kiện chuẩn $25^\\circ\\text{C},\\; 1\\text{ bar}$, tương ứng số mol $n = 0,2\\text{ mol}$) vào lượng dư dung dịch nước vôi trong $Ca(OH)_2$: $CO_2 + Ca(OH)_2 \\to CaCO_3\\downarrow + H_2O$. Tính khối lượng kết tủa canxi cacbonat ($CaCO_3$, khối lượng mol $M = 100\\text{ g/mol}$) thu được sau phản ứng (tính theo đơn vị gam).',
+    displayIndex: 3,
+    stemText: 'Trong phép lai $3$ cặp tính trạng phân li độc lập theo quy luật Mendel: $P: AaBbDd \\times AaBbdd$ (biết các allele trội $A, B, D$ là trội hoàn toàn so với các allele lặn $a, b, d$). Ở đời con $F_1$, kiểu hình mang cả 3 tính trạng trội ($A\\text{-}B\\text{-}D\\text{-}$) chiếm tỉ lệ bao nhiêu phần trăm? (Làm tròn hoặc ghi số thập phân chuẩn xác).',
     hasFormula: true,
-    formulaLatex: 'n_{CaCO_3} = n_{CO_2} = 0,2\\text{ mol} \\implies m_{CaCO_3} = 0,2 \\times 100 = 20\\text{ g}',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính khối lượng kết tủa thu được trong phản ứng giữa khí CO2 và dung dịch kiềm dư.',
-    explanation: 'Vì dung dịch $Ca(OH)_2$ dư nên phản ứng chỉ tạo muối trung hòa kết tủa: $n_{CaCO_3} = n_{CO_2} = 0,2\\text{ mol}$. Khối lượng kết tủa thu được là $m = 0,2 \\cdot 100 = 20\\text{ g}$.',
+    formulaLatex: 'P(A\\text{-}B\\text{-}D\\text{-}) = \\frac{3}{4} \\times \\frac{3}{4} \\times \\frac{1}{2} = \\frac{9}{32} = 28,125\\%',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Vận dụng quy tắc nhân xác suất để tính tỉ lệ kiểu hình trong phép lai nhiều cặp tính trạng phân li độc lập.',
+    explanation: 'Xét riêng từng cặp gene: $Aa \\times Aa \\to 3/4 A\\text{-}$; $Bb \\times Bb \\to 3/4 B\\text{-}$; $Dd \\times dd \\to 1/2 D\\text{-}$. Tỉ lệ kiểu hình trội cả 3 tính trạng ($A\\text{-}B\\text{-}D\\text{-}$) là $\\frac{3}{4} \\times \\frac{3}{4} \\times \\frac{1}{2} = \\frac{9}{32} = 28,125\\%$.',
+    shortAnswer: '28,125',
+    shortAnswerDetectedBy: 'UNDERLINE_RED',
+  },
+
+  // --- CÂU 4 (PHẦN III): BÀI TẬP LIÊN KẾT & HOÁN VỊ GENE ---
+  {
+    id: 'bio12-p3-4',
+    part: 'PART_3',
+    originalIndex: 26,
+    displayIndex: 4,
+    stemText: 'Ở một loài thực vật, cho cây dị hợp tử hai cặp gene $\\frac{AB}{ab}$ tự thụ phấn ($P: \\frac{AB}{ab} \\times \\frac{AB}{ab}$). Biết hoán vị gene xảy ra ở cả quá trình phát sinh giao tử đực và giao tử cái với tần số như nhau là $f = 20\\%$. Ở đời con $F_1$, kiểu gene đồng hợp lặn $\\frac{ab}{ab}$ chiếm tỉ lệ bao nhiêu phần trăm?',
+    hasFormula: true,
+    formulaLatex: '\\underline{ab} = \\frac{1 - 0,2}{2} = 0,40 \\implies P\\left(\\frac{ab}{ab}\\right) = 0,40 \\times 0,40 = 0,16 = 16\\%',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Tính được tỉ lệ kiểu hình đồng hợp lặn ở đời con khi biết tần số hoán vị gene ở hai giới.',
+    explanation: 'Với tần số hoán vị $f = 20\\%$, giao tử liên kết $\\underline{ab}$ ở cả bố và mẹ đều bằng $50\\% - 10\\% = 40\\% = 0,4$. Tỉ lệ kiểu gene đồng hợp lặn $\\frac{ab}{ab}$ ở $F_1$ là $0,4 \\times 0,4 = 0,16 = 16\\%$.',
+    shortAnswer: '16',
+    shortAnswerDetectedBy: 'UNDERLINE_RED',
+  },
+
+  // --- CÂU 5 (PHẦN III): BÀI TẬP DI TRUYỀN QUẦN THỂ & LAI GIỐNG TỰ THỤ ---
+  {
+    id: 'bio12-p3-5',
+    part: 'PART_3',
+    originalIndex: 27,
+    displayIndex: 5,
+    stemText: 'Trong kỹ thuật tạo dòng thuần ở cây trồng tự thụ phấn, xuất phát từ một quần thể giống ban đầu ($P$) có cấu trúc di truyền là $0,2AA : 0,8Aa$. Sau $2$ thế hệ tự thụ phấn liên tiếp, tỉ lệ cá thể có kiểu gene dị hợp tử ($Aa$) ở thế hệ $F_2$ là bao nhiêu phần trăm?',
+    hasFormula: true,
+    formulaLatex: 'H_2 = H_0 \\times \\left(\\frac{1}{2}\\right)^2 = 0,8 \\times \\frac{1}{4} = 0,20 = 20\\%',
+    bloomLevel: 'VAN_DUNG',
+    learningOutcome: 'Vận dụng công thức di truyền quần thể tự thụ phấn trong chọn giống cây trồng.',
+    explanation: 'Sau $n = 2$ thế hệ tự thụ phấn, tỉ lệ thể dị hợp $Aa$ ở $F_2$ giảm đi theo công thức $0,8 \\times (1/2)^2 = 0,8 \\times 0,25 = 0,20 = 20\\%$.',
     shortAnswer: '20',
     shortAnswerDetectedBy: 'UNDERLINE_RED',
   },
-  {
-    id: 'chem-p3-6',
-    part: 'PART_3',
-    originalIndex: 26,
-    displayIndex: 6,
-    stemText: 'Đun nóng hỗn hợp gồm $60\\text{ g}$ axit axetic ($CH_3COOH$, tương ứng $1\\text{ mol}$) và $92\\text{ g}$ ancol etylic ($C_2H_5OH$, tương ứng $2\\text{ mol}$) với xúc tác axit $H_2SO_4$ đặc. Kết thúc phản ứng thu được $66\\text{ g}$ este etyl axetat ($CH_3COOC_2H_5$, khối lượng mol $M = 88\\text{ g/mol}$, tương ứng $0,75\\text{ mol}$). Hãy tính hiệu suất $H$ của phản ứng este hóa này (tính theo đơn vị phần trăm - %).',
-    hasFormula: true,
-    formulaLatex: 'H = \\frac{n_{este\\;thuc\\;te}}{n_{axit\\;ly\\;thuyet}} \\times 100\\% = \\frac{0,75}{1,0} \\times 100\\% = 75\\%',
-    bloomLevel: 'VAN_DUNG',
-    learningOutcome: 'Tính hiệu suất phản ứng este hóa theo chất phản ứng hết.',
-    explanation: 'Tỉ lệ mol $CH_3COOH : C_2H_5OH = 1 : 2$ nên hiệu suất tính theo axit axetic ($1\\text{ mol}$). Số mol este thực tế thu được là $n = 66 / 88 = 0,75\\text{ mol}$. Hiệu suất phản ứng là $H = (0,75 / 1,0) \\cdot 100\\% = 75\\%$.',
-    shortAnswer: '75',
-    shortAnswerDetectedBy: 'UNDERLINE_RED',
-  },
 
-  // --- MÔN SINH HỌC (CÂU 7 -> CÂU 8) ---
+  // --- CÂU 6 (PHẦN III): BÀI TẬP DI TRUYỀN HỌC NGƯỜI ---
   {
-    id: 'bio-p3-7',
-    part: 'PART_3',
-    originalIndex: 27,
-    displayIndex: 7,
-    stemText: 'Một phân tử DNA mạch kép ở sinh vật nhân thực có tổng số $2400$ nucleotide, trong đó số nucleotide loại Adenine chiếm $20\\%$ tổng số nucleotide của phân tử. Hãy tính tổng số liên kết hydrogen giữa hai mạch đơn của phân tử DNA này.',
-    hasFormula: true,
-    formulaLatex: 'A = T = 480,\\; G = C = 720 \\implies H = 2A + 3G = 2(480) + 3(720) = 3120',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Vận dụng nguyên tắc bổ sung để tính số lượng nucleotide và số liên kết hydrogen của phân tử DNA.',
-    explanation: 'Số nucleotide loại $A = T = 2400 \\times 20\\% = 480$. Số nucleotide loại $G = C = \\frac{2400 - 2 \\times 480}{2} = 720$. Tổng số liên kết hydrogen là $H = 2A + 3G = 2 \\times 480 + 3 \\times 720 = 960 + 2160 = 3120$.',
-    shortAnswer: '3120',
-    shortAnswerDetectedBy: 'UNDERLINE_RED',
-  },
-  {
-    id: 'bio-p3-8',
+    id: 'bio12-p3-6',
     part: 'PART_3',
     originalIndex: 28,
-    displayIndex: 8,
-    stemText: 'Cho phép lai phân tích cây đậu Hà Lan dị hợp tử 3 cặp gene phân li độc lập: $P: AaBbDd \\times aabbdd$. Biết mỗi gene quy định một tính trạng và trội là trội hoàn toàn. Theo lí thuyết, đời con $F_a$ có tối đa bao nhiêu loại kiểu gene khác nhau?',
+    displayIndex: 6,
+    stemText: 'Ở người, bệnh фенилкетонурия (phenylketonuria - PKU) do một allele lặn $a$ nằm trên nhiễm sắc thể thường quy định, allele trội $A$ quy định bình thường. Một cặp vợ chồng đều có kiểu hình bình thường nhưng cả bên vợ và bên chồng đều có em gái ruột mắc bệnh PKU ($aa$), bố mẹ hai bên đều bình thường. Xác suất cặp vợ chồng này sinh con đầu lòng không mắc bệnh PKU là bao nhiêu phần trăm? (Làm tròn đến 1 chữ số thập phân sau dấu phẩy).',
     hasFormula: true,
-    formulaLatex: '(Aa \\times aa) \\to 2;\\; (Bb \\times bb) \\to 2;\\; (Dd \\times dd) \\to 2 \\implies 2 \\times 2 \\times 2 = 8',
-    bloomLevel: 'THONG_HIEU',
-    learningOutcome: 'Tính số loại kiểu gene tạo ra ở đời con trong phép lai phân li độc lập.',
-    explanation: 'Xét từng cặp gene riêng rẽ: $(Aa \\times aa) \\to 2$ kiểu gene ($Aa, aa$); $(Bb \\times bb) \\to 2$ kiểu gene ($Bb, bb$); $(Dd \\times dd) \\to 2$ kiểu gene ($Dd, dd$). Số loại kiểu gene tối đa ở đời con là $2 \\times 2 \\times 2 = 8$.',
-    shortAnswer: '8',
+    formulaLatex: 'P(aa) = \\frac{2}{3} \\times \\frac{2}{3} \\times \\frac{1}{4} = \\frac{1}{9} \\implies P(\\text{bình thường}) = 1 - \\frac{1}{9} = \\frac{8}{9} \\approx 88,9\\%',
+    bloomLevel: 'VAN_DUNG_CAO',
+    learningOutcome: 'Giải bài toán tư vấn di truyền học người và tính xác suất sinh con bình thường.',
+    explanation: 'Do cả vợ và chồng đều bình thường nhưng có em gái bị bệnh ($aa$) và bố mẹ bình thường ($Aa \\times Aa$), nên vợ và chồng đều có xác suất kiểu gene là $\\frac{1}{3}AA : \\frac{2}{3}Aa$. Xác suất sinh con đầu lòng bị bệnh ($aa$) là $\\frac{2}{3} \\times \\frac{2}{3} \\times \\frac{1}{4} = \\frac{1}{9}$. Do đó xác suất sinh con đầu lòng không mắc bệnh là $1 - \\frac{1}{9} = \\frac{8}{9} \\approx 88,9\\%$.',
+    shortAnswer: '88,9',
     shortAnswerDetectedBy: 'UNDERLINE_RED',
   },
 ];
@@ -786,6 +831,16 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
  * Đăng ký động các tính năng nâng cao (Dynamic Feature Registry)
  */
 export const DYNAMIC_FEATURE_REGISTRY: FeatureReleaseItem[] = [
+  {
+    id: 'feat-bio12-hk1-sample',
+    version: 'v3.9.0',
+    releaseDate: '2026-10',
+    title: 'Đề Mẫu Kiểm Tra Cuối Học Kì 1 — Môn Sinh Học 12 (28 Câu Chuẩn 18-4-6)',
+    category: 'CORE_PARSER',
+    description: 'Đề mẫu chuẩn cấu trúc 2025 (18 câu Phần I + 4 câu Phần II + 6 câu Phần III) bao quát toàn bộ chương trình Học kì 1 Sinh học 12: Sơ đồ DNA, Operon Lac, bài tập DNA-RNA-Protein, quy luật Mendel, hoán vị gene, liên kết giới tính, lai giống tạo ưu thế lai và 2 sơ đồ phả hệ di truyền học người.',
+    technicalSpec: '4 sơ đồ Vector SVG 300 DPI + Công thức OMML/LaTeX + Sạch 100% lỗi.',
+    autoDetected: true,
+  },
   {
     id: 'feat-master-multi-qr',
     version: 'v3.8.2',
@@ -824,16 +879,6 @@ export const DYNAMIC_FEATURE_REGISTRY: FeatureReleaseItem[] = [
     category: 'WORD_EXPORT',
     description: 'Đồng bộ cấu trúc đặt tên file theo mẫu: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] [Hậu tố].docx/.zip cho toàn bộ các đề thi, bảng đáp án và bản đặc tả CV 7991.',
     technicalSpec: 'Cú pháp chuẩn hóa: Môn ${subject} - ${grade} - Kỳ kiểm tra ${exam} - ${dd-mm-yy}.',
-    autoDetected: true,
-  },
-  {
-    id: 'feat-multi-subject-master',
-    version: 'v3.5.0',
-    releaseDate: '2025-10',
-    title: 'Đề Mẫu Đánh Giá Năng Lực Tích Hợp 4 Môn: Toán - Lý - Hóa - Sinh',
-    category: 'CORE_PARSER',
-    description: 'Chia đều 4 môn học theo tỉ lệ chuẩn ĐGNL hiện hành gồm 3 phần độc lập: 16 câu trắc nghiệm 4 lựa chọn, 4 câu đúng/sai (16 mệnh đề) và 8 câu trả lời ngắn. Tích hợp 100% công thức phức tạp, khối lập phương 3D, đồ thị hàm số, đồ thị dao động, sơ đồ phản ứng và phả hệ.',
-    technicalSpec: 'Khớp 100% tiêu chuẩn Office Math Markup (<m:oMath>), Word Table (<w:tbl>) và In Line with Text Image (<wp:inline>).',
     autoDetected: true,
   },
   {
