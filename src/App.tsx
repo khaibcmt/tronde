@@ -99,9 +99,9 @@ import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModa
 import { ScientificContentRenderer } from './components/ScientificContentRenderer';
 
 export default function App() {
-  // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề chuẩn Sinh học 2025 tỉ lệ 18 - 4 - 6 = 28 câu sạch lỗi 100%)
+  // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề mẫu Đánh Giá Năng Lực tích hợp 4 môn Toán - Lý - Hóa - Sinh)
   const [fileName, setFileName] = useState<string>(
-    'De_Chuan_THPT_2025_Mon_Sinh_Hoc_18_4_6.docx'
+    'De_Mau_Danh_Gia_Nang_Luc_Toan_Ly_Hoa_Sinh_2025.docx'
   );
   const [questions, setQuestions] = useState<ExamQuestion[]>(() =>
     recalculateQuestionNumbering(SAMPLE_2025_EXAM_WITH_ERRORS, true)
@@ -121,7 +121,7 @@ export default function App() {
     text: string;
   } | null>(null);
 
-  // 2. State cấu hình Trộn đề, Tiêu đề Quốc ngữ, Môn thi (SINH HỌC), Kỳ thi, Số phút (50 phút) & Mã QR
+  // 2. State cấu hình Trộn đề, Tiêu đề Quốc ngữ, Môn thi (ĐÁNH GIÁ NĂNG LỰC TOÁN - LÝ - HÓA - SINH), Kỳ thi, Số phút (60 phút) & Mã QR
   const [config, setConfig] = useState<ShuffleConfig>({
     numVariants: 4,
     examCodeDigits: 3,
@@ -134,16 +134,16 @@ export default function App() {
     qrFormat: 'QM2025',
     embedQrInWord: true,
     includeSolutionsInExport: false,
-    departmentName: 'SỞ GD&ĐT VĨNH LONG',
-    schoolName: 'TRƯỜNG THPT MANG THÍT',
+    departmentName: 'ĐẠI HỌC QUỐC GIA',
+    schoolName: 'TRUNG TÂM KHẢO THÍ & ĐÁNH GIÁ CHẤT LƯỢNG',
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
     nationalMotto: 'Độc lập - Tự do - Hạnh phúc',
-    examTitle: 'KIỂM TRA GIỮA KÌ I',
-    examSubtitle: 'ĐỀ THI CHÍNH THỨC',
-    subjectName: 'SINH HỌC',
-    gradeLevel: 'Lớp 12',
+    examTitle: 'BÀI THI ĐÁNH GIÁ NĂNG LỰC TỔNG HỢP',
+    examSubtitle: 'ĐỀ THI MẪU CHUẨN CẤU TRÚC 2025',
+    subjectName: 'TOÁN HỌC & KHOA HỌC TỰ NHIÊN (LÝ - HÓA - SINH)',
+    gradeLevel: 'Khảo thí Tuyển sinh',
     schoolYear: `Năm học ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
-    durationMinutes: 50,
+    durationMinutes: 60,
   });
   const [isConfigCollapsed, setIsConfigCollapsed] = useState<boolean>(false);
   const [showCustomCodeEditor, setShowCustomCodeEditor] = useState<boolean>(false);
@@ -3366,7 +3366,7 @@ export default function App() {
                                     {/* Phần I */}
                                     <div className="leading-relaxed">
                                       <span className="font-bold text-blue-900 mr-2">
-                                        PHẦN I (18 câu 4 lựa chọn):
+                                        PHẦN I ({v.answerKey.part1.length} câu 4 lựa chọn):
                                       </span>
                                       <span className="font-mono font-bold text-rose-600 tracking-wide">
                                         {p1Text}
@@ -3375,7 +3375,7 @@ export default function App() {
                                     {/* Phần II */}
                                     <div className="leading-relaxed">
                                       <span className="font-bold text-emerald-900 mr-2">
-                                        PHẦN II (4 câu Đúng / Sai):
+                                        PHẦN II ({v.answerKey.part2.length} câu Đúng / Sai):
                                       </span>
                                       <span className="font-mono font-semibold text-slate-900">
                                         {p2Text}
