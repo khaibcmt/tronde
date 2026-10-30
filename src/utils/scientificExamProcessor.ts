@@ -680,16 +680,10 @@ function buildChemicalAndSubSupRunsXml(text: string, baseStyle: WordRunStyleOpti
     return `^{${mapped}}`;
   });
 
-  // Nhận diện ion hóa học dạng Fe^3+, SO4^2-, Cu^2+, CO3^2-, PO4^3-, NH4^+, NO3^-
-  normalized = normalized.replace(
-    /\b([A-Z][a-z]?(?:\d+)?)\^([0-9]*[+-])/g,
-    (_, base, charge) => `${base}^{${charge}}`
-  );
-
-  // Tự động nhận diện công thức phân tử Hóa học chuẩn (H2O, H2SO4, Al2(SO4)3, Fe2O3, C6H12O6, CH3COOH, KMnO4, Na2CO3...)
+  // Tự động nhận diện công thức phân tử Hóa học chuẩn (H2O, H2SO4, Fe(NO3)3, Al2(SO4)3, Fe2O3, C6H12O6, CH3COOH, KMnO4, Na2CO3...)
   // Chỉ áp dụng cho các công thức gồm ký hiệu nguyên tố hóa học chuẩn để không ảnh hưởng tới mã đề hoặc tên biến
   const chemFormulaRegex =
-    /\b((?:(?:H|He|Li|Be|B|C|N|O|F|Ne|Na|Mg|Al|Si|P|S|Cl|Ar|K|Ca|Sc|Ti|V|Cr|Mn|Fe|Co|Ni|Cu|Zn|Ga|Ge|As|Se|Br|Kr|Rb|Sr|Y|Zr|Nb|Mo|Tc|Ru|Rh|Pd|Ag|Cd|In|Sn|Sb|Te|I|Xe|Cs|Ba|La|Ce|Pt|Au|Hg|Pb|Bi|Po|Rn|Fr|Ra|Ac|Th|Pa|U|\([A-Za-z0-9]+\))\d*){2,})(\^{?[0-9]*[+-]}?)?(?![a-zA-Z0-9_])/g;
+    /\b((?:(?:H|He|Li|Be|B|C|N|O|F|Ne|Na|Mg|Al|Si|P|S|Cl|Ar|K|Ca|Sc|Ti|V|Cr|Mn|Fe|Co|Ni|Cu|Zn|Ga|Ge|As|Se|Br|Kr|Rb|Sr|Y|Zr|Nb|Mo|Tc|Ru|Rh|Pd|Ag|Cd|In|Sn|Sb|Te|I|Xe|Cs|Ba|La|Ce|Pt|Au|Hg|Pb|Bi|Po|Rn|Fr|Ra|Ac|Th|Pa|U|\([A-Za-z0-9]+\))\d*){2,})(?![a-zA-Z0-9_])/g;
 
   normalized = normalized.replace(chemFormulaRegex, (fullMatch) => {
     // Phải chứa ít nhất 1 chữ số chỉ số dưới và là công thức hóa học thực sự (tránh nhầm B1, B2, A1, A2, F1, F2, G1, G2, S1, S2)
@@ -698,10 +692,26 @@ function buildChemicalAndSubSupRunsXml(text: string, baseStyle: WordRunStyleOpti
     return fullMatch.replace(/([A-Za-z)])(\d+)/g, '$1_{$2}');
   });
 
-  // Nhận diện các phân tử đơn nguyên tố phổ biến: O2, N2, H2, Cl2, Br2, I2, O3, P4, S8
+  // Nhận diện các phân tử đơn nguyên tố và hợp chất phổ biến: O2, N2, H2, Cl2, Br2, I2, O3, P4, S8, SO4, NO3, CO3, PO4, NH4
   normalized = normalized.replace(
-    /\b(O2|O3|N2|H2|Cl2|Br2|I2|F2|P4|S8|CH4|NH3|PH3|H2S|SO2|SO3|NO2|N2O|N2O4|N2O5|CO2|CS2|SiO2|P2O5|Al2O3|FeO|Fe2O3|Fe3O4|CuO|ZnO|MgO|CaO|BaO|Na2O|K2O|Ag2O|Cr2O3|CrO3|MnO2)\b/g,
+    /\b(O2|O3|N2|H2|Cl2|Br2|I2|F2|P4|S8|CH4|NH3|PH3|H2S|SO2|SO3|SO4|NO2|NO3|N2O|N2O4|N2O5|CO2|CO3|CS2|SiO2|P2O5|PO4|NH4|HCO3|HSO4|HSO3|HS|Al2O3|FeO|Fe2O3|Fe3O4|CuO|ZnO|MgO|CaO|BaO|Na2O|K2O|Ag2O|Cr2O3|CrO3|Cr2O7|CrO4|MnO2|MnO4)\b/g,
     (m) => m.replace(/([A-Za-z])(\d+)/g, '$1_{$2}')
+  );
+
+  // Nhận diện tất cả ion hóa học viết kèm dấu ^ (VD: SO4^2-, SO_{4}^2-, Al^3+, Fe^2+, Fe^3+, Cu^2+, CO3^2-, PO4^3-, NH4^+, NO3^-, OH^-)
+  normalized = normalized.replace(
+    /([A-Za-z0-9_(){}]+)\^\{?([0-9]*[+-])\}?(?![a-zA-Z0-9])/g,
+    (_, base, charge) => `${base}^{${charge}}`
+  );
+
+  // Nhận diện các ion viết tắt phổ biến không dùng dấu ^ (VD: OH-, NO3-, NH4+, HCO3-, HSO4-, CH3COO-, Cl-, Na+, K+, Ag+, H+)
+  normalized = normalized.replace(
+    /\b(OH|NO_\{3\}|NO3|HCO_\{3\}|HCO3|HSO_\{4\}|HSO4|CH_\{3\}COO|CH3COO|Cl|Br)\-(?=\s|[,.;:)\]}]|$)/g,
+    (_, base) => `${base.replace(/([A-Za-z])(\d+)/g, '$1_{$2}')}^{-}`
+  );
+  normalized = normalized.replace(
+    /\b(NH_\{4\}|NH4|Na|K|Ag|H|Li)\+(?=\s|[,.;:)\]}]|$)/g,
+    (_, base) => `${base.replace(/([A-Za-z])(\d+)/g, '$1_{$2}')}^{+}`
   );
 
   // Bước 2: Tách chuỗi theo các token _{...}, _x, ^{...}, ^x
@@ -747,13 +757,19 @@ function buildChemicalAndSubSupRunsXml(text: string, baseStyle: WordRunStyleOpti
 
 /**
  * Chuyển đổi văn bản khoa học hỗn hợp (chứa cả công thức LaTeX $...$, lệnh \frac, \sqrt, \int, \lim, \vec, \xrightarrow
- * và các công thức Hóa học H2SO4, Fe^{3+}, SO4^{2-}) sang chuỗi XML gồm các <w:r> và <m:oMath> chuẩn OpenXML
+ * và các công thức Hóa học H2SO4, Fe(NO3)3, Fe^{3+}, SO4^{2-}, OH-) sang chuỗi XML gồm các <w:r> và <m:oMath> chuẩn OpenXML
  */
 export function buildRichScientificRunsAndMathXml(
   rawText: string,
   baseStyle: WordRunStyleOptions
 ): string {
   if (!rawText) return '';
+
+  // Chuẩn hóa mũi tên kèm điều kiện phản ứng viết tắt dạng --t°, xt, p--> hoặc --(t°, xt)--> sang \xrightarrow{...} để xuất chuẩn <m:limUpp>
+  const preparedText = rawText.replace(
+    /--\(?([^-\n>{}]{1,25})\)?-->/g,
+    (_, cond) => `\\xrightarrow{${cond.trim()}}`
+  );
 
   // Tìm các đoạn LaTeX nằm trong $...$, $$...$$, \(...\), \[...\] hoặc các cụm lệnh toán học \frac{...}{...}, \sqrt{...}, \int..., \sum..., \lim..., \vec{...}, \xrightarrow{...}, \begin{cases}...\end{cases}
   const mathSegmentRegex =
@@ -763,9 +779,9 @@ export function buildRichScientificRunsAndMathXml(
   let lastIdx = 0;
   let m: RegExpExecArray | null;
 
-  while ((m = mathSegmentRegex.exec(rawText)) !== null) {
+  while ((m = mathSegmentRegex.exec(preparedText)) !== null) {
     if (m.index > lastIdx) {
-      const plainChunk = rawText.slice(lastIdx, m.index);
+      const plainChunk = preparedText.slice(lastIdx, m.index);
       segments.push(buildChemicalAndSubSupRunsXml(plainChunk, baseStyle));
     }
 
@@ -786,8 +802,8 @@ export function buildRichScientificRunsAndMathXml(
     lastIdx = m.index + m[0].length;
   }
 
-  if (lastIdx < rawText.length) {
-    segments.push(buildChemicalAndSubSupRunsXml(rawText.slice(lastIdx), baseStyle));
+  if (lastIdx < preparedText.length) {
+    segments.push(buildChemicalAndSubSupRunsXml(preparedText.slice(lastIdx), baseStyle));
   }
 
   return segments.join('\n');

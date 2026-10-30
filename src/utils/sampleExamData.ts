@@ -221,10 +221,15 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
     images: [
       {
         id: 'img-bio-pedigree-12',
+        tagId: '[HINH_ANH_CAU_12]',
         dataUrl:
-          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="440" height="170" viewBox="0 0 440 170"><rect width="100%" height="100%" fill="%23f8fafc" rx="10" stroke="%23cbd5e1" stroke-width="1.5"/><text x="220" y="24" font-family="Times New Roman, serif" font-size="13" font-weight="bold" text-anchor="middle" fill="%230f172a">SƠ ĐỒ PHẢ HỆ DI TRUYỀN PHÂN TỬ (CÂU 12)</text><circle cx="90" cy="65" r="17" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="90" y="69" font-family="serif" font-size="11" text-anchor="middle">I.1</text><line x1="107" y1="65" x2="165" y2="65" stroke="%23334155" stroke-width="2"/><rect x="165" y="48" width="34" height="34" fill="%23f87171" stroke="%23b91c1c" stroke-width="2"/><text x="182" y="69" font-family="serif" font-size="11" text-anchor="middle" fill="white">I.2</text><line x1="136" y1="65" x2="136" y2="98" stroke="%23334155" stroke-width="2"/><line x1="75" y1="98" x2="265" y2="98" stroke="%23334155" stroke-width="2"/><circle cx="75" cy="132" r="17" fill="%23f87171" stroke="%23b91c1c" stroke-width="2"/><text x="75" y="136" font-family="serif" font-size="11" text-anchor="middle" fill="white">II.1</text><line x1="75" y1="98" x2="75" y2="115" stroke="%23334155" stroke-width="2"/><rect x="150" y="115" width="34" height="34" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="167" y="136" font-family="serif" font-size="11" text-anchor="middle">II.2</text><line x1="167" y1="98" x2="167" y2="115" stroke="%23334155" stroke-width="2"/><circle cx="265" cy="132" r="17" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="265" y="136" font-family="serif" font-size="11" text-anchor="middle">II.3</text><line x1="265" y1="98" x2="265" y2="115" stroke="%23334155" stroke-width="2"/><rect x="310" y="46" width="115" height="105" fill="white" stroke="%2394a3b8" rx="8"/><text x="367" y="66" font-family="Times New Roman, serif" font-size="11" font-weight="bold" text-anchor="middle" fill="%231e3a8a">CHÚ THÍCH</text><circle cx="328" cy="85" r="7" fill="%23e2e8f0" stroke="%23334155"/><text x="342" y="89" font-family="serif" font-size="10.5">Nữ bình thường</text><rect x="321" y="103" width="14" height="14" fill="%23f87171" stroke="%23b91c1c"/><text x="342" y="115" font-family="serif" font-size="10.5">Nam bị bệnh</text><circle cx="328" cy="133" r="7" fill="%23f87171" stroke="%23b91c1c"/><text x="342" y="137" font-family="serif" font-size="10.5">Nữ bị bệnh</text></svg>',
+          'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="440" height="170" viewBox="0 0 440 170"><rect width="100%" height="100%" fill="%23ffffff" rx="10" stroke="%23cbd5e1" stroke-width="1.5"/><text x="220" y="24" font-family="Times New Roman, serif" font-size="13" font-weight="bold" text-anchor="middle" fill="%230f172a">SƠ ĐỒ PHẢ HỆ DI TRUYỀN PHÂN TỬ (CÂU 12)</text><circle cx="90" cy="65" r="17" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="90" y="69" font-family="serif" font-size="11" text-anchor="middle">I.1</text><line x1="107" y1="65" x2="165" y2="65" stroke="%23334155" stroke-width="2"/><rect x="165" y="48" width="34" height="34" fill="%23f87171" stroke="%23b91c1c" stroke-width="2"/><text x="182" y="69" font-family="serif" font-size="11" text-anchor="middle" fill="white">I.2</text><line x1="136" y1="65" x2="136" y2="98" stroke="%23334155" stroke-width="2"/><line x1="75" y1="98" x2="265" y2="98" stroke="%23334155" stroke-width="2"/><circle cx="75" cy="132" r="17" fill="%23f87171" stroke="%23b91c1c" stroke-width="2"/><text x="75" y="136" font-family="serif" font-size="11" text-anchor="middle" fill="white">II.1</text><line x1="75" y1="98" x2="75" y2="115" stroke="%23334155" stroke-width="2"/><rect x="150" y="115" width="34" height="34" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="167" y="136" font-family="serif" font-size="11" text-anchor="middle">II.2</text><line x1="167" y1="98" x2="167" y2="115" stroke="%23334155" stroke-width="2"/><circle cx="265" cy="132" r="17" fill="%23e2e8f0" stroke="%23334155" stroke-width="2"/><text x="265" y="136" font-family="serif" font-size="11" text-anchor="middle">II.3</text><line x1="265" y1="98" x2="265" y2="115" stroke="%23334155" stroke-width="2"/><rect x="310" y="46" width="115" height="105" fill="white" stroke="%2394a3b8" rx="8"/><text x="367" y="66" font-family="Times New Roman, serif" font-size="11" font-weight="bold" text-anchor="middle" fill="%231e3a8a">CHÚ THÍCH</text><circle cx="328" cy="85" r="7" fill="%23e2e8f0" stroke="%23334155"/><text x="342" y="89" font-family="serif" font-size="10.5">Nữ bình thường</text><rect x="321" y="103" width="14" height="14" fill="%23f87171" stroke="%23b91c1c"/><text x="342" y="115" font-family="serif" font-size="10.5">Nam bị bệnh</text><circle cx="328" y="133" r="7" fill="%23f87171" stroke="%23b91c1c"/><text x="342" y="137" font-family="serif" font-size="10.5">Nữ bị bệnh</text></svg>',
         fileName: 'pha_he_benh_mu_mau_cau_12.svg',
-        caption: 'Hình 1. Sơ đồ phả hệ di truyền bệnh mù màu qua 2 thế hệ',
+        caption: 'Hình 1. Sơ đồ phả hệ di truyền bệnh mù màu qua 2 thế hệ [HINH_ANH_CAU_12]',
+        widthTwips: 4400,
+        heightTwips: 1700,
+        aspectRatio: 440 / 170,
+        dpi: 300,
       },
     ],
     bloomLevel: 'THONG_HIEU',
@@ -243,7 +248,7 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
     part: 'PART_1',
     originalIndex: 13,
     displayIndex: 13,
-    stemText: 'Một quần thể ngẫu phối đang ở trạng thái cân bằng di truyền Hardy - Weinberg có cấu trúc di truyền là 0,36AA : 0,48Aa : 0,16aa (thỏa mãn p² + 2pq + q² = 1). Tần số tương đối của allele A và allele a trong quần thể này lần lượt là:',
+    stemText: 'Một quần thể ngẫu phối đang ở trạng thái cân bằng di truyền Hardy - Weinberg có cấu trúc di truyền là 0,36AA : 0,48Aa : 0,16aa (thỏa mãn $p^2 + 2pq + q^2 = 1$). Tần số tương đối của allele A và allele a trong quần thể này lần lượt là:',
     hasFormula: true,
     formulaLatex: 'p^2(AA) + 2pq(Aa) + q^2(aa) = 1 \\implies p(A) = 0.60, q(a) = 0.40',
     bloomLevel: 'VAN_DUNG',
@@ -262,8 +267,29 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
     part: 'PART_1',
     originalIndex: 14,
     displayIndex: 14,
-    stemText: 'Trong quy trình công nghệ tạo DNA tái tổ hợp, loại enzyme được sử dụng để nối đoạn gene cần chuyển vào thể truyền (vector) tạo nên phân tử DNA tái tổ hợp hoàn chỉnh là:',
+    stemText: 'Cho bảng ghép đôi giữa các loại enzyme di truyền phân tử (Cột A) và chức năng sinh học tương ứng trong công nghệ DNA tái tổ hợp (Cột B) dưới đây. Loại enzyme ở vị trí (I) dùng để nối đoạn DNA mục tiêu vào thể truyền (vector) tạo phân tử DNA tái tổ hợp hoàn chỉnh là:',
     hasFormula: false,
+    stemTables: [
+      {
+        id: 'tbl-bio-14',
+        isMatchingColumns: true,
+        caption: 'Bảng đối chiếu Enzyme di truyền phân tử (Cột A - Cột B)',
+        rows: [
+          [
+            { text: 'Cột A (Ký hiệu La Mã)', align: 'center', isHeader: true, isBold: true },
+            { text: 'Cột B (Chức năng sinh học trong tế bào / công nghệ gene)', align: 'center', isHeader: true, isBold: true },
+          ],
+          [
+            { text: 'I. Enzyme nối mảnh DNA', align: 'left', isBold: true },
+            { text: 'Xúc tác hình thành liên kết phosphodiester nối đoạn gene cần chuyển vào vector.', align: 'left' },
+          ],
+          [
+            { text: 'II. Enzyme cắt giới hạn', align: 'left', isBold: true },
+            { text: 'Nhận biết và cắt đứt liên kết phosphodiester tại trình tự nucleotide đặc hiệu.', align: 'left' },
+          ],
+        ],
+      },
+    ],
     bloomLevel: 'NHAN_BIET',
     learningOutcome: 'Trình bày được các bước và vai trò của các enzyme trong công nghệ DNA tái tổ hợp.',
     explanation: 'Enzyme restrictase dùng để cắt DNA tại trình tự đặc hiệu, còn enzyme DNA ligase dùng để nối đoạn DNA mục tiêu vào vector tạo DNA tái tổ hợp.',
