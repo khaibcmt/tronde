@@ -424,21 +424,6 @@ function buildExamNationalHeaderTableXml(
       </w:p>`
     : '';
 
-  // Nếu đã chèn ảnh Phiếu QM 2025 (vốn đã có sẵn khung Họ tên, Lớp, Mã đề, SBD), không lặp lại dòng chữ Họ tên rời rạc
-  const studentInfoLineXml = hasEmbeddedPhieuQM2025
-    ? ''
-    : `<w:p>
-    <w:pPr><w:spacing w:before="60" w:after="120"/><w:jc w:val="left"/></w:pPr>
-    <w:r>
-      <w:rPr>
-        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-        <w:b/>
-        <w:sz w:val="24"/><w:szCs w:val="24"/>
-      </w:rPr>
-      <w:t xml:space="preserve">Họ và tên thí sinh: ..................................................................... Số báo danh: ...........................</w:t>
-    </w:r>
-  </w:p>`;
-
   return `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
@@ -468,8 +453,7 @@ function buildExamNationalHeaderTableXml(
       </w:tc>
     </w:tr>
   </w:tbl>
-  ${codeBoxXml}
-  ${studentInfoLineXml}`;
+  ${codeBoxXml}`;
 }
 
 /**
@@ -985,50 +969,311 @@ export function buildVariant3ColumnAnswerCardXml(variant: ShuffledVariant): stri
   </w:tbl>${
     variant.answerKey.part4 && variant.answerKey.part4.length > 0
       ? '\n' +
-        buildStandardParagraphXml(
-          `${variant.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN (ĐÁP ÁN / CÂU HỎI TỰ LUẬN): `,
-          '',
-          {
-            prefixColorHex: '6D28D9',
-            underlinePrefix: true,
-            spaceBeforeTwips: 80,
-            spaceAfterTwips: 40,
-            fontSizeHalfPt: 24,
-          }
-        ) +
-        '\n' +
-        variant.answerKey.part4
-          .map((item) => {
-            const qPara = buildStandardParagraphXml(
-              `Câu ${item.questionNumber}. `,
-              item.questionText,
-              {
-                align: 'left',
-                spaceBeforeTwips: 30,
-                spaceAfterTwips: item.hasExplicitAnswer ? 15 : 40,
-                fontSizeHalfPt: 24,
-              }
-            );
-            const ansPara =
-              item.hasExplicitAnswer && item.answer
-                ? '\n' +
-                  buildStandardParagraphXml(
-                    `→ Đáp án / Hướng dẫn chấm: `,
-                    item.answer,
-                    {
-                      prefixColorHex: 'DC2626',
-                      align: 'left',
-                      spaceBeforeTwips: 10,
-                      spaceAfterTwips: 40,
-                      fontSizeHalfPt: 24,
-                    }
-                  )
-                : '';
-            return qPara + ansPara;
-          })
-          .join('\n')
+        buildEssayGradingAndRubricTablesXml(
+          variant.answerKey.part4,
+          variant.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'
+        )
       : ''
   }`;
+}
+
+/**
+ * Tách điểm số tự luận từ nội dung câu hỏi hoặc đáp án (ví dụ: "(1,0 điểm)", "(0.5đ)"), mặc định "1,00"
+ */
+function extractEssayPointLabel(questionText: string, answerText?: string): string {
+  const combined = `${questionText || ''} ${answerText || ''}`;
+  const match = combined.match(/\(?\s*(\d+[.,]\d+|\d+)\s*(?:điểm|đ)\s*\)?/i);
+  if (match && match[1]) {
+    return match[1].replace('.', ',');
+  }
+  return '1,00';
+}
+
+/**
+ * Xây dựng Bảng Hướng dẫn chấm Tự luận chuẩn Bộ GD&ĐT + Bảng Rubric chấm điểm Tự luận
+ */
+function buildEssayGradingAndRubricTablesXml(
+  p4Items: Array<{
+    questionNumber: number;
+    questionText: string;
+    answer: string;
+    hasExplicitAnswer: boolean;
+  }>,
+  essayRoman: string
+): string {
+  if (!p4Items || p4Items.length === 0) return '';
+
+  const sectionHeadingXml = buildStandardParagraphXml(
+    `${essayRoman}. TỰ LUẬN — HƯỚNG DẪN CHẤM CHI TIẾT`,
+    '',
+    {
+      prefixColorHex: '1E3A8A',
+      underlinePrefix: true,
+      align: 'left',
+      spaceBeforeTwips: 140,
+      spaceAfterTwips: 60,
+      fontSizeHalfPt: 24,
+    }
+  );
+
+  // 1. BẢNG HƯỚNG DẪN CHẤM TỰ LUẬN CHUẨN BỘ GIÁO DỤC VÀ ĐÀO TẠO (Cột: Câu | Nội dung / Hướng dẫn chấm | Điểm)
+  const gradingHeaderRowXml = `<w:tr>
+    <w:trPr><w:tblHeader/></w:trPr>
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="650" w:type="pct"/>
+        <w:shd w:val="clear" w:color="auto" w:fill="1E3A8A"/>
+        <w:vAlign w:val="center"/>
+      </w:tcPr>
+      <w:p>
+        <w:pPr><w:jc w:val="center"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+        <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>Câu</w:t></w:r>
+      </w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="3650" w:type="pct"/>
+        <w:shd w:val="clear" w:color="auto" w:fill="1E3A8A"/>
+        <w:vAlign w:val="center"/>
+      </w:tcPr>
+      <w:p>
+        <w:pPr><w:jc w:val="center"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+        <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>Nội dung / Đáp án - Hướng dẫn chấm</w:t></w:r>
+      </w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr>
+        <w:tcW w:w="700" w:type="pct"/>
+        <w:shd w:val="clear" w:color="auto" w:fill="1E3A8A"/>
+        <w:vAlign w:val="center"/>
+      </w:tcPr>
+      <w:p>
+        <w:pPr><w:jc w:val="center"/><w:spacing w:before="60" w:after="60"/></w:pPr>
+        <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>Điểm</w:t></w:r>
+      </w:p>
+    </w:tc>
+  </w:tr>`;
+
+  const gradingBodyRowsXml = p4Items
+    .map((item, idx) => {
+      const rowFill = idx % 2 === 0 ? 'FFFFFF' : 'F8FAFC';
+      const pointStr = extractEssayPointLabel(item.questionText, item.answer);
+
+      const qLines = item.questionText
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+
+      const contentParas: string[] = [];
+      contentParas.push(
+        buildStandardParagraphXml(
+          `Đề bài: `,
+          qLines[0] || item.questionText,
+          {
+            prefixColorHex: '0F172A',
+            align: 'left',
+            spaceBeforeTwips: 30,
+            spaceAfterTwips: qLines.length > 1 || (item.hasExplicitAnswer && item.answer.trim()) ? 20 : 30,
+            fontSizeHalfPt: 24,
+          }
+        )
+      );
+      for (let i = 1; i < qLines.length; i++) {
+        contentParas.push(
+          buildStandardParagraphXml('', qLines[i], {
+            align: 'left',
+            spaceBeforeTwips: 10,
+            spaceAfterTwips: 20,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
+
+      if (item.hasExplicitAnswer && item.answer.trim()) {
+        const ansLines = item.answer
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        contentParas.push(
+          buildStandardParagraphXml(
+            `Hướng dẫn chấm: `,
+            ansLines[0] || item.answer,
+            {
+              prefixColorHex: 'DC2626',
+              align: 'left',
+              spaceBeforeTwips: 20,
+              spaceAfterTwips: ansLines.length > 1 ? 15 : 30,
+              fontSizeHalfPt: 24,
+            }
+          )
+        );
+        for (let i = 1; i < ansLines.length; i++) {
+          contentParas.push(
+            buildStandardParagraphXml('', ansLines[i], {
+              align: 'left',
+              spaceBeforeTwips: 10,
+              spaceAfterTwips: i === ansLines.length - 1 ? 30 : 15,
+              fontSizeHalfPt: 24,
+            })
+          );
+        }
+      }
+
+      return `<w:tr>
+        <w:trPr><w:cantSplit/></w:trPr>
+        <w:tc>
+          <w:tcPr>
+            <w:tcW w:w="650" w:type="pct"/>
+            <w:shd w:val="clear" w:color="auto" w:fill="F1F5F9"/>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E3A8A"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>Câu ${item.questionNumber}</w:t></w:r>
+          </w:p>
+        </w:tc>
+        <w:tc>
+          <w:tcPr>
+            <w:tcW w:w="3650" w:type="pct"/>
+            <w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          ${contentParas.join('\n')}
+        </w:tc>
+        <w:tc>
+          <w:tcPr>
+            <w:tcW w:w="700" w:type="pct"/>
+            <w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="DC2626"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(pointStr)}</w:t></w:r>
+          </w:p>
+        </w:tc>
+      </w:tr>`;
+    })
+    .join('\n');
+
+  const gradingTableXml = `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="8" w:space="0" w:color="1E3A8A"/>
+        <w:left w:val="single" w:sz="8" w:space="0" w:color="1E3A8A"/>
+        <w:bottom w:val="single" w:sz="8" w:space="0" w:color="1E3A8A"/>
+        <w:right w:val="single" w:sz="8" w:space="0" w:color="1E3A8A"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="94A3B8"/>
+        <w:insideV w:val="single" w:sz="6" w:space="0" w:color="94A3B8"/>
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:top w:w="60" w:type="dxa"/>
+        <w:left w:w="80" w:type="dxa"/>
+        <w:bottom w:w="60" w:type="dxa"/>
+        <w:right w:w="80" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+    ${gradingHeaderRowXml}
+    ${gradingBodyRowsXml}
+  </w:tbl>`;
+
+  // 2. BẢNG RUBRIC CHẤM ĐIỂM TỰ LUẬN
+  const rubricHeadingXml = buildStandardParagraphXml(
+    `BẢNG RUBRIC ĐÁNH GIÁ VÀ CHẤM ĐIỂM TỰ LUẬN`,
+    '',
+    {
+      prefixColorHex: '6D28D9',
+      underlinePrefix: true,
+      align: 'left',
+      spaceBeforeTwips: 120,
+      spaceAfterTwips: 60,
+      fontSizeHalfPt: 24,
+    }
+  );
+
+  const rubricHeaderRowXml = `<w:tr>
+    <w:trPr><w:tblHeader/></w:trPr>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="700" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="6D28D9"/><w:vAlign w:val="center"/></w:tcPr>
+      <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Câu / Tiêu chí</w:t></w:r></w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="1150" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="047857"/><w:vAlign w:val="center"/></w:tcPr>
+      <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Mức Đầy đủ (100%)</w:t></w:r></w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr>
+      <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Mức Khá (75%)</w:t></w:r></w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="D97706"/><w:vAlign w:val="center"/></w:tcPr>
+      <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Mức Đạt (50%)</w:t></w:r></w:p>
+    </w:tc>
+    <w:tc>
+      <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="BE123C"/><w:vAlign w:val="center"/></w:tcPr>
+      <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="50" w:after="50"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Chưa đạt (0% - 25%)</w:t></w:r></w:p>
+    </w:tc>
+  </w:tr>`;
+
+  const rubricBodyRowsXml = p4Items
+    .map((item, idx) => {
+      const rowFill = idx % 2 === 0 ? 'FFFFFF' : 'FAF5FF';
+      const pointStr = extractEssayPointLabel(item.questionText, item.answer);
+      const coreAnswerSummary =
+        item.hasExplicitAnswer && item.answer.trim()
+          ? `Đúng trọn vẹn nội dung hướng dẫn chấm (${item.answer.trim().slice(0, 120)}${item.answer.trim().length > 120 ? '...' : ''}), lập luận chặt chẽ, trình bày khoa học.`
+          : 'Trình bày đầy đủ, chính xác tất cả các ý theo yêu cầu câu hỏi; lập luận chặt chẽ, công thức/thuật ngữ chuẩn xác.';
+
+      return `<w:tr>
+        <w:trPr><w:cantSplit/></w:trPr>
+        <w:tc>
+          <w:tcPr><w:tcW w:w="700" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="F3E8FF"/><w:vAlign w:val="center"/></w:tcPr>
+          <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="4C1D95"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Câu ${item.questionNumber}</w:t></w:r></w:p>
+          <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="30"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:color w:val="6D28D9"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>(${escapeXml(pointStr)} điểm)</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc>
+          <w:tcPr><w:tcW w:w="1150" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/><w:vAlign w:val="center"/></w:tcPr>
+          <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="30" w:after="30"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${escapeXml(coreAnswerSummary)}</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc>
+          <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/><w:vAlign w:val="center"/></w:tcPr>
+          <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="30" w:after="30"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Đúng bản chất và các ý chính (đạt khoảng 3/4 yêu cầu), còn sai sót nhỏ về diễn đạt hoặc bước biến đổi phụ.</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc>
+          <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/><w:vAlign w:val="center"/></w:tcPr>
+          <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="30" w:after="30"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Trình bày đúng được 1/2 số ý hoặc nêu đúng hướng giải/công thức trọng tâm nhưng kết quả cuối cùng chưa hoàn chỉnh.</w:t></w:r></w:p>
+        </w:tc>
+        <w:tc>
+          <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/><w:vAlign w:val="center"/></w:tcPr>
+          <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="30" w:after="30"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Làm sai hoàn toàn, bỏ trống hoặc chỉ nêu được một ý nhỏ rời rạc không đúng trọng tâm câu hỏi.</w:t></w:r></w:p>
+        </w:tc>
+      </w:tr>`;
+    })
+    .join('\n');
+
+  const rubricTableXml = `<w:tbl>
+    <w:tblPr>
+      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblBorders>
+        <w:top w:val="single" w:sz="8" w:space="0" w:color="6D28D9"/>
+        <w:left w:val="single" w:sz="8" w:space="0" w:color="6D28D9"/>
+        <w:bottom w:val="single" w:sz="8" w:space="0" w:color="6D28D9"/>
+        <w:right w:val="single" w:sz="8" w:space="0" w:color="6D28D9"/>
+        <w:insideH w:val="single" w:sz="4" w:space="0" w:color="C4B5FD"/>
+        <w:insideV w:val="single" w:sz="6" w:space="0" w:color="C4B5FD"/>
+      </w:tblBorders>
+      <w:tblCellMar>
+        <w:top w:w="50" w:type="dxa"/>
+        <w:left w:w="70" w:type="dxa"/>
+        <w:bottom w:w="50" w:type="dxa"/>
+        <w:right w:w="70" w:type="dxa"/>
+      </w:tblCellMar>
+    </w:tblPr>
+    ${rubricHeaderRowXml}
+    ${rubricBodyRowsXml}
+  </w:tbl>`;
+
+  return [sectionHeadingXml, gradingTableXml, rubricHeadingXml, rubricTableXml].join('\n');
 }
 
 /**
@@ -2062,86 +2307,12 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
   }
 
   // --- PHẦN TỰ LUẬN (PHẦN III NẾU KHÔNG CÓ TRẢ LỜI NGẮN, HOẶC PHẦN IV NẾU CÓ TRẢ LỜI NGẮN) ---
-  // Xuất dưới dạng các đoạn văn bản chuẩn (không đóng khung bảng) để giáo viên dễ dàng chỉnh sửa trực tiếp trong Word
   const p4Items = variants[0]?.answerKey?.part4 || [];
   const essayRoman = maxP3 === 0 ? 'PHẦN III' : 'PHẦN IV';
-  const p4ParagraphsXml: string[] = [];
-
-  if (p4Items.length > 0) {
-    p4ParagraphsXml.push(
-      buildStandardParagraphXml(
-        `${essayRoman}. TỰ LUẬN `,
-        `(Giữ nguyên thứ tự câu hỏi ở tất cả các mã đề — Giáo viên dễ dàng chỉnh sửa trực tiếp):`,
-        {
-          prefixColorHex: '6D28D9',
-          underlinePrefix: true,
-          align: 'left',
-          spaceBeforeTwips: 120,
-          spaceAfterTwips: 40,
-          fontSizeHalfPt: 24,
-        }
-      )
-    );
-
-    for (const item of p4Items) {
-      const qLines = item.questionText
-        .split(/\r?\n/)
-        .map((l) => l.trim())
-        .filter(Boolean);
-      p4ParagraphsXml.push(
-        buildStandardParagraphXml(
-          `Câu ${item.questionNumber}. `,
-          qLines[0] || item.questionText,
-          {
-            align: 'left',
-            spaceBeforeTwips: 40,
-            spaceAfterTwips: qLines.length > 1 || item.hasExplicitAnswer ? 15 : 40,
-            fontSizeHalfPt: 24,
-          }
-        )
-      );
-      for (let i = 1; i < qLines.length; i++) {
-        p4ParagraphsXml.push(
-          buildStandardParagraphXml('', qLines[i], {
-            align: 'left',
-            spaceBeforeTwips: 10,
-            spaceAfterTwips: i === qLines.length - 1 && !item.hasExplicitAnswer ? 40 : 15,
-            fontSizeHalfPt: 24,
-          })
-        );
-      }
-
-      if (item.hasExplicitAnswer && item.answer.trim()) {
-        const ansLines = item.answer
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter(Boolean);
-        p4ParagraphsXml.push(
-          buildStandardParagraphXml(
-            `→ Đáp án / Hướng dẫn chấm: `,
-            ansLines[0] || item.answer,
-            {
-              prefixColorHex: 'DC2626',
-              align: 'left',
-              spaceBeforeTwips: 15,
-              spaceAfterTwips: ansLines.length > 1 ? 15 : 50,
-              fontSizeHalfPt: 24,
-            }
-          )
-        );
-        for (let i = 1; i < ansLines.length; i++) {
-          p4ParagraphsXml.push(
-            buildStandardParagraphXml('', ansLines[i], {
-              align: 'left',
-              spaceBeforeTwips: 10,
-              spaceAfterTwips: i === ansLines.length - 1 ? 50 : 15,
-              fontSizeHalfPt: 24,
-            })
-          );
-        }
-      }
-    }
-  }
+  const p4TablesXml =
+    p4Items.length > 0
+      ? buildEssayGradingAndRubricTablesXml(p4Items, essayRoman)
+      : '';
 
   const hasObjectiveRows = maxP1 > 0 || maxP2 > 0 || maxP3 > 0;
   const matrixTblXml = hasObjectiveRows
@@ -2170,7 +2341,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
   </w:tbl>`
     : '';
 
-  return [matrixTblXml, ...p4ParagraphsXml].filter(Boolean).join('\n');
+  return [matrixTblXml, p4TablesXml].filter(Boolean).join('\n');
 }
 
 /**
@@ -2298,7 +2469,7 @@ export async function exportMasterAnswerSheetDocx(
         </w:p>`
       : '';
 
-  // 4. Bảng chữ ký Khảo thí & Cán bộ chấm thi
+  // 4. Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên)
   const signatureTableXml = `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
@@ -2311,7 +2482,7 @@ export async function exportMasterAnswerSheetDocx(
         <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
       </w:tblBorders>
       <w:tblCellMar>
-        <w:top w:w="120" w:type="dxa"/>
+        <w:top w:w="140" w:type="dxa"/>
         <w:left w:w="60" w:type="dxa"/>
         <w:bottom w:w="80" w:type="dxa"/>
         <w:right w:w="60" w:type="dxa"/>
@@ -2320,53 +2491,31 @@ export async function exportMasterAnswerSheetDocx(
     <w:tr>
       <w:tc>
         <w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>
-        <w:p>
-          <w:pPr><w:jc w:val="center"/></w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:b/>
-              <w:sz w:val="24"/><w:szCs w:val="24"/>
-            </w:rPr>
-            <w:t>CÁN BỘ CHẤM THI 1</w:t>
-          </w:r>
-        </w:p>
-        <w:p>
-          <w:pPr><w:jc w:val="center"/></w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:i/>
-              <w:color w:val="64748B"/>
-              <w:sz w:val="20"/><w:szCs w:val="20"/>
-            </w:rPr>
-            <w:t>(Ký và ghi rõ họ tên)</w:t>
-          </w:r>
-        </w:p>
+        <w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>
       </w:tc>
       <w:tc>
         <w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>
         <w:p>
-          <w:pPr><w:jc w:val="center"/></w:pPr>
+          <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr>
           <w:r>
             <w:rPr>
               <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
               <w:b/>
               <w:sz w:val="24"/><w:szCs w:val="24"/>
             </w:rPr>
-            <w:t>CÁN BỘ CHẤM THI 2 / KHẢO THÍ</w:t>
+            <w:t>Người ra đề</w:t>
           </w:r>
         </w:p>
         <w:p>
-          <w:pPr><w:jc w:val="center"/></w:pPr>
+          <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="200"/></w:pPr>
           <w:r>
             <w:rPr>
               <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
               <w:i/>
-              <w:color w:val="64748B"/>
-              <w:sz w:val="20"/><w:szCs w:val="20"/>
+              <w:color w:val="475569"/>
+              <w:sz w:val="22"/><w:szCs w:val="22"/>
             </w:rPr>
-            <w:t>(Ký và ghi rõ họ tên)</w:t>
+            <w:t>( Ký và ghi rõ họ và tên)</w:t>
           </w:r>
         </w:p>
       </w:tc>
@@ -2639,85 +2788,70 @@ export async function exportAllVariantsZipBundle(
 ): Promise<Blob> {
   const bundleZip = new JSZip();
 
-  // 1. Lưu file đề gốc chuẩn
+  // Cấu trúc tệp .zip gồm đúng 2 thư mục theo yêu cầu:
+  // 1. Thư mục các mã đề: gồm đề gốc và đề trộn
+  // 2. Thư mục đáp án: gồm các file liên quan đến đáp án
+  const thuMucCacMaDe = bundleZip.folder('Thư mục các mã đề');
+  const thuMucDapAn = bundleZip.folder('Thư mục đáp án');
+
+  // 1. Lưu Đề gốc và các Đề trộn vào "Thư mục các mã đề"
   const masterCleanBlob = await exportCleanedMasterDocx(masterQuestions, config, false);
-  bundleZip.file(
-    buildStandardExportFileName(config, 'docx', 'Đề gốc chuẩn'),
+  thuMucCacMaDe?.file(
+    buildStandardExportFileName(config, 'docx', 'Đề gốc'),
     masterCleanBlob
   );
 
-  // 2. Lưu file Bảng đáp án tổng hợp (Dap_an_tong_hop.docx & tên chuẩn đồng nhất) có nhúng đủ 3 mã QR
-  const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
-  bundleZip.file('Dap_an_tong_hop.docx', masterAnswerDocxBlob);
-  bundleZip.file(
-    buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí ma trận'),
-    masterAnswerDocxBlob
-  );
-
-  // 3. Lưu file Ma Trận & Bản Đặc Tả theo chuẩn Công văn 7991/BGDĐT-GDTrH
-  try {
-    const matrixDocxBlob = await exportMatrixAndSpecificationDocx(masterQuestions, config);
-    bundleZip.file(
-      buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991'),
-      matrixDocxBlob
-    );
-  } catch (err) {
-    console.warn('Không thể xuất kèm Ma trận CV 7991 vào zip:', err);
-  }
-
-  // 4. Lưu từng file đề hoán vị độc lập (De_101.docx, De_102.docx... có sẵn phiếu QM 2025 ở Trang 1) & Bộ 3 Mã QR Chấm Thi
-  const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
-  const qrFolder = bundleZip.folder('Ma_QR_3_Phan_Mem_QM2025_TNMaker_Azota');
-  const excelFolder = bundleZip.folder('File_Excel_Dap_An_Chuan_3_Phan_Mem');
-
   for (const v of variants) {
     const docxBlob = await exportSingleVariantDocx(v, config);
-    // Đặt file độc lập De_101.docx, De_102.docx ngay tại thư mục gốc của ZIP theo đúng Quy cách xuất tập tin mục III.3
-    bundleZip.file(`De_${v.examCode}.docx`, docxBlob);
-    // Đồng thời lưu bản đặt tên đầy đủ (Môn... - Lớp... - Kỳ kiểm tra... - dd-mm-yy - Mã đề 101.docx) trong thư mục Bo_De_Thi_Hoc_Sinh_Docx
-    deThiFolder?.file(
+    thuMucCacMaDe?.file(
       buildStandardExportFileName(config, 'docx', `Mã đề ${v.examCode}`),
       docxBlob
     );
 
     if (v.tripleQr) {
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-1-QM2025`),
         dataUrlToUint8Array(v.tripleQr.qm2025.qrDataUrl)
       );
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-2-TNMaker`),
         dataUrlToUint8Array(v.tripleQr.tnmaker.qrDataUrl)
       );
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-3-Azota`),
         dataUrlToUint8Array(v.tripleQr.azota.qrDataUrl)
       );
     } else if (v.qrDataUrl) {
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
         dataUrlToUint8Array(v.qrDataUrl)
       );
     }
   }
 
-  // 5. Lưu Bộ 3 Mã QR Tổng Hợp Tất Cả Mã Đề (1. QM 2025 — 2. TNMaker — 3. Azota) + 3 File Excel .xlsx chuẩn
+  // 2. Lưu các file liên quan đến đáp án vào "Thư mục đáp án"
+  const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
+  thuMucDapAn?.file(
+    buildStandardExportFileName(config, 'docx', 'Bảng đáp án chung'),
+    masterAnswerDocxBlob
+  );
+
   try {
     const { tripleQr } = await generateMasterMultiQrCode(variants, config);
     if (tripleQr.qm2025.qrDataUrl) {
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 1 - App QM 2025'),
         dataUrlToUint8Array(tripleQr.qm2025.qrDataUrl)
       );
     }
     if (tripleQr.tnmaker.qrDataUrl) {
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 2 - App TNMaker'),
         dataUrlToUint8Array(tripleQr.tnmaker.qrDataUrl)
       );
     }
     if (tripleQr.azota.qrDataUrl) {
-      qrFolder?.file(
+      thuMucDapAn?.file(
         buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 3 - App Azota'),
         dataUrlToUint8Array(tripleQr.azota.qrDataUrl)
       );
@@ -2728,15 +2862,15 @@ export async function exportAllVariantsZipBundle(
       exportGradingExcelXlsx(variants, 'TNMAKER'),
       exportGradingExcelXlsx(variants, 'AZOTA'),
     ]);
-    excelFolder?.file(
+    thuMucDapAn?.file(
       buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn QM 2025'),
       xlsxQm
     );
-    excelFolder?.file(
+    thuMucDapAn?.file(
       buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn TNMaker 2025'),
       xlsxTn
     );
-    excelFolder?.file(
+    thuMucDapAn?.file(
       buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn Azota 2025'),
       xlsxAz
     );
@@ -2744,7 +2878,6 @@ export async function exportAllVariantsZipBundle(
     console.warn('Không thể lưu bộ 3 ảnh QR tổng hợp & Excel vào zip:', err);
   }
 
-  // 6. Tạo file CSV tổng hợp key chấm thi
   const csvLines: string[] = [
     'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload_QM2025,QR_Payload_TNMaker,QR_Payload_Azota',
   ];
@@ -2757,7 +2890,7 @@ export async function exportAllVariantsZipBundle(
     const azStr = (v.tripleQr?.azota.qrPayload || '').replace(/"/g, '""');
     csvLines.push(`"${v.examCode}","${p1}","${p2}","${p3}","${qmStr}","${tnStr}","${azStr}"`);
   }
-  bundleZip.file(
+  thuMucDapAn?.file(
     buildStandardExportFileName(config, 'csv', 'Bảng đáp án tổng hợp'),
     '\uFEFF' + csvLines.join('\n')
   );

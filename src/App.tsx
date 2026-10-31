@@ -1310,41 +1310,122 @@ export default function App() {
         </div>
       </div>
 
-      {/* KHUNG TỰ LUẬN (NẾU ĐỀ CÓ PHẦN TỰ LUẬN) */}
+      {/* KHUNG TỰ LUẬN DẠNG BẢNG CHUẨN BỘ GD&ĐT + BẢNG RUBRIC CHẤM ĐIỂM */}
       {variant.answerKey.part4 && variant.answerKey.part4.length > 0 && (
         <div
           style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
-          className="p-4 rounded-3xl bg-purple-50/70 border-2 border-purple-300 shadow-xs space-y-2.5"
+          className="p-4 rounded-3xl bg-white border-2 border-purple-300 shadow-xs space-y-4"
         >
           <div className="pb-2 border-b border-purple-200 flex items-center justify-between flex-wrap gap-2">
-            <h4 className="font-bold text-purple-950 text-base">
-              {variant.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN ({variant.answerKey.part4.length} câu — Giữ nguyên thứ tự câu hỏi)
+            <h4 className="font-bold text-purple-950 text-base uppercase">
+              {variant.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN — HƯỚNG DẪN CHẤM CHI TIẾT
             </h4>
             <span className="text-xs font-sans font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-lg">
-              Không đóng khung bảng khi xuất Word để dễ chỉnh sửa
+              Mẫu Bảng Bộ GD&ĐT &amp; Bảng Rubric chấm điểm
             </span>
           </div>
-          <div className="space-y-2.5">
-            {variant.answerKey.part4.map((item) => (
-              <div
-                key={`card-p4-${variant.examCode}-${item.questionNumber}`}
-                className="p-3 bg-white rounded-xl border border-purple-200 space-y-1 text-left"
-              >
-                <div className="text-slate-950 leading-relaxed">
-                  <strong className="font-bold">Câu {item.questionNumber}. </strong>
-                  <ScientificContentRenderer text={item.questionText} inline />
-                </div>
-                {item.hasExplicitAnswer && item.answer ? (
-                  <div className="text-rose-700 leading-relaxed pt-1 border-t border-dashed border-purple-200">
-                    <strong className="font-bold">→ Đáp án / Hướng dẫn chấm: </strong>
-                    <ScientificContentRenderer text={item.answer} inline />
-                  </div>
-                ) : null}
-              </div>
-            ))}
+
+          {/* Bảng Hướng dẫn chấm chuẩn Bộ GD&ĐT */}
+          <div className="overflow-x-auto rounded-xl border border-purple-300">
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr className="bg-sky-900 text-white text-center font-bold">
+                  <th className="py-2 px-3 border-r border-sky-700 w-24">Câu</th>
+                  <th className="py-2 px-3 border-r border-sky-700">Nội dung / Đáp án - Hướng dẫn chấm</th>
+                  <th className="py-2 px-3 w-24">Điểm</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-purple-200">
+                {variant.answerKey.part4.map((item) => {
+                  const ptMatch = `${item.questionText || ''} ${item.answer || ''}`.match(
+                    /\(?\s*(\d+[.,]\d+|\d+)\s*(?:điểm|đ)\s*\)?/i
+                  );
+                  const ptLabel = ptMatch && ptMatch[1] ? ptMatch[1].replace('.', ',') : '1,00';
+                  return (
+                    <tr key={`card-p4-${variant.examCode}-${item.questionNumber}`} className="hover:bg-purple-50/40">
+                      <td className="py-2.5 px-3 border-r border-purple-200 font-bold text-center text-sky-950 bg-slate-50">
+                        Câu {item.questionNumber}
+                      </td>
+                      <td className="py-2.5 px-3 border-r border-purple-200 space-y-1.5">
+                        <div className="text-slate-950 leading-relaxed">
+                          <strong className="font-bold">Đề bài: </strong>
+                          <ScientificContentRenderer text={item.questionText} inline />
+                        </div>
+                        {item.hasExplicitAnswer && item.answer ? (
+                          <div className="text-rose-700 leading-relaxed pt-1 border-t border-dashed border-purple-200">
+                            <strong className="font-bold">Hướng dẫn chấm: </strong>
+                            <ScientificContentRenderer text={item.answer} inline />
+                          </div>
+                        ) : null}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-center text-rose-700">
+                        {ptLabel}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Bảng Rubric chấm điểm tự luận */}
+          <div className="space-y-1.5">
+            <h5 className="font-bold text-purple-900 text-sm uppercase">
+              BẢNG RUBRIC ĐÁNH GIÁ VÀ CHẤM ĐIỂM TỰ LUẬN
+            </h5>
+            <div className="overflow-x-auto rounded-xl border border-purple-300">
+              <table className="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr className="text-white text-center font-bold">
+                    <th className="py-2 px-2.5 bg-purple-800 border-r border-purple-600 w-28">Câu / Tiêu chí</th>
+                    <th className="py-2 px-2.5 bg-emerald-700 border-r border-emerald-600">Mức Đầy đủ (100%)</th>
+                    <th className="py-2 px-2.5 bg-sky-700 border-r border-sky-600">Mức Khá (75%)</th>
+                    <th className="py-2 px-2.5 bg-amber-600 border-r border-amber-500">Mức Đạt (50%)</th>
+                    <th className="py-2 px-2.5 bg-rose-700">Chưa đạt (0% - 25%)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-purple-200">
+                  {variant.answerKey.part4.map((item) => {
+                    const ptMatch = `${item.questionText || ''} ${item.answer || ''}`.match(
+                      /\(?\s*(\d+[.,]\d+|\d+)\s*(?:điểm|đ)\s*\)?/i
+                    );
+                    const ptLabel = ptMatch && ptMatch[1] ? ptMatch[1].replace('.', ',') : '1,00';
+                    return (
+                      <tr key={`rubric-card-${variant.examCode}-${item.questionNumber}`} className="hover:bg-purple-50/30">
+                        <td className="py-2 px-2.5 border-r border-purple-200 text-center font-bold text-purple-950 bg-purple-50/60">
+                          <div>Câu {item.questionNumber}</div>
+                          <div className="text-[11px] font-normal italic text-purple-700">({ptLabel} điểm)</div>
+                        </td>
+                        <td className="py-2 px-2.5 border-r border-purple-200 text-slate-900">
+                          Trình bày đầy đủ, chính xác trọn vẹn các ý theo hướng dẫn chấm; lập luận chặt chẽ, công thức/thuật ngữ chuẩn xác.
+                        </td>
+                        <td className="py-2 px-2.5 border-r border-purple-200 text-slate-800">
+                          Đúng bản chất và các ý chính (đạt khoảng 3/4 yêu cầu), còn sai sót nhỏ về diễn đạt hoặc bước biến đổi phụ.
+                        </td>
+                        <td className="py-2 px-2.5 border-r border-purple-200 text-slate-800">
+                          Trình bày đúng được 1/2 số ý hoặc nêu đúng hướng giải/công thức trọng tâm nhưng kết quả chưa hoàn chỉnh.
+                        </td>
+                        <td className="py-2 px-2.5 text-slate-700">
+                          Làm sai hoàn toàn, bỏ trống hoặc chỉ nêu được một ý nhỏ rời rạc không đúng trọng tâm.
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Chữ ký cuối đáp án */}
+      <div className="flex justify-end pt-2 pr-6 text-center text-slate-900">
+        <div>
+          <div className="font-bold text-sm">Người ra đề</div>
+          <div className="text-xs italic text-slate-600 pt-0.5">( Ký và ghi rõ họ và tên)</div>
+          <div className="h-10" />
+        </div>
+      </div>
     </div>
   );
 
@@ -1562,52 +1643,121 @@ export default function App() {
           </div>
         )}
 
-        {/* PHẦN TỰ LUẬN (PHẦN III NẾU KHÔNG CÓ TRẢ LỜI NGẮN, HOẶC PHẦN IV NẾU CÓ TRẢ LỜI NGẮN) */}
+        {/* PHẦN TỰ LUẬN DẠNG BẢNG CHUẨN BỘ GD&ĐT + BẢNG RUBRIC CHẤM ĐIỂM */}
         {(variants[0]?.answerKey?.part4?.length || 0) > 0 && (
-          <div className="rounded-2xl border-2 border-purple-300 bg-white shadow-xs overflow-hidden">
+          <div className="rounded-2xl border-2 border-purple-300 bg-white shadow-xs overflow-hidden space-y-4 pb-4">
             <div className="bg-purple-900 text-white px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
               <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wide">
-                {part3Max === 0 ? 'PHẦN III' : 'PHẦN IV'}: TỰ LUẬN ({variants[0].answerKey.part4.length} CÂU · GIỮ NGUYÊN THỨ TỰ CÂU HỎI Ở TẤT CẢ MÃ ĐỀ)
+                {part3Max === 0 ? 'PHẦN III' : 'PHẦN IV'}: TỰ LUẬN — HƯỚNG DẪN CHẤM &amp; BẢNG RUBRIC ({variants[0].answerKey.part4.length} CÂU)
               </span>
               <span className="text-[11px] font-mono text-purple-200">
-                Có đáp án: tích hợp trực tiếp · Không có đáp án: giữ nguyên câu hỏi tự luận
+                Trình bày dạng bảng chuẩn Bộ Giáo dục và Đào tạo kèm Bảng Rubric chấm điểm
               </span>
             </div>
+
             <div
               style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
-              className="p-4 space-y-3 divide-y divide-purple-100"
+              className="px-4 space-y-4"
             >
-              {variants[0].answerKey.part4.map((item) => (
-                <div
-                  key={`matrix-p4-q${item.questionNumber}`}
-                  className="pt-2.5 first:pt-0 space-y-1.5 text-left"
-                >
-                  <div className="text-slate-950 leading-relaxed">
-                    <strong className="font-bold">Câu {item.questionNumber}. </strong>
-                    <ScientificContentRenderer text={item.questionText} inline />
-                  </div>
-                  {item.hasExplicitAnswer && item.answer ? (
-                    <div className="pl-3 border-l-4 border-rose-500 text-rose-800 bg-rose-50/60 py-1.5 px-3 rounded-r-xl leading-relaxed">
-                      <strong className="font-bold">→ Đáp án / Hướng dẫn chấm: </strong>
-                      <ScientificContentRenderer text={item.answer} inline />
-                    </div>
-                  ) : null}
+              {/* 1. Bảng Hướng dẫn chấm Tự luận chuẩn Bộ GD&ĐT */}
+              <div className="overflow-x-auto rounded-xl border border-slate-300">
+                <table className="w-full border-collapse text-left">
+                  <thead>
+                    <tr className="bg-sky-900 text-white text-center font-bold">
+                      <th className="py-2.5 px-3 border-r border-sky-700 w-24">Câu</th>
+                      <th className="py-2.5 px-3 border-r border-sky-700">Nội dung / Đáp án - Hướng dẫn chấm</th>
+                      <th className="py-2.5 px-3 w-24">Điểm</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {variants[0].answerKey.part4.map((item) => {
+                      const ptMatch = `${item.questionText || ''} ${item.answer || ''}`.match(
+                        /\(?\s*(\d+[.,]\d+|\d+)\s*(?:điểm|đ)\s*\)?/i
+                      );
+                      const ptLabel = ptMatch && ptMatch[1] ? ptMatch[1].replace('.', ',') : '1,00';
+                      return (
+                        <tr key={`matrix-p4-q${item.questionNumber}`} className="hover:bg-purple-50/40">
+                          <td className="py-2.5 px-3 border-r border-slate-200 font-bold text-center text-sky-950 bg-slate-50">
+                            Câu {item.questionNumber}
+                          </td>
+                          <td className="py-2.5 px-3 border-r border-slate-200 space-y-1.5">
+                            <div className="text-slate-950 leading-relaxed">
+                              <strong className="font-bold">Đề bài: </strong>
+                              <ScientificContentRenderer text={item.questionText} inline />
+                            </div>
+                            {item.hasExplicitAnswer && item.answer ? (
+                              <div className="pl-3 border-l-4 border-rose-500 text-rose-800 bg-rose-50/60 py-1.5 px-3 rounded-r-xl leading-relaxed">
+                                <strong className="font-bold">Hướng dẫn chấm: </strong>
+                                <ScientificContentRenderer text={item.answer} inline />
+                              </div>
+                            ) : null}
+                          </td>
+                          <td className="py-2.5 px-3 font-bold text-center text-rose-700">
+                            {ptLabel}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 2. Bảng Rubric đánh giá và chấm điểm Tự luận */}
+              <div className="space-y-2">
+                <div className="font-bold text-purple-950 text-sm uppercase">
+                  BẢNG RUBRIC ĐÁNH GIÁ VÀ CHẤM ĐIỂM TỰ LUẬN
                 </div>
-              ))}
+                <div className="overflow-x-auto rounded-xl border border-purple-300">
+                  <table className="w-full border-collapse text-left text-xs">
+                    <thead>
+                      <tr className="text-white text-center font-bold">
+                        <th className="py-2 px-3 bg-purple-800 border-r border-purple-600 w-28">Câu / Tiêu chí</th>
+                        <th className="py-2 px-3 bg-emerald-700 border-r border-emerald-600">Mức Đầy đủ (100%)</th>
+                        <th className="py-2 px-3 bg-sky-700 border-r border-sky-600">Mức Khá (75%)</th>
+                        <th className="py-2 px-3 bg-amber-600 border-r border-amber-500">Mức Đạt (50%)</th>
+                        <th className="py-2 px-3 bg-rose-700">Chưa đạt (0% - 25%)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-purple-200">
+                      {variants[0].answerKey.part4.map((item) => {
+                        const ptMatch = `${item.questionText || ''} ${item.answer || ''}`.match(
+                          /\(?\s*(\d+[.,]\d+|\d+)\s*(?:điểm|đ)\s*\)?/i
+                        );
+                        const ptLabel = ptMatch && ptMatch[1] ? ptMatch[1].replace('.', ',') : '1,00';
+                        return (
+                          <tr key={`matrix-rubric-q${item.questionNumber}`} className="hover:bg-purple-50/30">
+                            <td className="py-2.5 px-3 border-r border-purple-200 text-center font-bold text-purple-950 bg-purple-50/60">
+                              <div>Câu {item.questionNumber}</div>
+                              <div className="text-[11px] font-normal italic text-purple-700">({ptLabel} điểm)</div>
+                            </td>
+                            <td className="py-2.5 px-3 border-r border-purple-200 text-slate-900">
+                              Trình bày đầy đủ, chính xác trọn vẹn các ý theo hướng dẫn chấm; lập luận chặt chẽ, công thức/thuật ngữ chuẩn xác.
+                            </td>
+                            <td className="py-2.5 px-3 border-r border-purple-200 text-slate-800">
+                              Đúng bản chất và các ý chính (đạt khoảng 3/4 yêu cầu), còn sai sót nhỏ về diễn đạt hoặc bước biến đổi phụ.
+                            </td>
+                            <td className="py-2.5 px-3 border-r border-purple-200 text-slate-800">
+                              Trình bày đúng được 1/2 số ý hoặc nêu đúng hướng giải/công thức trọng tâm nhưng kết quả chưa hoàn chỉnh.
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-700">
+                              Làm sai hoàn toàn, bỏ trống hoặc chỉ nêu được một ý nhỏ rời rạc không đúng trọng tâm.
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Khung chữ ký Khảo thí */}
-        <div className="grid grid-cols-2 gap-4 p-4 border-2 border-slate-300 rounded-2xl text-center text-slate-800 bg-white shadow-xs">
+        {/* Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) */}
+        <div className="flex justify-end p-4 border-2 border-slate-300 rounded-2xl text-center text-slate-800 bg-white shadow-xs pr-12">
           <div>
-            <div className="font-bold text-xs uppercase">CÁN BỘ CHẤM THI 1</div>
-            <div className="text-[11px] italic text-slate-500 pt-1">(Ký và ghi rõ họ tên)</div>
-            <div className="h-12" />
-          </div>
-          <div>
-            <div className="font-bold text-xs uppercase">CÁN BỘ CHẤM THI 2 / KHẢO THÍ</div>
-            <div className="text-[11px] italic text-slate-500 pt-1">(Ký và ghi rõ họ tên)</div>
+            <div className="font-bold text-sm">Người ra đề</div>
+            <div className="text-xs italic text-slate-600 pt-1">( Ký và ghi rõ họ và tên)</div>
             <div className="h-12" />
           </div>
         </div>
@@ -4279,7 +4429,7 @@ export default function App() {
                                     {v.answerKey.part4 && v.answerKey.part4.length > 0 && (
                                       <div className="leading-relaxed pt-1 border-t border-dashed border-sky-200 space-y-1">
                                         <div className="font-bold text-purple-900">
-                                          {v.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN ({v.answerKey.part4.length} câu — Giữ nguyên thứ tự):
+                                          {v.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN:
                                         </div>
                                         {v.answerKey.part4.map((item) => (
                                           <div
@@ -4292,7 +4442,7 @@ export default function App() {
                                             </div>
                                             {item.hasExplicitAnswer && item.answer ? (
                                               <div className="text-rose-700 font-semibold pl-3">
-                                                → Đáp án: <ScientificContentRenderer text={item.answer} inline />
+                                                → Hướng dẫn chấm: <ScientificContentRenderer text={item.answer} inline />
                                               </div>
                                             ) : null}
                                           </div>
@@ -4306,22 +4456,14 @@ export default function App() {
                           </tbody>
                         </table>
 
-                        {/* Khung chữ ký khảo thí & cán bộ chấm thi */}
-                        <div className="grid grid-cols-2 gap-4 p-4 border-t-2 border-sky-300 text-center text-slate-800 bg-slate-50/70">
+                        {/* Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) */}
+                        <div className="flex justify-end p-4 border-t-2 border-sky-300 text-center text-slate-800 bg-slate-50/70 pr-12">
                           <div>
-                            <div className="font-bold text-xs uppercase">
-                              CÁN BỘ CHẤM THI 1
+                            <div className="font-bold text-sm">
+                              Người ra đề
                             </div>
-                            <div className="text-[11px] italic text-slate-500 pt-1">
-                              (Ký và ghi rõ họ tên)
-                            </div>
-                          </div>
-                          <div>
-                            <div className="font-bold text-xs uppercase">
-                              CÁN BỘ CHẤM THI 2 / KHẢO THÍ
-                            </div>
-                            <div className="text-[11px] italic text-slate-500 pt-1">
-                              (Ký và ghi rõ họ tên)
+                            <div className="text-xs italic text-slate-600 pt-1">
+                              ( Ký và ghi rõ họ và tên)
                             </div>
                           </div>
                         </div>
@@ -4520,17 +4662,15 @@ export default function App() {
                           </div>
 
                           <div className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-200">
-                            {config.embedPhieuQM2025 === false ? (
-                              <div className="font-bold min-w-0 flex-1">
-                                Họ và tên thí sinh: ......................................................... Số báo danh: ....................
-                              </div>
-                            ) : (
+                            {config.embedPhieuQM2025 !== false ? (
                               <div className="text-xs font-sans font-bold text-emerald-800 flex items-center gap-1.5 min-w-0 flex-1">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span className="truncate sm:whitespace-normal">
                                   Đã nhúng tự động <strong>{activePhieuQMInfo.standardFileName}</strong> ({activePhieuQMInfo.groupName}: {activePhieuQMInfo.structureDesc}) — Khóa tỷ lệ 16.5cm × 8.2cm
                                 </span>
                               </div>
+                            ) : (
+                              <div className="flex-1" />
                             )}
                             <div className="px-3 py-0.5 border-2 border-slate-900 font-bold shrink-0 whitespace-nowrap ml-auto">
                               MÃ ĐỀ THI: {activeVariant.examCode}
