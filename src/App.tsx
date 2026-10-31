@@ -4590,13 +4590,16 @@ export default function App() {
                           <div className="pt-4 text-center font-bold">
                             -------------------- HẾT --------------------
                           </div>
+                          <div className="text-center italic text-[11pt] text-slate-700 pb-2">
+                            (Thí sinh không được sử dụng tài liệu. Cán bộ coi thi không giải thích gì thêm)
+                          </div>
 
-                          <div className="pt-3 mt-4 border-t border-slate-400 flex items-center justify-between text-slate-800">
-                            <span className="italic font-bold">
-                              Môn: {formatPedagogicalSubject(config.subjectName)} — Lớp: 12 — Mã đề: {activeVariant.examCode}
-                            </span>
+                          <div className="pt-2.5 mt-3 border-t border-slate-500 flex items-center justify-between text-[11pt] italic text-slate-900">
                             <span>
-                              Trang <strong>1</strong> / <strong>2</strong>
+                              Môn: {formatPedagogicalSubject(config.subjectName)} — Lớp: {(config.gradeLevel || '12').replace(/^lớp\s+/i, '').trim() || '12'} — Mã đề: <strong className="font-bold">{activeVariant.examCode}</strong>
+                            </span>
+                            <span className="shrink-0 ml-4">
+                              Trang <strong className="font-bold">1</strong> / <strong className="font-bold">2</strong>
                             </span>
                           </div>
                         </div>
