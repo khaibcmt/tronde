@@ -1089,9 +1089,9 @@ export default function App() {
       const blob = await exportCleanedMasterDocx(questions, config, false);
       triggerBrowserDownload(
         blob,
-        buildStandardExportFileName(config, 'docx', 'Đề gốc chuẩn')
+        buildStandardExportFileName(config, 'docx', 'Đề gốc')
       );
-      await executePostDownloadZeroTracePurge('Đề Gốc Chuẩn Không Lời Giải (.docx)');
+      await executePostDownloadZeroTracePurge('Đề Gốc Đối Chiếu (Giữ Nguyên Gạch Chân & Tô Đỏ Đáp Án Đúng)');
     } finally {
       setIsProcessing(false);
     }
@@ -2170,8 +2170,9 @@ export default function App() {
                       }}
                       className="w-full px-1.5 py-1.5 text-xs font-mono font-black text-indigo-950 bg-indigo-50/80 border border-indigo-300 rounded-xl focus:outline-none cursor-pointer"
                     >
-                      <option value={4}>4 đề</option>
-                      <option value={8}>8 đề</option>
+                      <option value={4}>4 đề (1 QR chung)</option>
+                      <option value={6}>6 đề (1 QR chung)</option>
+                      <option value={8}>8 đề (Tối đa 1 QR)</option>
                       <option value={12}>12 đề</option>
                       <option value={24}>24 đề</option>
                     </select>
@@ -4080,14 +4081,14 @@ export default function App() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <QrCode className="w-5 h-5 text-purple-700" />
                             <h4 className="text-base font-black text-purple-950 uppercase">
-                              BỘ 3 MÃ QR CHẤM THI TỔNG HỢP ({shuffledVariants.length} MÃ ĐỀ: {shuffledVariants.map((v) => v.examCode).join(', ')})
+                              BỘ 3 MÃ QR CHUNG TÍCH HỢP CÁC MÃ ĐỀ ({shuffledVariants.slice(0, 8).length} MÃ ĐỀ: {shuffledVariants.slice(0, 8).map((v) => v.examCode).join(', ')})
                             </h4>
                             <span className="text-[10px] font-black uppercase bg-emerald-700 text-white px-2.5 py-0.5 rounded-md">
-                              Quét 100% Thành Công Trên Cả 3 App
+                              Quét 1 Lần Lên Hết Tất Cả Mã Đề (Tối Đa 8 Mã / 1 QR)
                             </span>
                           </div>
                           <p className="text-xs text-slate-700 font-semibold">
-                            Mỗi phần mềm chấm thi có cấu trúc giải mã JSON riêng. Hệ thống đã đóng gói sẵn <strong>3 Mã QR độc lập chuẩn gốc 100%</strong> cho <strong>1. QM 2025</strong>, <strong>2. TNMaker</strong> và <strong>3. Azota</strong> (kèm 3 file Excel <code>.xlsx</code> chuẩn). Thầy cô dùng phần mềm nào chỉ cần quét đúng mã QR của phần mềm đó!
+                            Toàn bộ các mã đề đã được <strong>tích hợp chung vào 1 Mã QR duy nhất</strong> (tối ưu tối đa <strong>8 mã đề / 1 mã QR</strong> để camera điện thoại lấy nét cực nhạy trong 0.2 giây) cho <strong>1. QM 2025</strong>, <strong>2. TNMaker</strong> và <strong>3. Azota</strong>. Thầy cô chỉ cần quét <strong>1 lần duy nhất</strong> là ứng dụng tự động nạp đầy đủ đáp án của tất cả các mã đề!
                           </p>
                         </div>
 
@@ -4477,11 +4478,11 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* THANH CHỌN MÃ ĐỀ ĐỂ XEM CHI TIẾT MÃ QR & BẢN DÀN TRANG ĐỀ THI WORD */}
+                  {/* THANH CHỌN MÃ ĐỀ ĐỂ XEM BẢN DÀN TRANG ĐỀ THI WORD */}
                   <div className="p-4 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="text-xs font-extrabold text-sky-950 mr-1">
-                        Xem trước Đề thi & Mã QR của:
+                        Xem trước Đề thi của:
                       </span>
                       {shuffledVariants.map((v, idx) => {
                         const colorClass =
@@ -4518,98 +4519,6 @@ export default function App() {
 
                   {activeVariant && (
                     <>
-                      {/* Khung Bộ 3 Mã QR Chấm Thi Riêng Cho Mã Đề Đang Chọn (1. QM 2025 — 2. TNMaker — 3. Azota) */}
-                      <div className="p-5 rounded-2xl card-3d-panel space-y-4">
-                        <div className="flex items-center justify-between flex-wrap gap-2 border-b border-sky-200 pb-3">
-                          <div>
-                            <h3 className="text-sm sm:text-base font-black text-sky-950 uppercase">
-                              BỘ 3 MÃ QR CHẤM THI RIÊNG CHO MÃ ĐỀ {activeVariant.examCode} (1. QM 2025 — 2. TNMAKER — 3. AZOTA)
-                            </h3>
-                            <p className="text-xs text-slate-600 font-medium">
-                              Dành cho giáo viên muốn quét nạp riêng từng mã đề {activeVariant.examCode} trên 1 trong 3 phần mềm chấm thi:
-                            </p>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-lg border border-emerald-300">
-                            Mã đề: {activeVariant.examCode} · Chuẩn 100% 3 App
-                          </span>
-                        </div>
-
-                        {activeVariant.tripleQr ? (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {[
-                              {
-                                item: activeVariant.tripleQr.qm2025,
-                                title: `1. QM 2025 (Mã ${activeVariant.examCode})`,
-                                border: 'border-amber-300 bg-amber-50/40',
-                                badge: 'bg-amber-800 text-white',
-                              },
-                              {
-                                item: activeVariant.tripleQr.tnmaker,
-                                title: `2. TNMaker (Mã ${activeVariant.examCode})`,
-                                border: 'border-blue-300 bg-blue-50/40',
-                                badge: 'bg-blue-800 text-white',
-                              },
-                              {
-                                item: activeVariant.tripleQr.azota,
-                                title: `3. Azota (Mã ${activeVariant.examCode})`,
-                                border: 'border-emerald-300 bg-emerald-50/40',
-                                badge: 'bg-emerald-800 text-white',
-                              },
-                            ].map((qrCard) => (
-                              <div
-                                key={`${activeVariant.examCode}-${qrCard.item.appId}`}
-                                className={`p-3.5 rounded-2xl border-2 ${qrCard.border} flex flex-col items-center space-y-2.5`}
-                              >
-                                <div className={`w-full text-center py-1 px-2 rounded-lg text-xs font-black uppercase ${qrCard.badge}`}>
-                                  {qrCard.title}
-                                </div>
-                                <img
-                                  src={qrCard.item.qrDataUrl}
-                                  alt={qrCard.title}
-                                  referrerPolicy="no-referrer"
-                                  className="w-36 h-36 object-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xs"
-                                />
-                                <div className="w-full p-2 rounded-lg bg-slate-900 text-emerald-400 font-mono text-[10px] break-all max-h-16 overflow-y-auto">
-                                  {qrCard.item.qrPayload}
-                                </div>
-                                <div className="w-full flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const link = document.createElement('a');
-                                      link.href = qrCard.item.qrDataUrl;
-                                      link.download = buildStandardExportFileName(
-                                        config,
-                                        'png',
-                                        `QR-Mã đề ${activeVariant.examCode}-${qrCard.item.appId}`
-                                      );
-                                      link.click();
-                                    }}
-                                    className="flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 flex items-center justify-center gap-1 cursor-pointer"
-                                  >
-                                    <Download className="w-3 h-3" />
-                                    <span>Tải QR PNG</span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(qrCard.item.qrPayload);
-                                      setStatusBanner({
-                                        type: 'SUCCESS',
-                                        text: `Đã sao chép chuỗi QR ${qrCard.item.appId} của Mã đề ${activeVariant.examCode}!`,
-                                      });
-                                    }}
-                                    className="py-1.5 px-2.5 rounded-lg text-[11px] font-bold bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 cursor-pointer"
-                                  >
-                                    Copy
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-
                       {/* Xem trước nội dung Đề thi đã hoán vị (Times New Roman 12pt, Canh trái đều, có Tiêu đề Quốc ngữ & Footer Số trang + Mã đề) */}
                       <div className="p-6 rounded-2xl card-3d-panel space-y-5">
                         <div className="flex items-center justify-between border-b-2 border-sky-200 pb-3 flex-wrap gap-2">

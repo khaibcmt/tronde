@@ -19,6 +19,8 @@ import { buildCV7991MatrixAndSpecification } from './matrixSpecCv7991';
 import {
   exportGradingExcelXlsx,
   generateMasterMultiQrCode,
+  generateTripleGradingQrSet,
+  MAX_CODES_PER_SINGLE_QR,
 } from './shuffleEngine';
 import {
   PHIEU_KHXH_BASE64,
@@ -567,6 +569,7 @@ function buildPart1OptionsWithTabStopsXml(
         hangingIndent: false,
         keepNext: false,
         keepLines: false,
+        prefixColorHex: isMarked ? 'FF0000' : undefined,
         underlinePrefix: isMarked,
         underlineBody: isMarked,
         redBody: isMarked,
@@ -1531,7 +1534,7 @@ function stripAnswerAndSolutionFromExamText(rawText: string): string {
 function buildQuestionsBodyXml(
   questions: ExamQuestion[],
   config: ShuffleConfig,
-  _highlightCorrectAnswers: boolean = false,
+  highlightCorrectAnswers: boolean = false,
   _includeSolutions: boolean = false,
   imageRelMap?: Map<string, string>
 ): string {
@@ -1608,7 +1611,7 @@ function buildQuestionsBodyXml(
           buildPart1OptionsWithTabStopsXml(
             sanitizedOptions,
             layout,
-            false
+            highlightCorrectAnswers
           )
         );
       }
@@ -1649,14 +1652,20 @@ function buildQuestionsBodyXml(
         const sub = subs[sIdx];
         const isLast = sIdx === subs.length - 1;
         const cleanSubText = stripAnswerAndSolutionFromExamText(sub.text);
+        const isMarkedTrue = highlightCorrectAnswers && sub.isTrue;
+        const displaySubText = highlightCorrectAnswers
+          ? `${cleanSubText} [${sub.isTrue ? 'Đúng' : 'Sai'}]`
+          : cleanSubText;
+
         blocks.push(
-          buildStandardParagraphXml(`${sub.currentLabel}) `, cleanSubText, {
+          buildStandardParagraphXml(`${sub.currentLabel}) `, displaySubText, {
             hangingIndent: false,
             keepNext: false,
             keepLines: false,
-            underlinePrefix: false,
-            underlineBody: false,
-            redBody: false,
+            prefixColorHex: isMarkedTrue ? 'FF0000' : undefined,
+            underlinePrefix: isMarkedTrue,
+            underlineBody: isMarkedTrue,
+            redBody: isMarkedTrue,
             align: 'left',
             spaceBeforeTwips: 0,
             spaceAfterTwips: isLast ? 30 : 20,
@@ -1690,11 +1699,30 @@ function buildQuestionsBodyXml(
           keepLines: false,
           align: 'left',
           spaceBeforeTwips: 30,
-          spaceAfterTwips: 30,
+          spaceAfterTwips: highlightCorrectAnswers ? 15 : 30,
           fontSizeHalfPt: 24,
         })
       );
       appendQuestionTablesAndImages(q);
+
+      if (highlightCorrectAnswers) {
+        blocks.push(
+          buildStandardParagraphXml(
+            `Đáp án đúng: `,
+            (q.shortAnswer || '0').trim(),
+            {
+              prefixColorHex: 'FF0000',
+              underlinePrefix: true,
+              underlineBody: true,
+              redBody: true,
+              align: 'left',
+              spaceBeforeTwips: 0,
+              spaceAfterTwips: 30,
+              fontSizeHalfPt: 24,
+            }
+          )
+        );
+      }
     }
   }
 
@@ -1728,6 +1756,7 @@ function buildQuestionsBodyXml(
         .map((l) => l.trim())
         .filter(Boolean);
       const firstLine = stemLines[0] || cleanStem;
+      const essayAns = (q.essayAnswer || q.explanation || q.shortAnswer || '').trim();
 
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, firstLine, {
@@ -1735,7 +1764,7 @@ function buildQuestionsBodyXml(
           keepLines: false,
           align: 'left',
           spaceBeforeTwips: 30,
-          spaceAfterTwips: stemLines.length > 1 ? 15 : 30,
+          spaceAfterTwips: stemLines.length > 1 || (highlightCorrectAnswers && essayAns) ? 15 : 30,
           fontSizeHalfPt: 24,
         })
       );
@@ -1747,13 +1776,28 @@ function buildQuestionsBodyXml(
             keepLines: false,
             align: 'left',
             spaceBeforeTwips: 10,
-            spaceAfterTwips: i === stemLines.length - 1 ? 30 : 15,
+            spaceAfterTwips:
+              i === stemLines.length - 1 && !(highlightCorrectAnswers && essayAns) ? 30 : 15,
             fontSizeHalfPt: 24,
           })
         );
       }
 
       appendQuestionTablesAndImages(q);
+
+      if (highlightCorrectAnswers && essayAns) {
+        blocks.push(
+          buildStandardParagraphXml(`Đáp án / Hướng dẫn chấm: `, essayAns, {
+            prefixColorHex: 'FF0000',
+            underlinePrefix: true,
+            redBody: true,
+            align: 'left',
+            spaceBeforeTwips: 10,
+            spaceAfterTwips: 30,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
     }
   }
 
@@ -1957,7 +2001,7 @@ async function packOpenXmlDocx(
 }
 
 /**
- * Tiện ích 1: Xuất file đề gốc đã chuẩn hóa cấu trúc 2025 (không kèm lời giải cho học sinh làm thử)
+ * Tiện ích 1: Xuất file Đề gốc giữ nguyên gạch chân đáp án đúng, tô đỏ và các phương án đúng ở các phần để giáo viên đối chiếu
  */
 export async function exportCleanedMasterDocx(
   questions: ExamQuestion[],
@@ -1983,14 +2027,15 @@ export async function exportCleanedMasterDocx(
 
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025',
+    'ĐỀ GỐC ĐỐI CHIẾU (GẠCH CHÂN & TÔ ĐỎ ĐÁP ÁN ĐÚNG)',
     Boolean(phieuQmDrawingXml)
   );
+  // Đề gốc: luôn giữ nguyên gạch chân đáp án đúng, tô đỏ và các phương án đúng ở các phần để đối chiếu (highlightCorrectAnswers = true)
   const bodyQuestionsXml = buildQuestionsBodyXml(
     questions,
     config,
-    false,
-    false,
+    true,
+    includeSolutions,
     imageRelMap
   );
   const fullInnerXml = [headerXml, phieuQmDrawingXml, bodyQuestionsXml]
@@ -2000,7 +2045,7 @@ export async function exportCleanedMasterDocx(
   return packOpenXmlDocx(
     fullInnerXml,
     config,
-    'Đề gốc chuẩn 2025',
+    'Đề gốc đối chiếu',
     undefined,
     imagesToEmbed
   );
@@ -2789,12 +2834,12 @@ export async function exportAllVariantsZipBundle(
   const bundleZip = new JSZip();
 
   // Cấu trúc tệp .zip gồm đúng 2 thư mục theo yêu cầu:
-  // 1. Thư mục các mã đề: gồm đề gốc và đề trộn
-  // 2. Thư mục đáp án: gồm các file liên quan đến đáp án
+  // 1. Thư mục các mã đề: gồm đề gốc (giữ nguyên gạch chân, tô đỏ đáp án đúng để đối chiếu) và các đề trộn
+  // 2. Thư mục đáp án: gồm các file liên quan đến đáp án (Bảng đáp án Word, Mã QR Chung tích hợp các mã đề, File Excel/CSV)
   const thuMucCacMaDe = bundleZip.folder('Thư mục các mã đề');
   const thuMucDapAn = bundleZip.folder('Thư mục đáp án');
 
-  // 1. Lưu Đề gốc và các Đề trộn vào "Thư mục các mã đề"
+  // 1. Lưu Đề gốc (có gạch chân & tô đỏ đáp án đúng để đối chiếu) và các Đề trộn vào "Thư mục các mã đề"
   const masterCleanBlob = await exportCleanedMasterDocx(masterQuestions, config, false);
   thuMucCacMaDe?.file(
     buildStandardExportFileName(config, 'docx', 'Đề gốc'),
@@ -2807,26 +2852,6 @@ export async function exportAllVariantsZipBundle(
       buildStandardExportFileName(config, 'docx', `Mã đề ${v.examCode}`),
       docxBlob
     );
-
-    if (v.tripleQr) {
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-1-QM2025`),
-        dataUrlToUint8Array(v.tripleQr.qm2025.qrDataUrl)
-      );
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-2-TNMaker`),
-        dataUrlToUint8Array(v.tripleQr.tnmaker.qrDataUrl)
-      );
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-3-Azota`),
-        dataUrlToUint8Array(v.tripleQr.azota.qrDataUrl)
-      );
-    } else if (v.qrDataUrl) {
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
-        dataUrlToUint8Array(v.qrDataUrl)
-      );
-    }
   }
 
   // 2. Lưu các file liên quan đến đáp án vào "Thư mục đáp án"
@@ -2836,25 +2861,42 @@ export async function exportAllVariantsZipBundle(
     masterAnswerDocxBlob
   );
 
+  // Xuất Mã QR Chung tích hợp các mã đề (tối đa 8 mã đề / 1 Mã QR Chung để quét 1 lần lên hết các mã đề)
   try {
-    const { tripleQr } = await generateMasterMultiQrCode(variants, config);
-    if (tripleQr.qm2025.qrDataUrl) {
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 1 - App QM 2025'),
-        dataUrlToUint8Array(tripleQr.qm2025.qrDataUrl)
+    const totalBatches = Math.ceil(variants.length / MAX_CODES_PER_SINGLE_QR);
+    for (let bIdx = 0; bIdx < totalBatches; bIdx++) {
+      const batch = variants.slice(
+        bIdx * MAX_CODES_PER_SINGLE_QR,
+        (bIdx + 1) * MAX_CODES_PER_SINGLE_QR
       );
-    }
-    if (tripleQr.tnmaker.qrDataUrl) {
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 2 - App TNMaker'),
-        dataUrlToUint8Array(tripleQr.tnmaker.qrDataUrl)
-      );
-    }
-    if (tripleQr.azota.qrDataUrl) {
-      thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'png', 'QR Tổng Hợp 3 - App Azota'),
-        dataUrlToUint8Array(tripleQr.azota.qrDataUrl)
-      );
+      const codeRangeLabel =
+        batch.length === 1
+          ? `Mã ${batch[0].examCode}`
+          : `Mã ${batch[0].examCode}-${batch[batch.length - 1].examCode}`;
+      const batchPrefix =
+        totalBatches === 1
+          ? `QR Chung (${codeRangeLabel})`
+          : `QR Chung Cụm ${bIdx + 1} (${codeRangeLabel})`;
+
+      const batchTripleQr = await generateTripleGradingQrSet(batch);
+      if (batchTripleQr.qm2025.qrDataUrl) {
+        thuMucDapAn?.file(
+          buildStandardExportFileName(config, 'png', `${batchPrefix} - 1 - App QM 2025`),
+          dataUrlToUint8Array(batchTripleQr.qm2025.qrDataUrl)
+        );
+      }
+      if (batchTripleQr.tnmaker.qrDataUrl) {
+        thuMucDapAn?.file(
+          buildStandardExportFileName(config, 'png', `${batchPrefix} - 2 - App TNMaker`),
+          dataUrlToUint8Array(batchTripleQr.tnmaker.qrDataUrl)
+        );
+      }
+      if (batchTripleQr.azota.qrDataUrl) {
+        thuMucDapAn?.file(
+          buildStandardExportFileName(config, 'png', `${batchPrefix} - 3 - App Azota`),
+          dataUrlToUint8Array(batchTripleQr.azota.qrDataUrl)
+        );
+      }
     }
 
     const [xlsxQm, xlsxTn, xlsxAz] = await Promise.all([
@@ -2875,11 +2917,11 @@ export async function exportAllVariantsZipBundle(
       xlsxAz
     );
   } catch (err) {
-    console.warn('Không thể lưu bộ 3 ảnh QR tổng hợp & Excel vào zip:', err);
+    console.warn('Không thể lưu bộ 3 ảnh QR chung & Excel vào zip:', err);
   }
 
   const csvLines: string[] = [
-    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload_QM2025,QR_Payload_TNMaker,QR_Payload_Azota',
+    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload_Chung_QM2025,QR_Payload_Chung_TNMaker,QR_Payload_Chung_Azota',
   ];
   for (const v of variants) {
     const p1 = v.answerKey.part1.map((x) => `${x.questionNumber}${x.answer}`).join(' ');
@@ -2899,7 +2941,7 @@ export async function exportAllVariantsZipBundle(
 }
 
 /**
- * Tiện ích 5: Tải riêng bộ ảnh 3 Mã QR (QM 2025, TNMaker, Azota) + 3 File Excel chuẩn (.zip)
+ * Tiện ích 5: Tải riêng bộ ảnh 3 Mã QR Chung tích hợp các mã đề (QM 2025, TNMaker, Azota) + 3 File Excel chuẩn (.zip)
  */
 export async function exportQrCodesZip(
   variants: ShuffledVariant[],
@@ -2908,48 +2950,42 @@ export async function exportQrCodesZip(
   const qrZip = new JSZip();
   const lines: string[] = [];
 
-  const { tripleQr } = await generateMasterMultiQrCode(variants, config);
-  if (tripleQr.qm2025.qrDataUrl) {
-    qrZip.file(
-      buildStandardExportFileName(config, 'png', '01-QR Tổng Hợp - App QM 2025'),
-      dataUrlToUint8Array(tripleQr.qm2025.qrDataUrl)
+  const totalBatches = Math.ceil(variants.length / MAX_CODES_PER_SINGLE_QR);
+  for (let bIdx = 0; bIdx < totalBatches; bIdx++) {
+    const batch = variants.slice(
+      bIdx * MAX_CODES_PER_SINGLE_QR,
+      (bIdx + 1) * MAX_CODES_PER_SINGLE_QR
     );
-    lines.push(`=== 1. PAYLOAD TỔNG HỢP APP QM 2025 ===\n${tripleQr.qm2025.qrPayload}\n`);
-  }
-  if (tripleQr.tnmaker.qrDataUrl) {
-    qrZip.file(
-      buildStandardExportFileName(config, 'png', '02-QR Tổng Hợp - App TNMaker'),
-      dataUrlToUint8Array(tripleQr.tnmaker.qrDataUrl)
-    );
-    lines.push(`=== 2. PAYLOAD TỔNG HỢP APP TNMAKER 2025 ===\n${tripleQr.tnmaker.qrPayload}\n`);
-  }
-  if (tripleQr.azota.qrDataUrl) {
-    qrZip.file(
-      buildStandardExportFileName(config, 'png', '03-QR Tổng Hợp - App Azota'),
-      dataUrlToUint8Array(tripleQr.azota.qrDataUrl)
-    );
-    lines.push(`=== 3. PAYLOAD TỔNG HỢP APP AZOTA 2025 ===\n${tripleQr.azota.qrPayload}\n`);
-  }
+    const codeRangeLabel =
+      batch.length === 1
+        ? `Mã ${batch[0].examCode}`
+        : `Mã ${batch[0].examCode}-${batch[batch.length - 1].examCode}`;
+    const batchPrefix =
+      totalBatches === 1
+        ? `QR Chung (${codeRangeLabel})`
+        : `QR Chung Cụm ${bIdx + 1} (${codeRangeLabel})`;
 
-  for (const v of variants) {
-    if (v.tripleQr) {
+    const batchTripleQr = await generateTripleGradingQrSet(batch);
+    if (batchTripleQr.qm2025.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-1-QM2025`),
-        dataUrlToUint8Array(v.tripleQr.qm2025.qrDataUrl)
+        buildStandardExportFileName(config, 'png', `01-${batchPrefix} - App QM 2025`),
+        dataUrlToUint8Array(batchTripleQr.qm2025.qrDataUrl)
       );
+      lines.push(`=== 1. PAYLOAD CHUNG (${codeRangeLabel}) APP QM 2025 ===\n${batchTripleQr.qm2025.qrPayload}\n`);
+    }
+    if (batchTripleQr.tnmaker.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-2-TNMaker`),
-        dataUrlToUint8Array(v.tripleQr.tnmaker.qrDataUrl)
+        buildStandardExportFileName(config, 'png', `02-${batchPrefix} - App TNMaker`),
+        dataUrlToUint8Array(batchTripleQr.tnmaker.qrDataUrl)
       );
+      lines.push(`=== 2. PAYLOAD CHUNG (${codeRangeLabel}) APP TNMAKER 2025 ===\n${batchTripleQr.tnmaker.qrPayload}\n`);
+    }
+    if (batchTripleQr.azota.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}-3-Azota`),
-        dataUrlToUint8Array(v.tripleQr.azota.qrDataUrl)
+        buildStandardExportFileName(config, 'png', `03-${batchPrefix} - App Azota`),
+        dataUrlToUint8Array(batchTripleQr.azota.qrDataUrl)
       );
-    } else if (v.qrDataUrl) {
-      qrZip.file(
-        buildStandardExportFileName(config, 'png', `QR-Mã đề ${v.examCode}`),
-        dataUrlToUint8Array(v.qrDataUrl)
-      );
+      lines.push(`=== 3. PAYLOAD CHUNG (${codeRangeLabel}) APP AZOTA 2025 ===\n${batchTripleQr.azota.qrPayload}\n`);
     }
   }
 

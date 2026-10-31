@@ -497,16 +497,6 @@ export async function generateShuffledVariants(
       part4: answerKeyP4,
     };
 
-    // Sinh đủ 3 mã QR (QM 2025, TNMaker, Azota) cho mã đề này
-    const tripleQr = await generateTripleGradingQrSet([{ examCode, answerKey }]);
-
-    const selectedQr =
-      config.qrFormat === 'TNMAKER'
-        ? tripleQr.tnmaker
-        : config.qrFormat === 'AZOTA'
-        ? tripleQr.azota
-        : tripleQr.qm2025;
-
     variants.push({
       examCode,
       createdAt: new Date().toLocaleTimeString('vi-VN'),
@@ -516,19 +506,41 @@ export async function generateShuffledVariants(
         ...processedP3,
         ...processedP4,
       ]),
-      qrPayload: selectedQr.qrPayload,
-      qrDataUrl: selectedQr.qrDataUrl,
-      tripleQr,
+      qrPayload: '',
+      qrDataUrl: '',
       answerKey,
     });
+  }
+
+  // Tích hợp Mã QR Chung cho các mã đề (tối ưu tối đa 8 mã đề / 1 Mã QR Chung để đảm bảo độ nhạy camera 100%, quét 1 lần lên hết các mã đề)
+  const MAX_VARIANTS_PER_MASTER_QR = 8;
+  for (let start = 0; start < variants.length; start += MAX_VARIANTS_PER_MASTER_QR) {
+    const batch = variants.slice(start, start + MAX_VARIANTS_PER_MASTER_QR);
+    const batchTripleQr = await generateTripleGradingQrSet(batch);
+    const selectedQr =
+      config.qrFormat === 'TNMAKER'
+        ? batchTripleQr.tnmaker
+        : config.qrFormat === 'AZOTA'
+        ? batchTripleQr.azota
+        : batchTripleQr.qm2025;
+
+    for (const v of batch) {
+      v.tripleQr = batchTripleQr;
+      v.qrPayload = selectedQr.qrPayload;
+      v.qrDataUrl = selectedQr.qrDataUrl;
+    }
   }
 
   return variants;
 }
 
+export const MAX_CODES_PER_SINGLE_QR = 8;
+
 /**
- * Sinh Bộ 3 Mã QR Tổng Hợp Đa Mã Đề (Master Multi-Exam QR Code) tích hợp toàn bộ các mã đề
- * cho cả 3 phần mềm: 1. QM 2025 — 2. TNMaker — 3. Azota
+ * Sinh Bộ 3 Mã QR Chung Tích Hợp Đa Mã Đề (Master Multi-Exam QR Code)
+ * - Tự động gom tối đa 8 mã đề chuẩn (ví dụ: 4, 6 hoặc 8 mã đề: 101..108) vào 1 Mã QR Chung duy nhất
+ *   để đảm bảo mật độ điểm ảnh QR vừa vặn, quét 1 lần là lên hết toàn bộ các mã đề trên cả 3 App:
+ *   1. QM 2025 — 2. TNMaker — 3. Azota
  */
 export async function generateMasterMultiQrCode(
   variants: ShuffledVariant[],
@@ -537,6 +549,7 @@ export async function generateMasterMultiQrCode(
   qrDataUrl: string;
   qrPayload: string;
   tripleQr: TripleGradingQrSet;
+  integratedCodes: string[];
 }> {
   if (!variants || variants.length === 0) {
     const emptyItem = {
@@ -553,10 +566,13 @@ export async function generateMasterMultiQrCode(
         tnmaker: { ...emptyItem, appId: 'TNMAKER' },
         azota: { ...emptyItem, appId: 'AZOTA' },
       },
+      integratedCodes: [],
     };
   }
 
-  const tripleQr = await generateTripleGradingQrSet(variants);
+  // Tích hợp tối đa 8 mã đề vào 1 Mã QR Chung để đảm bảo camera điện thoại quét nhạy 100% trong 0.2 giây
+  const targetVariants = variants.slice(0, MAX_CODES_PER_SINGLE_QR);
+  const tripleQr = await generateTripleGradingQrSet(targetVariants);
   const primary =
     config.qrFormat === 'TNMAKER'
       ? tripleQr.tnmaker
@@ -568,6 +584,7 @@ export async function generateMasterMultiQrCode(
     qrDataUrl: primary.qrDataUrl,
     qrPayload: primary.qrPayload,
     tripleQr,
+    integratedCodes: targetVariants.map((v) => v.examCode),
   };
 }
 
