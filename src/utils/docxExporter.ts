@@ -54,6 +54,250 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 }
 
 /**
+ * ============================================================================
+ * BỘ ÁNH XẠ 4 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 THEO MÔN HỌC (CHẠY TỨC THÌ 0.01s)
+ * - Không gửi ảnh lên AI, hoàn toàn nạp tĩnh từ bộ nhớ đệm trình duyệt (0 API token)
+ * - Kích thước khóa cứng chuẩn Camera AI nhận diện: Width = 16.5cm (624px / 5,943,600 EMUs) × Height = 8.2cm (310px / 2,952,750 EMUs)
+ * ============================================================================
+ */
+export interface PhieuQM2025Info {
+  groupCode: 'TOAN' | 'KHTN_DIA' | 'NGOAI_NGU' | 'KHXH_CN_TIN';
+  groupName: string;
+  subjectsLabel: string;
+  structureDesc: string;
+  standardFileName: 'phieu_toan.jpg' | 'phieu_khtn.jpg' | 'phieu_ngoaingu.jpg' | 'phieu_khxh.jpg';
+  assetPath: string;
+  publicUrl: string;
+  fallbackUrl: string;
+  widthPx: number;
+  heightPx: number;
+  widthEmu: number;
+  heightEmu: number;
+}
+
+export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
+  {
+    groupCode: 'TOAN',
+    groupName: 'Môn Toán',
+    subjectsLabel: 'Toán học',
+    structureDesc: 'Phần I: 12 câu | Phần II: 4 câu | Phần III: 6 câu',
+    standardFileName: 'phieu_toan.jpg',
+    assetPath: 'assets/phieu_toan.jpg',
+    publicUrl: '/assets/phieu_toan.jpg',
+    fallbackUrl: '/assets/aistudio/QM_202_To_n_2e669509.jpg',
+    widthPx: 624,
+    heightPx: 310,
+    widthEmu: 5943600, // 16.5 cm chuẩn khít lề A4
+    heightEmu: 2952750, // ~8.2 cm chuẩn tỷ lệ gốc QM 2025
+  },
+  {
+    groupCode: 'KHTN_DIA',
+    groupName: 'Nhóm KHTN & Địa',
+    subjectsLabel: 'Sinh học, Vật lí, Hóa học, Địa lí',
+    structureDesc: 'Phần I: 18 câu | Phần II: 4 câu | Phần III: 6 câu',
+    standardFileName: 'phieu_khtn.jpg',
+    assetPath: 'assets/phieu_khtn.jpg',
+    publicUrl: '/assets/phieu_khtn.jpg',
+    fallbackUrl: '/assets/aistudio/QM_2025_-_Ly__Hoa__Sinh__Dia_6a77a214.jpg',
+    widthPx: 624,
+    heightPx: 310,
+    widthEmu: 5943600,
+    heightEmu: 2952750,
+  },
+  {
+    groupCode: 'NGOAI_NGU',
+    groupName: 'Môn Ngoại ngữ',
+    subjectsLabel: 'Tiếng Anh, Ngoại ngữ khác',
+    structureDesc: 'Phần I: 40 câu trắc nghiệm 4 lựa chọn',
+    standardFileName: 'phieu_ngoaingu.jpg',
+    assetPath: 'assets/phieu_ngoaingu.jpg',
+    publicUrl: '/assets/phieu_ngoaingu.jpg',
+    fallbackUrl: '/assets/aistudio/QM_2025_-_NGOAI_NGU_5d10a158.jpg',
+    widthPx: 624,
+    heightPx: 310,
+    widthEmu: 5943600,
+    heightEmu: 2952750,
+  },
+  {
+    groupCode: 'KHXH_CN_TIN',
+    groupName: 'Nhóm KHXH, CN, Tin',
+    subjectsLabel: 'Lịch sử, Tin học, Công nghệ, GD Kinh tế & Pháp luật',
+    structureDesc: 'Phần I: 24 câu | Phần II: 6 câu (Không có Phần III)',
+    standardFileName: 'phieu_khxh.jpg',
+    assetPath: 'assets/phieu_khxh.jpg',
+    publicUrl: '/assets/phieu_khxh.jpg',
+    fallbackUrl: '/assets/aistudio/QM_2025_-_Su__Tin__CN__GDPL_cdd333ca.jpg',
+    widthPx: 624,
+    heightPx: 310,
+    widthEmu: 5943600,
+    heightEmu: 2952750,
+  },
+];
+
+/**
+ * 1. Hàm ánh xạ lấy đúng đường dẫn ảnh phiếu QM 2025 theo môn học (Chuẩn tài liệu kỹ thuật)
+ */
+export function getPhieuQMBySubject(subjectName: string): string {
+  const sub = (subjectName || '').toLowerCase();
+  if (sub.includes('toán') || sub.includes('toan')) {
+    return 'assets/phieu_toan.jpg';
+  }
+  if (
+    sub.includes('sinh') ||
+    sub.includes('lí') ||
+    sub.includes('lý') ||
+    sub.includes('ly') ||
+    sub.includes('hóa') ||
+    sub.includes('hoa') ||
+    sub.includes('địa') ||
+    sub.includes('dia')
+  ) {
+    return 'assets/phieu_khtn.jpg';
+  }
+  if (
+    sub.includes('anh') ||
+    sub.includes('ngoại ngữ') ||
+    sub.includes('ngoai ngu')
+  ) {
+    return 'assets/phieu_ngoaingu.jpg';
+  }
+  // Các môn còn lại: Sử, Tin, Công nghệ, GDPL
+  return 'assets/phieu_khxh.jpg';
+}
+
+/**
+ * Lấy thông tin chi tiết của mẫu phiếu QM 2025 theo tên môn học
+ */
+export function getPhieuQMInfoBySubject(subjectName: string): PhieuQM2025Info {
+  const matchedPath = getPhieuQMBySubject(subjectName);
+  return (
+    ALL_PHIEU_QM_2025_TEMPLATES.find((t) => t.assetPath === matchedPath) ||
+    ALL_PHIEU_QM_2025_TEMPLATES[1]
+  );
+}
+
+// Bộ nhớ đệm RAM trên trình duyệt để nạp ảnh phiếu QM 2025 tức thì (0.01s)
+const phieuQmDataUrlCache = new Map<string, string>();
+
+async function fetchUrlAsBase64DataUrl(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string' && reader.result.startsWith('data:')) {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Invalid data URL'));
+        }
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Nạp Base64 DataURL của ảnh phiếu QM 2025 theo môn học (Ưu tiên lấy từ RAM Cache trong 0.01s)
+ */
+export async function loadPhieuQMDataUrlBySubject(
+  subjectName: string
+): Promise<{ info: PhieuQM2025Info; dataUrl: string | null }> {
+  const info = getPhieuQMInfoBySubject(subjectName);
+  const cached = phieuQmDataUrlCache.get(info.standardFileName);
+  if (cached) {
+    return { info, dataUrl: cached };
+  }
+
+  let dataUrl = await fetchUrlAsBase64DataUrl(info.publicUrl);
+  if (!dataUrl) {
+    dataUrl = await fetchUrlAsBase64DataUrl(info.fallbackUrl);
+  }
+  if (dataUrl) {
+    phieuQmDataUrlCache.set(info.standardFileName, dataUrl);
+  }
+  return { info, dataUrl };
+}
+
+// Tự động nạp sẵn 4 mẫu phiếu QM 2025 vào RAM ngay khi mở ứng dụng để xuất Word đạt tốc độ 0.01s
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    for (const tpl of ALL_PHIEU_QM_2025_TEMPLATES) {
+      if (!phieuQmDataUrlCache.has(tpl.standardFileName)) {
+        fetchUrlAsBase64DataUrl(tpl.publicUrl)
+          .then((res) => res || fetchUrlAsBase64DataUrl(tpl.fallbackUrl))
+          .then((dataUrl) => {
+            if (dataUrl) {
+              phieuQmDataUrlCache.set(tpl.standardFileName, dataUrl);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, 50);
+}
+
+/**
+ * 2. Tạo khối Paragraph chứa ImageRun (DrawingML) của Phiếu QM 2025 chèn ngay dưới Header Trang 1:
+ * - Căn giữa (AlignmentType.CENTER / <w:jc w:val="center"/>)
+ * - Khóa cứng tỷ lệ hình ảnh: Width = 16.5cm (624px = 5,943,600 EMUs), Height = 8.2cm (310px = 2,952,750 EMUs)
+ * - Khoảng cách dưới: spacing: { after: 200 } (<w:spacing w:before="40" w:after="200"/>)
+ */
+function buildPhieuQM2025DrawingXml(
+  relId: string,
+  phieuInfo: PhieuQM2025Info
+): string {
+  const cx = phieuInfo.widthEmu;  // 5,943,600 EMUs = 16.5 cm (624 px)
+  const cy = phieuInfo.heightEmu; // 2,952,750 EMUs = 8.2 cm (310 px)
+  const docPrId = 9025;
+  return `<w:p>
+    <w:pPr>
+      <w:spacing w:before="40" w:after="200"/>
+      <w:jc w:val="center"/>
+    </w:pPr>
+    <w:r>
+      <w:drawing>
+        <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+          <wp:extent cx="${cx}" cy="${cy}"/>
+          <wp:effectExtent l="0" t="0" r="0" b="0"/>
+          <wp:docPr id="${docPrId}" name="Phieu_QM_2025_${escapeXml(phieuInfo.groupCode)}" descr="${escapeXml(phieuInfo.standardFileName)}"/>
+          <wp:cNvGraphicFramePr>
+            <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
+          </wp:cNvGraphicFramePr>
+          <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:nvPicPr>
+                  <pic:cNvPr id="${docPrId + 1}" name="${escapeXml(phieuInfo.standardFileName)}"/>
+                  <pic:cNvPicPr>
+                    <a:picLocks noChangeAspect="1" noChangeArrowheads="1"/>
+                  </pic:cNvPicPr>
+                </pic:nvPicPr>
+                <pic:blipFill>
+                  <a:blip r:embed="${relId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
+                  <a:stretch><a:fillRect/></a:stretch>
+                </pic:blipFill>
+                <pic:spPr bwMode="auto">
+                  <a:xfrm>
+                    <a:off x="0" y="0"/>
+                    <a:ext cx="${cx}" cy="${cy}"/>
+                  </a:xfrm>
+                  <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                </pic:spPr>
+              </pic:pic>
+            </a:graphicData>
+          </a:graphic>
+        </wp:inline>
+      </w:drawing>
+    </w:r>
+  </w:p>`;
+}
+
+/**
  * Tạo đoạn văn bản Word chuẩn Typography & Khoa học Tự nhiên:
  * - Bắt buộc Font Times New Roman kích cỡ 12pt (24 half-points)
  * - Tự động nhận diện và chuyển đổi công thức Toán/Lý sang chuẩn Office Math Markup (<m:oMath>)
@@ -152,7 +396,8 @@ function buildStandardParagraphXml(
  */
 function buildExamNationalHeaderTableXml(
   config: ShuffleConfig,
-  examCodeLabel?: string
+  examCodeLabel?: string,
+  hasEmbeddedPhieuQM2025: boolean = false
 ): string {
   const leftCellParagraphs = [
     buildStandardParagraphXml(config.departmentName.toUpperCase(), '', {
@@ -209,7 +454,7 @@ function buildExamNationalHeaderTableXml(
   const codeBoxXml = examCodeLabel
     ? `<w:p>
         <w:pPr>
-          <w:spacing w:before="80" w:after="120"/>
+          <w:spacing w:before="60" w:after="${hasEmbeddedPhieuQM2025 ? '60' : '120'}"/>
           <w:jc w:val="center"/>
         </w:pPr>
         <w:r>
@@ -223,6 +468,21 @@ function buildExamNationalHeaderTableXml(
         </w:r>
       </w:p>`
     : '';
+
+  // Nếu đã chèn ảnh Phiếu QM 2025 (vốn đã có sẵn khung Họ tên, Lớp, Mã đề, SBD), không lặp lại dòng chữ Họ tên rời rạc
+  const studentInfoLineXml = hasEmbeddedPhieuQM2025
+    ? ''
+    : `<w:p>
+    <w:pPr><w:spacing w:before="60" w:after="120"/><w:jc w:val="left"/></w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:b/>
+        <w:sz w:val="24"/><w:szCs w:val="24"/>
+      </w:rPr>
+      <w:t xml:space="preserve">Họ và tên thí sinh: ..................................................................... Số báo danh: ...........................</w:t>
+    </w:r>
+  </w:p>`;
 
   return `<w:tbl>
     <w:tblPr>
@@ -254,17 +514,7 @@ function buildExamNationalHeaderTableXml(
     </w:tr>
   </w:tbl>
   ${codeBoxXml}
-  <w:p>
-    <w:pPr><w:spacing w:before="60" w:after="120"/><w:jc w:val="left"/></w:pPr>
-    <w:r>
-      <w:rPr>
-        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-        <w:b/>
-        <w:sz w:val="24"/><w:szCs w:val="24"/>
-      </w:rPr>
-      <w:t xml:space="preserve">Họ và tên thí sinh: ..................................................................... Số báo danh: ...........................</w:t>
-    </w:r>
-  </w:p>`;
+  ${studentInfoLineXml}`;
 }
 
 /**
@@ -1351,11 +1601,28 @@ export async function exportCleanedMasterDocx(
   includeSolutions: boolean = false
 ): Promise<Blob> {
   const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(questions);
+  const shouldEmbedPhieuQM = !includeSolutions && config.embedPhieuQM2025 !== false;
+  let phieuQmDrawingXml = '';
+
+  if (shouldEmbedPhieuQM) {
+    const { info, dataUrl } = await loadPhieuQMDataUrlBySubject(config.subjectName);
+    if (dataUrl) {
+      const relId = 'rIdPhieuQM2025';
+      imagesToEmbed.push({
+        relId,
+        dataUrl,
+        fileName: info.standardFileName,
+      });
+      phieuQmDrawingXml = buildPhieuQM2025DrawingXml(relId, info);
+    }
+  }
+
   const headerXml = buildExamNationalHeaderTableXml(
     config,
     includeSolutions
       ? 'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
-      : 'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025'
+      : 'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025',
+    Boolean(phieuQmDrawingXml)
   );
   const bodyQuestionsXml = buildQuestionsBodyXml(
     questions,
@@ -1364,8 +1631,12 @@ export async function exportCleanedMasterDocx(
     includeSolutions,
     imageRelMap
   );
+  const fullInnerXml = [headerXml, phieuQmDrawingXml, bodyQuestionsXml]
+    .filter(Boolean)
+    .join('\n');
+
   return packOpenXmlDocx(
-    `${headerXml}\n${bodyQuestionsXml}`,
+    fullInnerXml,
     config,
     'Đề gốc chuẩn 2025',
     undefined,
@@ -1384,7 +1655,8 @@ export async function exportMasterExamWithSolutionsDocx(
   const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(questions);
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
+    'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)',
+    false
   );
   const bodyQuestionsXml = buildQuestionsBodyXml(
     questions,
@@ -1404,8 +1676,11 @@ export async function exportMasterExamWithSolutionsDocx(
 
 /**
  * Tiện ích 3: Xuất 1 tệp Đề thi hoán vị (.docx) DÀNH RIÊNG CHO HỌC SINH LÀM BÀI:
- * - BẮT BUỘC KHÔNG CÓ LỜI GIẢI & KHÔNG CÓ ĐÁP ÁN
- * - KHÔNG XUẤT KHUNG ĐÁP ÁN Ở CUỐI ĐỀ THI (Thỏa mãn yêu cầu 4)
+ * - [Trang 1]:
+ *   1. Header thông tin kỳ thi (Tên trường, Môn, Thời gian, Mã đề thi: 101, 102...)
+ *   2. CHÈN ẢNH PHIẾU QM 2025 NGAY BÊN DƯỚI HEADER (Width = 16.5cm, Height = 8.2cm, khóa cứng tỷ lệ)
+ *   3. BẮT ĐẦU NỘI DUNG CÂU HỎI ĐỀ THI NGAY PHÍA DƯỚI MÉP ẢNH PHIẾU
+ * - BẮT BUỘC KHÔNG CÓ LỜI GIẢI & KHÔNG CÓ ĐÁP ÁN Ở CUỐI ĐỀ
  * - Tự động nhúng hình ảnh, sơ đồ sinh động
  * - Footer sư phạm chữ thường: “Môn: Sinh học — Lớp: 12 — Mã đề: 101”
  */
@@ -1414,9 +1689,26 @@ export async function exportSingleVariantDocx(
   config: ShuffleConfig
 ): Promise<Blob> {
   const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(variant.questions);
+
+  // Tự động nạp ảnh phiếu QM 2025 theo môn học (chạy tức thì trên trình duyệt, mặc định BẬT)
+  let phieuQmDrawingXml = '';
+  if (config.embedPhieuQM2025 !== false) {
+    const { info, dataUrl } = await loadPhieuQMDataUrlBySubject(config.subjectName);
+    if (dataUrl) {
+      const relId = 'rIdPhieuQM2025';
+      imagesToEmbed.push({
+        relId,
+        dataUrl,
+        fileName: info.standardFileName,
+      });
+      phieuQmDrawingXml = buildPhieuQM2025DrawingXml(relId, info);
+    }
+  }
+
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    `MÃ ĐỀ THI: ${variant.examCode}`
+    `MÃ ĐỀ THI: ${variant.examCode}`,
+    Boolean(phieuQmDrawingXml)
   );
 
   // Học sinh làm bài: highlightCorrectAnswers = false, includeSolutions = false
@@ -1441,8 +1733,10 @@ export async function exportSingleVariantDocx(
     ),
   ].join('\n');
 
-  // KHÔNG CÒN xuất khung đáp án ở cuối đề thi học sinh (Theo yêu cầu 4)
-  const fullInnerXml = [headerXml, questionsXml, footerEndXml].join('\n');
+  // Thứ tự chuẩn Trang 1: 1. Header -> 2. Ảnh Phiếu QM 2025 (16.5cm x 8.2cm) -> 3. Nội dung câu hỏi đề thi
+  const fullInnerXml = [headerXml, phieuQmDrawingXml, questionsXml, footerEndXml]
+    .filter(Boolean)
+    .join('\n');
 
   return packOpenXmlDocx(
     fullInnerXml,
@@ -2148,8 +2442,9 @@ export async function exportAllVariantsZipBundle(
     masterCleanBlob
   );
 
-  // 2. Lưu file Bảng đáp án ma trận khảo thí (A4) có nhúng đủ 3 mã QR
+  // 2. Lưu file Bảng đáp án tổng hợp (Dap_an_tong_hop.docx & tên chuẩn đồng nhất) có nhúng đủ 3 mã QR
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
+  bundleZip.file('Dap_an_tong_hop.docx', masterAnswerDocxBlob);
   bundleZip.file(
     buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí ma trận'),
     masterAnswerDocxBlob
@@ -2166,13 +2461,16 @@ export async function exportAllVariantsZipBundle(
     console.warn('Không thể xuất kèm Ma trận CV 7991 vào zip:', err);
   }
 
-  // 4. Lưu từng file đề hoán vị cho học sinh & Bộ 3 Mã QR Chấm Thi (QM 2025, TNMaker, Azota)
+  // 4. Lưu từng file đề hoán vị độc lập (De_101.docx, De_102.docx... có sẵn phiếu QM 2025 ở Trang 1) & Bộ 3 Mã QR Chấm Thi
   const deThiFolder = bundleZip.folder('Bo_De_Thi_Hoc_Sinh_Docx');
   const qrFolder = bundleZip.folder('Ma_QR_3_Phan_Mem_QM2025_TNMaker_Azota');
   const excelFolder = bundleZip.folder('File_Excel_Dap_An_Chuan_3_Phan_Mem');
 
   for (const v of variants) {
     const docxBlob = await exportSingleVariantDocx(v, config);
+    // Đặt file độc lập De_101.docx, De_102.docx ngay tại thư mục gốc của ZIP theo đúng Quy cách xuất tập tin mục III.3
+    bundleZip.file(`De_${v.examCode}.docx`, docxBlob);
+    // Đồng thời lưu bản đặt tên đầy đủ (Môn... - Lớp... - Kỳ kiểm tra... - dd-mm-yy - Mã đề 101.docx) trong thư mục Bo_De_Thi_Hoc_Sinh_Docx
     deThiFolder?.file(
       buildStandardExportFileName(config, 'docx', `Mã đề ${v.examCode}`),
       docxBlob

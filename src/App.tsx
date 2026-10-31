@@ -78,6 +78,7 @@ import {
   generateShuffledVariants,
 } from './utils/shuffleEngine';
 import {
+  ALL_PHIEU_QM_2025_TEMPLATES,
   buildStandardExportFileName,
   exportAllVariantsZipBundle,
   exportCleanedMasterDocx,
@@ -87,6 +88,7 @@ import {
   exportQrCodesZip,
   exportSingleVariantDocx,
   formatPedagogicalSubject,
+  getPhieuQMInfoBySubject,
   triggerBrowserDownload,
 } from './utils/docxExporter';
 import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
@@ -146,6 +148,7 @@ export default function App() {
     shuffleSubItemsPart2: true,
     qrFormat: 'QM2025',
     embedQrInWord: true,
+    embedPhieuQM2025: true,
     includeSolutionsInExport: false,
     departmentName: 'SỞ GD&ĐT VĨNH LONG',
     schoolName: 'TRƯỜNG THPT MANG THÍT',
@@ -160,6 +163,12 @@ export default function App() {
   });
   const [isConfigCollapsed, setIsConfigCollapsed] = useState<boolean>(false);
   const [showCustomCodeEditor, setShowCustomCodeEditor] = useState<boolean>(false);
+  const [isPhieuQmGalleryOpen, setIsPhieuQmGalleryOpen] = useState<boolean>(false);
+
+  const activePhieuQMInfo = useMemo(
+    () => getPhieuQMInfoBySubject(config.subjectName),
+    [config.subjectName]
+  );
 
   // 2b. State Chế độ Soạn thảo Trực tiếp kiểu MS Word (Word Ribbon + Trang A4)
   const [editorViewMode, setEditorViewMode] = useState<'CARDS_3D' | 'WORD_A4_PAGE'>('CARDS_3D');
@@ -2010,6 +2019,50 @@ export default function App() {
                     </div>
                   </div>
                 )}
+
+                {/* Khung tự động ánh xạ 4 Mẫu Phiếu QM 2025 theo môn học (Tốc độ 0.01s, khóa cứng 16.5cm x 8.2cm) */}
+                <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-50 via-yellow-50/80 to-emerald-50 border border-amber-300 space-y-1.5">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.embedPhieuQM2025 !== false}
+                        onChange={(e) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            embedPhieuQM2025: e.target.checked,
+                          }))
+                        }
+                        className="w-3.5 h-3.5 accent-emerald-600 rounded cursor-pointer shrink-0"
+                      />
+                      <span className="text-[11px] font-black text-amber-950 uppercase tracking-tight">
+                        Chèn Phiếu QM 2025 Trang 1 (.docx)
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsPhieuQmGalleryOpen(true)}
+                      className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-extrabold shadow-2xs cursor-pointer shrink-0"
+                      title="Xem bảng ánh xạ và hình ảnh 4 mẫu phiếu QM 2025 chuẩn"
+                    >
+                      Xem 4 Mẫu Phiếu
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-[11px] bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200">
+                    <div className="truncate">
+                      <span className="font-black text-emerald-800">
+                        {activePhieuQMInfo.standardFileName}
+                      </span>
+                      <span className="text-slate-600 font-semibold ml-1">
+                        ({activePhieuQMInfo.structureDesc})
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
+                      16.5×8.2cm
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -4245,13 +4298,48 @@ export default function App() {
                           </div>
 
                           <div className="flex flex-wrap items-center justify-between gap-2 py-1 border-b border-slate-200">
-                            <div className="font-bold">
-                              Họ và tên thí sinh: ......................................................... Số báo danh: ....................
-                            </div>
+                            {config.embedPhieuQM2025 === false ? (
+                              <div className="font-bold">
+                                Họ và tên thí sinh: ......................................................... Số báo danh: ....................
+                              </div>
+                            ) : (
+                              <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>
+                                  Đã nhúng tự động <strong>{activePhieuQMInfo.standardFileName}</strong> ({activePhieuQMInfo.groupName}: {activePhieuQMInfo.structureDesc}) — Khóa tỷ lệ 16.5cm × 8.2cm
+                                </span>
+                              </div>
+                            )}
                             <div className="px-3 py-0.5 border-2 border-slate-900 font-bold">
-                              MÃ ĐỀ: {activeVariant.examCode}
+                              MÃ ĐỀ THI: {activeVariant.examCode}
                             </div>
                           </div>
+
+                          {/* HIỂN THỊ TRỰC QUAN ẢNH PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 NGAY DƯỚI HEADER TRANG 1 */}
+                          {config.embedPhieuQM2025 !== false && (
+                            <div className="py-2 flex flex-col items-center justify-center border-b-2 border-dashed border-slate-300 bg-slate-50/50 rounded-xl">
+                              <img
+                                src={activePhieuQMInfo.publicUrl}
+                                onError={(e) => {
+                                  const target = e.currentTarget;
+                                  if (target.src !== window.location.origin + activePhieuQMInfo.fallbackUrl) {
+                                    target.src = activePhieuQMInfo.fallbackUrl;
+                                  }
+                                }}
+                                alt={`Phiếu trả lời trắc nghiệm QM 2025 - ${activePhieuQMInfo.groupName}`}
+                                className="w-full max-w-[624px] h-auto object-contain border border-slate-300 rounded-lg shadow-xs bg-white cursor-pointer hover:shadow-md transition-shadow"
+                                onClick={() =>
+                                  setPreviewModalImage({
+                                    src: activePhieuQMInfo.publicUrl,
+                                    caption: `Phiếu trả lời QM 2025 (${activePhieuQMInfo.standardFileName}) — ${activePhieuQMInfo.groupName} (${activePhieuQMInfo.structureDesc}) — Kích thước in Word: 16.5cm × 8.2cm`,
+                                  })
+                                }
+                              />
+                              <span className="mt-1 text-[11px] font-sans font-semibold text-slate-500">
+                                ▲ Ảnh Phiếu QM 2025 ({activePhieuQMInfo.standardFileName} · 16.5cm × 8.2cm) được chèn tự động ngay dưới Header Trang 1 trong file De_{activeVariant.examCode}.docx (Bấm vào ảnh để phóng to)
+                              </span>
+                            </div>
+                          )}
 
                           <div className="space-y-4 text-left">
                             {activeVariant.questions.map((vq, vIdx) => {
@@ -4675,6 +4763,126 @@ export default function App() {
               >
                 Đóng Cửa Sổ
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Xem Bảng Ánh Xạ & 4 Mẫu Phiếu Trả Lời Trắc Nghiệm QM 2025 */}
+      {isPhieuQmGalleryOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setIsPhieuQmGalleryOpen(false)}
+        >
+          <div
+            className="w-full max-w-5xl bg-white rounded-3xl border-4 border-amber-400 p-5 sm:p-6 shadow-2xl space-y-4 my-auto max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-amber-200">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase">
+                  BẢNG ÁNH XẠ 4 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 VÀO ĐẦU TRANG 1 ĐỀ THI WORD (.DOCX)
+                </h3>
+                <p className="text-xs font-semibold text-slate-600">
+                  Tự động nhận diện theo môn học trong 0.01s (0 API token) · Khóa cứng tỷ lệ chuẩn Camera QM: Width = 16.5cm (624px) × Height = 8.2cm (310px)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPhieuQmGalleryOpen(false)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white btn-3d-rose cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border-2 border-amber-300">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-amber-900 text-white font-bold">
+                    <th className="py-2.5 px-3 border-r border-amber-700">Nhóm môn</th>
+                    <th className="py-2.5 px-3 border-r border-amber-700">Tên môn áp dụng</th>
+                    <th className="py-2.5 px-3 border-r border-amber-700">Cấu trúc trắc nghiệm trên phiếu</th>
+                    <th className="py-2.5 px-3">Tên file ảnh chuẩn</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-amber-200">
+                  {ALL_PHIEU_QM_2025_TEMPLATES.map((tpl) => {
+                    const isCurrent = tpl.standardFileName === activePhieuQMInfo.standardFileName;
+                    return (
+                      <tr
+                        key={tpl.groupCode}
+                        className={isCurrent ? 'bg-emerald-50 font-bold' : 'bg-white hover:bg-amber-50/50'}
+                      >
+                        <td className="py-2 px-3 border-r border-amber-200 font-black text-slate-900">
+                          {tpl.groupName}
+                          {isCurrent && (
+                            <span className="ml-2 px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px]">
+                              Đang chọn
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 border-r border-amber-200 text-slate-800">
+                          {tpl.subjectsLabel}
+                        </td>
+                        <td className="py-2 px-3 border-r border-amber-200 text-blue-900 font-semibold">
+                          {tpl.structureDesc}
+                        </td>
+                        <td className="py-2 px-3 font-mono font-black text-amber-900">
+                          {tpl.standardFileName}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {ALL_PHIEU_QM_2025_TEMPLATES.map((tpl) => {
+                const isCurrent = tpl.standardFileName === activePhieuQMInfo.standardFileName;
+                return (
+                  <div
+                    key={`card-${tpl.groupCode}`}
+                    className={`p-3.5 rounded-2xl border-2 space-y-2 ${
+                      isCurrent
+                        ? 'border-emerald-500 bg-emerald-50/50 shadow-md'
+                        : 'border-slate-200 bg-slate-50/70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-black text-slate-900 uppercase">
+                          {tpl.groupName} ({tpl.standardFileName})
+                        </div>
+                        <div className="text-[11px] font-semibold text-slate-600">
+                          {tpl.structureDesc}
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-lg bg-amber-100 border border-amber-300 font-mono text-[10px] font-bold text-amber-900">
+                        16.5cm × 8.2cm
+                      </span>
+                    </div>
+                    <img
+                      src={tpl.publicUrl}
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src !== window.location.origin + tpl.fallbackUrl) {
+                          target.src = tpl.fallbackUrl;
+                        }
+                      }}
+                      alt={tpl.groupName}
+                      className="w-full h-auto object-contain rounded-xl border border-slate-300 bg-white cursor-pointer hover:shadow-md"
+                      onClick={() =>
+                        setPreviewModalImage({
+                          src: tpl.publicUrl,
+                          caption: `${tpl.groupName} (${tpl.standardFileName}) — ${tpl.structureDesc}`,
+                        })
+                      }
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

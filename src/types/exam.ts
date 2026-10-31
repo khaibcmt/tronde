@@ -129,6 +129,7 @@ export interface ShuffleConfig {
   shuffleSubItemsPart2: boolean;
   qrFormat: QRAppFormat;
   embedQrInWord: boolean;
+  embedPhieuQM2025?: boolean; // Tự động chèn Phiếu trả lời trắc nghiệm QM 2025 (16.5cm x 8.2cm) vào đầu Trang 1 của mỗi mã đề Word
   includeSolutionsInExport: boolean; // Tùy chọn xuất kèm lời giải chi tiết trong Word
 
   // Thông tin tiêu đề đề thi & Quốc hiệu Tiêu ngữ
