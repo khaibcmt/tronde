@@ -1247,8 +1247,37 @@ async function collectImagesAndBuildRelMap(questions: ExamQuestion[]): Promise<{
 }
 
 /**
- * Tạo nội dung body XML cho 1 bộ câu hỏi:
+ * Làm sạch tuyệt đối văn bản câu hỏi/phương án khi xuất ĐỀ THI cho học sinh:
+ * Loại bỏ hoàn toàn mọi phần Đáp án, Hướng dẫn chấm, Lời giải, Thang điểm còn sót lại
+ * (Chỉ xuất đáp án ở Bảng đáp án chung).
+ */
+function stripAnswerAndSolutionFromExamText(rawText: string): string {
+  if (!rawText) return '';
+  let cleaned = rawText.trim();
+  const inlineSolIdx = cleaned.search(
+    /(?:^|\r?\n|\s{2,}|\.\s+)(?:[*#•+\-–—\s])*(?:Đáp\s*án(?:\s*tự\s*luận|\s*chi\s*tiết|\s*đúng|\s*là)?|Đáp\s*số|ĐS|Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|HDC|HDG|Thang\s*điểm|Biểu\s*điểm)\s*[:=.\-–—]/i
+  );
+  if (inlineSolIdx >= 0) {
+    cleaned = cleaned.slice(0, inlineSolIdx).trim();
+  }
+  // Xóa các dòng bắt đầu bằng Lời giải / Hướng dẫn chấm / Đáp án nếu nằm ở dòng riêng
+  cleaned = cleaned
+    .split(/\r?\n/)
+    .filter(
+      (line) =>
+        !/^\s*(?:[*#•+\-–—\s])*(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|HDC|HDG|Giải\s*chi\s*tiết|Thang\s*điểm|Biểu\s*điểm)\b/i.test(
+          line.trim()
+        )
+    )
+    .join('\n')
+    .trim();
+  return cleaned || rawText.trim();
+}
+
+/**
+ * Tạo nội dung body XML cho 1 bộ câu hỏi ĐỀ THI:
  * - Bắt buộc dùng Times New Roman 12pt, canh trái (left), tự động co dãn đều đẹp mắt
+ * - TUYỆT ĐỐI KHÔNG XUẤT PHẦN ĐÁP ÁN, HƯỚNG DẪN CHẤM, LỜI GIẢI TRONG ĐỀ THI (Chỉ xuất theo Bảng đáp án chung)
  * - Công thức Toán/Lý xuất dưới dạng chuẩn Office Math (<m:oMath>)
  * - Ký hiệu Hóa học xuất chỉ số trên/dưới (<w:vertAlign>) và mũi tên phản ứng chuẩn
  * - Bảng dữ liệu / bảng ghép đôi xuất dưới dạng Word Table (<w:tbl>) giữ nguyên ô gộp & căn lề
@@ -1257,8 +1286,8 @@ async function collectImagesAndBuildRelMap(questions: ExamQuestion[]): Promise<{
 function buildQuestionsBodyXml(
   questions: ExamQuestion[],
   config: ShuffleConfig,
-  highlightCorrectAnswers: boolean,
-  includeSolutions: boolean = false,
+  _highlightCorrectAnswers: boolean = false,
+  _includeSolutions: boolean = false,
   imageRelMap?: Map<string, string>
 ): string {
   // Chạy Khâu kiểm duyệt cuối (Final Validation Gate) để vá rỗng & bảo toàn 100% công thức
@@ -1308,8 +1337,9 @@ function buildQuestionsBodyXml(
       )
     );
     for (const q of part1) {
+      const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
       blocks.push(
-        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
+        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
           keepNext: false,
           keepLines: false,
           align: 'left',
@@ -1321,28 +1351,20 @@ function buildQuestionsBodyXml(
       appendQuestionTablesAndImages(q);
 
       if (q.options && q.options.length > 0) {
+        const sanitizedOptions = q.options.map((opt) => ({
+          ...opt,
+          text: stripAnswerAndSolutionFromExamText(opt.text),
+        }));
         const layout =
           config.layoutOverride === 'AUTO'
             ? q.computedLayout || '4_ROW_1_COL'
             : config.layoutOverride;
         blocks.push(
           buildPart1OptionsWithTabStopsXml(
-            q.options,
+            sanitizedOptions,
             layout,
-            highlightCorrectAnswers
+            false
           )
-        );
-      }
-      if (includeSolutions && q.explanation) {
-        blocks.push(
-          buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
-            italicBody: true,
-            prefixColorHex: '1D4ED8',
-            align: 'left',
-            spaceBeforeTwips: 20,
-            spaceAfterTwips: 60,
-            fontSizeHalfPt: 24,
-          })
         );
       }
     }
@@ -1364,8 +1386,9 @@ function buildQuestionsBodyXml(
       )
     );
     for (const q of part2) {
+      const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
       blocks.push(
-        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
+        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
           keepNext: false,
           keepLines: false,
           align: 'left',
@@ -1379,31 +1402,19 @@ function buildQuestionsBodyXml(
       const subs = q.subItems || [];
       for (let sIdx = 0; sIdx < subs.length; sIdx++) {
         const sub = subs[sIdx];
-        const isMarked = highlightCorrectAnswers && sub.isTrue;
         const isLast = sIdx === subs.length - 1;
+        const cleanSubText = stripAnswerAndSolutionFromExamText(sub.text);
         blocks.push(
-          buildStandardParagraphXml(`${sub.currentLabel}) `, sub.text, {
+          buildStandardParagraphXml(`${sub.currentLabel}) `, cleanSubText, {
             hangingIndent: false,
             keepNext: false,
             keepLines: false,
-            underlinePrefix: isMarked,
-            underlineBody: isMarked,
-            redBody: isMarked,
+            underlinePrefix: false,
+            underlineBody: false,
+            redBody: false,
             align: 'left',
             spaceBeforeTwips: 0,
             spaceAfterTwips: isLast ? 30 : 20,
-            fontSizeHalfPt: 24,
-          })
-        );
-      }
-      if (includeSolutions && q.explanation) {
-        blocks.push(
-          buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
-            italicBody: true,
-            prefixColorHex: '047857',
-            align: 'left',
-            spaceBeforeTwips: 20,
-            spaceAfterTwips: 60,
             fontSizeHalfPt: 24,
           })
         );
@@ -1427,8 +1438,9 @@ function buildQuestionsBodyXml(
       )
     );
     for (const q of part3) {
+      const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
       blocks.push(
-        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
+        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
           keepNext: false,
           keepLines: false,
           align: 'left',
@@ -1438,30 +1450,6 @@ function buildQuestionsBodyXml(
         })
       );
       appendQuestionTablesAndImages(q);
-
-      if (highlightCorrectAnswers && q.shortAnswer) {
-        blocks.push(
-          buildStandardParagraphXml(`Đáp án: `, q.shortAnswer, {
-            underlineBody: true,
-            redBody: true,
-            align: 'left',
-            spaceAfterTwips: 60,
-            fontSizeHalfPt: 24,
-          })
-        );
-      }
-      if (includeSolutions && q.explanation) {
-        blocks.push(
-          buildStandardParagraphXml(`Lời giải chi tiết: `, q.explanation, {
-            italicBody: true,
-            prefixColorHex: 'B45309',
-            align: 'left',
-            spaceBeforeTwips: 20,
-            spaceAfterTwips: 60,
-            fontSizeHalfPt: 24,
-          })
-        );
-      }
     }
   }
 
@@ -1489,11 +1477,12 @@ function buildQuestionsBodyXml(
     );
 
     for (const q of part4) {
-      const stemLines = q.stemText
+      const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
+      const stemLines = cleanStem
         .split(/\r?\n/)
         .map((l) => l.trim())
         .filter(Boolean);
-      const firstLine = stemLines[0] || q.stemText;
+      const firstLine = stemLines[0] || cleanStem;
 
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, firstLine, {
@@ -1520,35 +1509,6 @@ function buildQuestionsBodyXml(
       }
 
       appendQuestionTablesAndImages(q);
-
-      const essayAns = (q.essayAnswer || q.explanation || q.shortAnswer || '').trim();
-      if ((highlightCorrectAnswers || includeSolutions) && essayAns) {
-        const ansLines = essayAns
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter(Boolean);
-        blocks.push(
-          buildStandardParagraphXml(`Đáp án / Hướng dẫn chấm: `, ansLines[0] || essayAns, {
-            italicBody: false,
-            prefixColorHex: '6D28D9',
-            align: 'left',
-            spaceBeforeTwips: 20,
-            spaceAfterTwips: ansLines.length > 1 ? 15 : 60,
-            fontSizeHalfPt: 24,
-          })
-        );
-        for (let i = 1; i < ansLines.length; i++) {
-          blocks.push(
-            buildStandardParagraphXml('', ansLines[i], {
-              italicBody: false,
-              align: 'left',
-              spaceBeforeTwips: 10,
-              spaceAfterTwips: i === ansLines.length - 1 ? 60 : 15,
-              fontSizeHalfPt: 24,
-            })
-          );
-        }
-      }
     }
   }
 
@@ -1778,16 +1738,14 @@ export async function exportCleanedMasterDocx(
 
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    includeSolutions
-      ? 'ĐỀ GỐC CÓ LỜI GIẢI CHI TIẾT (CHUẨN 2025)'
-      : 'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025',
+    'ĐỀ GỐC ĐÃ CHUẨN HÓA CẤU TRÚC 2025',
     Boolean(phieuQmDrawingXml)
   );
   const bodyQuestionsXml = buildQuestionsBodyXml(
     questions,
     config,
-    true,
-    includeSolutions,
+    false,
+    false,
     imageRelMap
   );
   const fullInnerXml = [headerXml, phieuQmDrawingXml, bodyQuestionsXml]

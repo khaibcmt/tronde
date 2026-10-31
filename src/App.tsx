@@ -4698,9 +4698,9 @@ export default function App() {
                                             <ScientificContentRenderer
                                               text={o.text}
                                               inline
-                                              isCorrect={o.isCorrect}
-                                              isUnderline={o.isUnderline}
-                                              isRed={o.isRed}
+                                              isCorrect={false}
+                                              isUnderline={false}
+                                              isRed={false}
                                             />
                                           </div>
                                         ))}
@@ -4720,21 +4720,12 @@ export default function App() {
                                             <ScientificContentRenderer
                                               text={s.text}
                                               inline
-                                              isCorrect={s.isTrue}
-                                              isUnderline={s.isUnderline}
-                                              isRed={s.isRed}
+                                              isCorrect={false}
+                                              isUnderline={false}
+                                              isRed={false}
                                             />
                                           </div>
                                         ))}
-                                      </div>
-                                    )}
-
-                                    {vq.part === 'PART_3' && (
-                                      <div className="pt-1 text-sm text-slate-800 flex items-center gap-2">
-                                        <span className="font-bold text-slate-900">Đáp số / Trả lời ngắn:</span>
-                                        <span className="inline-block border-b-2 border-dotted border-slate-600 w-44 text-center font-bold text-blue-900">
-                                          {vq.shortAnswer ? vq.shortAnswer : '................................................'}
-                                        </span>
                                       </div>
                                     )}
                                   </div>

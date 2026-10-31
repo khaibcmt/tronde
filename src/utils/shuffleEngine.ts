@@ -338,6 +338,20 @@ export async function generateShuffledVariants(
   const labelsP1: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   const labelsP2: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
 
+  const splitStemAndInlineSolution = (rawStem: string): { cleanStem: string; extractedAns: string } => {
+    const trimmed = (rawStem || '').trim();
+    const match = trimmed.match(
+      /(?:^|\r?\n|\s{2,}|\.\s+)(?:[*#•+\-–—\s])*(?:Đáp\s*án(?:\s*tự\s*luận|\s*chi\s*tiết|\s*đúng)?|Đáp\s*số|ĐS|Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|HDC|HDG|Thang\s*điểm|Biểu\s*điểm)\s*[:=.\-–—]\s*([\s\S]+)$/i
+    );
+    if (match && match.index !== undefined) {
+      return {
+        cleanStem: trimmed.slice(0, match.index).trim(),
+        extractedAns: (match[1] || '').trim(),
+      };
+    }
+    return { cleanStem: trimmed, extractedAns: '' };
+  };
+
   for (const examCode of codes) {
     // 1. Trộn thứ tự câu trong từng phần trắc nghiệm độc lập (Phần IV Tự luận giữ nguyên thứ tự gốc, KHÔNG trộn)
     const p1Questions = config.shuffleQuestions
@@ -353,8 +367,9 @@ export async function generateShuffledVariants(
 
     let continuousCounter = 1;
 
-    // 2. Xử lý Phần I: Đảo phương án A, B, C, D và gán lại nhãn
+    // 2. Xử lý Phần I: Đảo phương án A, B, C, D và gán lại nhãn (Tuyệt đối sạch lời giải/hướng dẫn chấm trong đề thi)
     const processedP1: ExamQuestion[] = p1Questions.map((q, idx) => {
+      const { cleanStem } = splitStemAndInlineSolution(q.stemText);
       const rawOptions = q.options ? [...q.options] : [];
       const shuffledOpts = config.shuffleOptionsPart1
         ? fisherYatesShuffle(rawOptions)
@@ -375,6 +390,7 @@ export async function generateShuffledVariants(
 
       return {
         ...q,
+        stemText: cleanStem || q.stemText,
         displayIndex,
         options: relabeledOpts,
         computedLayout: finalLayout,
@@ -383,6 +399,7 @@ export async function generateShuffledVariants(
 
     // 3. Xử lý Phần II: Đảo 4 ý con a, b, c, d trong nội bộ câu và gán lại nhãn a, b, c, d
     const processedP2: ExamQuestion[] = p2Questions.map((q, idx) => {
+      const { cleanStem } = splitStemAndInlineSolution(q.stemText);
       const rawSubs = q.subItems ? [...q.subItems] : [];
       const shuffledSubs = config.shuffleSubItemsPart2
         ? fisherYatesShuffle(rawSubs)
@@ -399,36 +416,44 @@ export async function generateShuffledVariants(
 
       return {
         ...q,
+        stemText: cleanStem || q.stemText,
         displayIndex,
         subItems: relabeledSubs,
       };
     });
 
-    // 4. Xử lý Phần III: Chỉ đảo thứ tự câu hỏi, giữ nguyên nội dung câu
+    // 4. Xử lý Phần III: Chỉ đảo thứ tự câu hỏi, giữ nguyên nội dung câu hỏi sạch
     const processedP3: ExamQuestion[] = p3Questions.map((q, idx) => {
+      const { cleanStem } = splitStemAndInlineSolution(q.stemText);
       const displayIndex = config.resetNumberingPerPart
         ? idx + 1
         : continuousCounter++;
 
       return {
         ...q,
+        stemText: cleanStem || q.stemText,
         displayIndex,
       };
     });
 
-    // 5. Xử lý Phần IV (Tự luận): Giữ nguyên 100% thứ tự câu hỏi và nội dung gốc, không trộn
+    // 5. Xử lý Phần IV (Tự luận): Giữ nguyên 100% thứ tự câu hỏi, tách sạch phần Đáp án / Hướng dẫn chấm khỏi đề thi để chỉ đưa vào Bảng đáp án chung
     const processedP4: ExamQuestion[] = p4Questions.map((q, idx) => {
+      const { cleanStem, extractedAns } = splitStemAndInlineSolution(q.stemText);
       const displayIndex = config.resetNumberingPerPart
         ? idx + 1
         : continuousCounter++;
+      const mergedAns = (q.essayAnswer || q.explanation || extractedAns || '').trim();
 
       return {
         ...q,
+        stemText: cleanStem || q.stemText,
+        essayAnswer: mergedAns || undefined,
+        explanation: mergedAns || undefined,
         displayIndex,
       };
     });
 
-    // 6. Tổng hợp bảng đáp án cho mã đề này
+    // 6. Tổng hợp bảng đáp án chung cho mã đề này
     const answerKeyP1 = processedP1.map((q) => {
       const correctOpt = (q.options || []).find((o) => o.isCorrect);
       return {

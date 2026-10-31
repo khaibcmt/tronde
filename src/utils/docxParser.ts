@@ -1267,9 +1267,9 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
 
   if (maxCols < 2 || rows.length < 2) return null;
 
-  // Loại trừ các bảng hành chính đầu trang, bảng chứa câu hỏi ("Câu 1.") hoặc bảng chia cột 4 đáp án A, B, C, D
+  // Loại trừ các bảng hành chính đầu trang, bảng chứa câu hỏi ("Câu 1."), bảng đáp án/hướng dẫn chấm/thang điểm hoặc bảng chia cột 4 đáp án A, B, C, D
   if (
-    /(?:SỞ\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|BẢNG\s+ĐÁP\s+ÁN|PHẦN\s+(?:I|II|III|IV)\b|(?:^|\s)(?:Câu|Bài|Question)\s*\d+\s*[.:)])/i.test(
+    /(?:SỞ\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|BẢNG\s+ĐÁP\s+ÁN|HƯỚNG\s+DẪN\s+CHẤM|THANG\s+ĐIỂM|BIỂU\s+ĐIỂM|ĐÁP\s+ÁN\s+CHÍNH\s+THỨC|LỜI\s+GIẢI\s+CHI\s+TIẾT|PHẦN\s+(?:I|II|III|IV)\b|(?:^|\s)(?:Câu|Bài|Question)\s*\d+\s*[.:)])/i.test(
       allCellsCombinedText
     )
   ) {
@@ -2803,12 +2803,27 @@ export function buildQuestionsFromParsedParagraphs(
   let globalIndex = 1;
   let inTrailingAnswerKeySection = false;
   let inIgnoredEssaySection = false;
+  let inQuestionSolutionBlock = false;
   const trailingAnswerKeyPart1 = new Map<number, 'A' | 'B' | 'C' | 'D'>();
+  const trailingAnswerKeyPart4 = new Map<number, string>();
+  let currentTrailingEssayQNum: number | null = null;
 
   const startNewQuestionFromPara = (para: ParsedParagraph, customStemText?: string) => {
-    const stemContent = (customStemText !== undefined ? customStemText : para.fullText).trim();
+    inQuestionSolutionBlock = false;
+    let stemContent = (customStemText !== undefined ? customStemText : para.fullText).trim();
     const initialImages: ExamImageAttachment[] = [...para.images];
     currentQuestionRuns = [...para.runs];
+
+    // Bóc tách sớm nếu trong cùng đoạn mở đầu câu hỏi có dính kèm اللời giải / Hướng dẫn chấm / Đáp án
+    let extractedInlineExplanation = '';
+    const inlineSolMatch = stemContent.match(
+      /(?:\r?\n|\s{2,}|\.\s+)(?:[*#•+\-–—\s])*(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|Giải\s*chi\s*tiết|HDG|HDC|Thang\s*điểm|Biểu\s*điểm)\s*[:=.\-–—]\s*([\s\S]+)$/i
+    );
+    if (inlineSolMatch && inlineSolMatch.index !== undefined) {
+      extractedInlineExplanation = inlineSolMatch[1].trim();
+      stemContent = stemContent.slice(0, inlineSolMatch.index).trim();
+      inQuestionSolutionBlock = true;
+    }
 
     currentQuestion = {
       id: `q-${currentPart.toLowerCase()}-${globalIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2825,7 +2840,8 @@ export function buildQuestionsFromParsedParagraphs(
       subItems: currentPart === 'PART_2' ? [] : undefined,
       shortAnswer: currentPart === 'PART_3' ? '' : undefined,
       shortAnswerDetectedBy: currentPart === 'PART_3' ? 'NONE' : undefined,
-      essayAnswer: currentPart === 'PART_4' ? '' : undefined,
+      essayAnswer: currentPart === 'PART_4' ? extractedInlineExplanation : undefined,
+      explanation: extractedInlineExplanation || undefined,
     };
 
     if (currentPart === 'PART_3') {
@@ -2848,17 +2864,19 @@ export function buildQuestionsFromParsedParagraphs(
       }
     } else if (currentPart === 'PART_4') {
       const essayAnsMatch = stemContent.match(
-        /(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?)\s*[:=]\s*(.+)$/i
+        /(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|HDC|HDG)\s*[:=]\s*([\s\S]+)$/i
       );
-      if (essayAnsMatch) {
+      if (essayAnsMatch && essayAnsMatch.index !== undefined) {
         currentQuestion.essayAnswer = essayAnsMatch[1].trim();
         currentQuestion.explanation = essayAnsMatch[1].trim();
         currentQuestion.stemText = stemContent.slice(0, essayAnsMatch.index).trim();
+        inQuestionSolutionBlock = true;
       }
     }
   };
 
   const pushCurrentQuestion = () => {
+    inQuestionSolutionBlock = false;
     if (!currentQuestion) return;
 
     // Nếu câu hỏi đang ở PART_1 nhưng hoàn toàn không có phương án A,B,C,D mà lại có đủ 4 ý a), b), c), d) -> chuyển câu này sang PART_2
@@ -2919,9 +2937,14 @@ export function buildQuestionsFromParsedParagraphs(
   };
 
   for (const para of paragraphs) {
-    // Nếu đoạn văn mang Bảng dữ liệu hoặc Bảng ghép đôi Cột A - Cột B thuộc câu hỏi hiện tại
+    // Nếu đang ở phần Bảng đáp án / Hướng dẫn chấm cuối đề thì bỏ qua mọi bảng biểu đính kèm
+    if (inTrailingAnswerKeySection && para.attachedTable) {
+      continue;
+    }
+
+    // Nếu đoạn văn mang Bảng dữ liệu hoặc Bảng ghép đôi Cột A - Cột B thuộc câu hỏi hiện tại (và không nằm trong khối lời giải)
     if (para.attachedTable) {
-      if (currentQuestion) {
+      if (currentQuestion && !inQuestionSolutionBlock) {
         currentQuestion.stemTables = [...(currentQuestion.stemTables || []), para.attachedTable];
       }
       continue;
@@ -2931,29 +2954,51 @@ export function buildQuestionsFromParsedParagraphs(
     if (!text && para.images.length === 0) continue;
     const rawJoined = normalizeVietnameseExamText(para.runs.map((r) => r.text).join(''));
 
-    // Nhận diện mục BẢNG ĐÁP ÁN / ĐÁP ÁN & HƯỚNG DẪN GIẢI ở cuối đề thi (sau khi đã đọc xong các câu hỏi)
-    if (
-      questions.length >= 1 &&
-      /^(?:BẢNG\s+ĐÁP\s+ÁN|ĐÁP\s+ÁN\s+VÀ\s+HƯỚNG\s+DẪN|HƯỚNG\s+DẪN\s+CHẤM\s+VÀ\s+ĐÁP\s+ÁN|ĐÁP\s+ÁN\s+THAM\s+KHẢO|-----\s*HẾT\s*-----)/i.test(
+    // Nhận diện mục HẾT / BẢNG ĐÁP ÁN / ĐÁP ÁN & HƯỚNG DẪN CHẤM / LỜI GIẢI CHI TIẾT ở cuối đề thi
+    const isEndMarkerLine = /^(?:[-–—_*=~•\s]{2,}\s*)?HẾT(?:\s*[-–—_*=~•.!]*|\s*\(.*\))?$/i.test(text);
+    const isTrailingAnswerHeading =
+      /^(?:[*#•+\-–—\s])*(?:BẢNG\s+ĐÁP\s+ÁN|ĐÁP\s+ÁN(?:\s*[-–—&/]\s*|\s+VÀ\s+|\s+)(?:HƯỚNG\s+DẪN(?:\s+CHẤM|\s+GIẢI)?|THANG\s+ĐIỂM|BIỂU\s+ĐIỂM|CHI\s+TIẾT|THAM\s+KHẢO|ĐỀ\s+THI|CHÍNH\s+THỨC)|HƯỚNG\s+DẪN\s+CHẤM(?:\s*[-–—&/]\s*|\s+VÀ\s+|\s+)?(?:ĐÁP\s+ÁN|THANG\s+ĐIỂM|BIỂU\s+ĐIỂM|CHI\s+TIẾT|TỰ\s+LUẬN|TRẮC\s+NGHIỆM)?|HƯỚNG\s+DẪN\s+GIẢI(?:\s+CHI\s+TIẾT)?|LỜI\s+GIẢI\s+CHI\s+TIẾT|THANG\s+ĐIỂM\s+VÀ\s+ĐÁP\s+ÁN|BIỂU\s+ĐIỂM\s+CHẤM|ĐÁP\s+ÁN\s*[:.]?\s*$)/i.test(
         text
-      )
-    ) {
+      );
+
+    if ((questions.length >= 1 || currentQuestion) && (isEndMarkerLine || isTrailingAnswerHeading)) {
       pushCurrentQuestion();
-      if (!/-----\s*HẾT\s*-----/i.test(text)) {
-        inTrailingAnswerKeySection = true;
-      }
+      inTrailingAnswerKeySection = true;
       continue;
     }
 
     if (inTrailingAnswerKeySection) {
-      // Quét các cặp đáp án dạng "1.A", "1-A", "1: A", "Câu 1: A" trong Bảng đáp án cuối đề
+      // 1. Quét các cặp đáp án trắc nghiệm dạng "1.A", "1-A", "1: A", "Câu 1: A" trong Bảng đáp án cuối đề
       const pairRegex = /(?:Câu\s*)?(\d{1,3})\s*[.:\-–—)\s]\s*([A-D])\b/gi;
       let pm: RegExpExecArray | null;
+      let matchedMcq = false;
       while ((pm = pairRegex.exec(text)) !== null) {
         const qNum = parseInt(pm[1], 10);
         const ansLetter = pm[2].toUpperCase() as 'A' | 'B' | 'C' | 'D';
         if (qNum >= 1 && qNum <= 200 && !trailingAnswerKeyPart1.has(qNum)) {
           trailingAnswerKeyPart1.set(qNum, ansLetter);
+          matchedMcq = true;
+        }
+      }
+
+      // 2. Nếu phần đáp án cuối đề có hướng dẫn chấm cho các câu Tự luận (Câu 1: ..., Câu 2: ...) thì gom vào trailingAnswerKeyPart4 để chỉ xuất ở Bảng đáp án chung
+      if (!matchedMcq && !isEndMarkerLine && !isTrailingAnswerHeading && !isAdministrativeExamHeader(text)) {
+        const trailingEssayMatch = text.match(
+          /^(?:[*#•+\-–—\s])*(?:Câu|Bài)\s*(\d{1,2})\s*(?:\([^)]{1,25}\))?\s*[.:\-–—)]\s*(.*)$/i
+        );
+        if (trailingEssayMatch) {
+          currentTrailingEssayQNum = parseInt(trailingEssayMatch[1], 10);
+          const body = trailingEssayMatch[2].trim();
+          if (body) {
+            const prev = trailingAnswerKeyPart4.get(currentTrailingEssayQNum) || '';
+            trailingAnswerKeyPart4.set(currentTrailingEssayQNum, prev ? `${prev}\n${body}` : body);
+          }
+        } else if (
+          currentTrailingEssayQNum !== null &&
+          !/^(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)|TỰ\s+LUẬN)/i.test(text)
+        ) {
+          const prev = trailingAnswerKeyPart4.get(currentTrailingEssayQNum) || '';
+          trailingAnswerKeyPart4.set(currentTrailingEssayQNum, prev ? `${prev}\n${text}` : text);
         }
       }
       continue;
@@ -3062,22 +3107,60 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
 
-    // Kiểm tra dòng Lời giải / Hướng dẫn giải TRƯỚC khi tách phương án để tránh lời giải chứa "a) Đúng... b) Sai..." làm hỏng câu hỏi
+    // Kiểm tra dòng Lời giải / Hướng dẫn giải / Hướng dẫn chấm / Đáp án TRƯỚC khi tách phương án để tuyệt đối không đưa lời giải vào đề thi
     const expMatch = text.match(
-      /^(?:[*#•+\-–—\s])*(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*giải|\s*chấm)?|Giải\s*chi\s*tiết|Đáp\s*án(?:\s*tự\s*luận)?)\s*[:=.-]\s*(.+)$/i
+      /^(?:[*#•+\-–—\s])*(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*giải|\s*chấm)?|Giải\s*chi\s*tiết|HDG|HDC|Đáp\s*án(?:\s*tự\s*luận|\s*chi\s*tiết|\s*đúng)?|Thang\s*điểm|Biểu\s*điểm)(?:\s*[:=.\-–—]\s*(.*))?$/i
     );
-    if (expMatch && currentQuestion && (currentQuestion.part !== 'PART_3' || !/^[-\d.,]+$/.test(expMatch[1].trim()))) {
+    if (expMatch && currentQuestion) {
+      const expBody = (expMatch[1] || '').trim();
+      if (currentQuestion.part === 'PART_3' && expBody && /^[-\d.,]+$/.test(expBody)) {
+        currentQuestion.shortAnswer = expBody;
+        currentQuestion.shortAnswerDetectedBy = 'KEYWORD';
+      } else if (currentQuestion.part === 'PART_1' && /^[A-D]$/i.test(expBody) && currentQuestion.options) {
+        const target = expBody.toUpperCase() as 'A' | 'B' | 'C' | 'D';
+        currentQuestion.options = currentQuestion.options.map((o) => ({
+          ...o,
+          isCorrect: o.originalLabel === target,
+          isUnderline: o.originalLabel === target,
+          isRed: o.originalLabel === target,
+        }));
+      }
+      inQuestionSolutionBlock = true;
+      if (expBody) {
+        currentQuestion.explanation = currentQuestion.explanation
+          ? `${currentQuestion.explanation}\n${expBody}`
+          : expBody;
+        if (currentQuestion.part === 'PART_4') {
+          currentQuestion.essayAnswer = currentQuestion.essayAnswer
+            ? `${currentQuestion.essayAnswer}\n${expBody}`
+            : expBody;
+        }
+      }
+      continue;
+    }
+
+    // Nếu đang nằm trong khối Lời giải / Hướng dẫn chấm của câu hỏi hiện tại (nhiều dòng liên tiếp trước khi sang Câu mới)
+    // thì tuyệt đối KHÔNG mở câu hỏi giả mới và KHÔNG cộng vào stemText của đề thi!
+    if (inQuestionSolutionBlock && currentQuestion) {
       currentQuestion.explanation = currentQuestion.explanation
-        ? `${currentQuestion.explanation}\n${expMatch[1].trim()}`
-        : expMatch[1].trim();
+        ? `${currentQuestion.explanation}\n${text}`
+        : text;
       if (currentQuestion.part === 'PART_4') {
         currentQuestion.essayAnswer = currentQuestion.essayAnswer
-          ? `${currentQuestion.essayAnswer}\n${expMatch[1].trim()}`
-          : expMatch[1].trim();
+          ? `${currentQuestion.essayAnswer}\n${text}`
+          : text;
       }
-      if (para.images.length > 0) {
-        currentQuestion.hasImage = true;
-        currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+      if (currentQuestion.part === 'PART_1' && currentQuestion.options) {
+        const chooseMatch = text.match(/(?:Chọn(?:\s+đáp\s+án)?|Đáp\s+án(?:\s+đúng)?(?:\s+là)?)\s*[:=]?\s*([A-D])\b/i);
+        if (chooseMatch && !currentQuestion.options.some((o) => o.isCorrect)) {
+          const target = chooseMatch[1].toUpperCase() as 'A' | 'B' | 'C' | 'D';
+          currentQuestion.options = currentQuestion.options.map((o) => ({
+            ...o,
+            isCorrect: o.originalLabel === target,
+            isUnderline: o.originalLabel === target,
+            isRed: o.originalLabel === target,
+          }));
+        }
       }
       continue;
     }
@@ -3096,9 +3179,10 @@ export function buildQuestionsFromParsedParagraphs(
     if (
       currentQuestion &&
       currentHasCompleteOptions &&
+      !inQuestionSolutionBlock &&
       optExtraction.items.length === 0 &&
       subExtraction.items.length === 0 &&
-      !/^(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn)/i.test(text) &&
+      !/^(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn|HDG|HDC|Giải\b|Chọn\s+[A-D]\b)/i.test(text) &&
       !isAdministrativeExamHeader(text)
     ) {
       pushCurrentQuestion();
@@ -3266,16 +3350,22 @@ export function buildQuestionsFromParsedParagraphs(
       }
     } else if (currentQuestion.part === 'PART_4') {
       const essayAnsLine = text.match(
-        /^(?:[*#•+\-–—\s])*(?:Đáp\s*án|Đáp\s*số|ĐS|Kết\s*quả|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|Giải)\s*[:=.-]\s*(.*)$/i
+        /^(?:[*#•+\-–—\s])*(?:Đáp\s*án|Đáp\s*số|ĐS|Kết\s*quả|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|HDC|HDG|Giải|Thang\s*điểm|Biểu\s*điểm)(?:\s*[:=.\-–—]\s*(.*))?$/i
       );
       if (essayAnsLine) {
-        const ansBody = essayAnsLine[1].trim();
+        inQuestionSolutionBlock = true;
+        const ansBody = (essayAnsLine[1] || '').trim();
+        if (ansBody) {
+          currentQuestion.essayAnswer = currentQuestion.essayAnswer
+            ? `${currentQuestion.essayAnswer}\n${ansBody}`.trim()
+            : ansBody;
+          currentQuestion.explanation = currentQuestion.essayAnswer;
+        }
+      } else if (inQuestionSolutionBlock || (currentQuestion.essayAnswer !== undefined && currentQuestion.essayAnswer.length > 0)) {
+        inQuestionSolutionBlock = true;
         currentQuestion.essayAnswer = currentQuestion.essayAnswer
-          ? `${currentQuestion.essayAnswer}\n${ansBody}`.trim()
-          : ansBody;
-        currentQuestion.explanation = currentQuestion.essayAnswer;
-      } else if (currentQuestion.essayAnswer !== undefined && currentQuestion.essayAnswer.length > 0) {
-        currentQuestion.essayAnswer = `${currentQuestion.essayAnswer}\n${text}`;
+          ? `${currentQuestion.essayAnswer}\n${text}`
+          : text;
         currentQuestion.explanation = currentQuestion.essayAnswer;
       } else {
         currentQuestion.stemText += (currentQuestion.stemText ? '\n' : '') + text;
@@ -3299,6 +3389,21 @@ export function buildQuestionsFromParsedParagraphs(
             isUnderline: o.originalLabel === mappedAns,
             isRed: o.originalLabel === mappedAns,
           }));
+        }
+      }
+    }
+  }
+
+  // Nếu tệp có HƯỚNG DẪN CHẤM TỰ LUẬN ở cuối đề, tự động gán vào essayAnswer của các câu Phần IV (chỉ dùng cho Bảng đáp án chung)
+  if (trailingAnswerKeyPart4.size > 0) {
+    let p4Idx = 0;
+    for (const q of questions) {
+      if (q.part === 'PART_4') {
+        p4Idx++;
+        const mappedEssayAns = trailingAnswerKeyPart4.get(p4Idx);
+        if (mappedEssayAns && !q.essayAnswer?.trim()) {
+          q.essayAnswer = mappedEssayAns.trim();
+          q.explanation = mappedEssayAns.trim();
         }
       }
     }
