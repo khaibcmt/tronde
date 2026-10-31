@@ -411,7 +411,7 @@ function buildExamNationalHeaderTableXml(
       spaceAfterTwips: 60,
       fontSizeHalfPt: 24,
     }),
-    buildStandardParagraphXml(config.examSubtitle || 'ĐỀ CHÍNH THỨC', '', {
+    buildStandardParagraphXml(config.examSubtitle || '( Đề chính thức )', '', {
       align: 'center',
       spaceAfterTwips: 40,
       fontSizeHalfPt: 24,

@@ -155,7 +155,7 @@ export default function App() {
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
     nationalMotto: 'Độc lập - Tự do - Hạnh phúc',
     examTitle: 'KIỂM TRA CUỐI KÌ I',
-    examSubtitle: 'ĐỀ KIỂM TRA ĐỊNH KỲ CHUẨN CẤU TRÚC 2025',
+    examSubtitle: '( Đề chính thức )',
     subjectName: 'SINH HỌC',
     gradeLevel: 'Lớp 12',
     schoolYear: `Năm học ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
@@ -511,7 +511,7 @@ export default function App() {
     setConfig((prev) => ({
       ...prev,
       examTitle: 'KIỂM TRA CUỐI KÌ I',
-      examSubtitle: 'ĐỀ KIỂM TRA ĐỊNH KỲ CHUẨN CẤU TRÚC 2025',
+      examSubtitle: '( Đề chính thức )',
       subjectName: 'SINH HỌC',
       gradeLevel: 'Lớp 12',
       durationMinutes: 50,
