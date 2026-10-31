@@ -2386,110 +2386,236 @@ export function triggerBrowserDownload(blob: Blob, filename: string): void {
 }
 
 /**
- * Xuất toàn bộ Vai trò, Tính năng và Hướng dẫn sử dụng hệ thống ra tệp Word (.docx) chuẩn đẹp
+ * Xuất toàn bộ Vai trò, 12 Tính năng (mỗi tính năng 1 khung viền màu đồng bộ riêng biệt) và Hướng dẫn sử dụng hệ thống ra tệp Word (.docx) chuẩn đẹp
  */
 export async function exportUserManualDocx(features: any[] = []): Promise<Blob> {
   const zip = new JSZip();
 
   const titlePara = `<w:p>
-    <w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="80"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E3A8A"/><w:sz w:val="36"/><w:szCs w:val="36"/></w:rPr><w:t>TÀI LIỆU HƯỚNG DẪN SỬ DỤNG &amp; ĐẶC TẢ TÍNH NĂNG</w:t></w:r>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="60"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E3A8A"/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr><w:t>CẨM NANG 12 TÍNH NĂNG &amp; HƯỚNG DẪN SỬ DỤNG TOÀN DIỆN</w:t></w:r>
   </w:p>
   <w:p>
-    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="160"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0284C7"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr><w:t>HỆ THỐNG XỬ LÝ, BIÊN TẬP VÀ TRỘN ĐỀ THI EDUMIX 2025</w:t></w:r>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="120"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0284C7"/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr><w:t>HỆ THỐNG XỬ LÝ, BIÊN TẬP VÀ TRỘN ĐỀ THI EDUMIX 2025</w:t></w:r>
   </w:p>
   <w:p>
-    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="240"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:color w:val="475569"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Tác giả: Thầy Hồ Tấn Khải — Giáo viên Trường THPT Mang Thít, Sở GD&amp;ĐT Vĩnh Long</w:t></w:r>
+    <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="200"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:color w:val="334155"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>Tác giả: Thầy Hồ Tấn Khải — Giáo viên Trường THPT Mang Thít, Sở GD&amp;ĐT Vĩnh Long (ĐT/Zalo: 0939580982)</w:t></w:r>
   </w:p>`;
 
   const h1 = (title: string, color: string = '1E3A8A') => `<w:p>
-    <w:pPr><w:jc w:val="left"/><w:spacing w:before="240" w:after="100"/></w:pPr>
+    <w:pPr><w:jc w:val="left"/><w:spacing w:before="220" w:after="100"/></w:pPr>
     <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="${color}"/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr><w:t>${escapeXml(title)}</w:t></w:r>
   </w:p>`;
 
-  const h2 = (title: string, color: string = '0369A1') => `<w:p>
-    <w:pPr><w:jc w:val="left"/><w:spacing w:before="160" w:after="60"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="${color}"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(title)}</w:t></w:r>
-  </w:p>`;
-
-  const p = (text: string, isBold: boolean = false, isItalic: boolean = false) => `<w:p>
+  const p = (text: string, isBold: boolean = false) => `<w:p>
     <w:pPr><w:jc w:val="both"/><w:spacing w:line="276" w:lineRule="auto" w:before="40" w:after="60"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>${isBold ? '<w:b/>' : ''}${isItalic ? '<w:i/>' : ''}<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>${isBold ? '<w:b/>' : ''}<w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r>
   </w:p>`;
 
-  const bullet = (title: string, desc: string) => `<w:p>
-    <w:pPr><w:jc w:val="both"/><w:spacing w:before="30" w:after="50"/><w:ind w:left="360" w:hanging="240"/></w:pPr>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0F172A"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>• ${escapeXml(title)}: </w:t></w:r>
-    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(desc)}</w:t></w:r>
+  const bullet = (title: string, desc: string, color: string = '0F172A') => `<w:p>
+    <w:pPr><w:jc w:val="both"/><w:spacing w:before="30" w:after="40"/><w:ind w:left="320" w:hanging="200"/></w:pPr>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="${color}"/><w:sz w:val="23"/><w:szCs w:val="23"/></w:rPr><w:t>• ${escapeXml(title)}: </w:t></w:r>
+    <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="23"/><w:szCs w:val="23"/></w:rPr><w:t>${escapeXml(desc)}</w:t></w:r>
   </w:p>`;
+
+  /**
+   * Tạo khung có viền màu đồng bộ trong Word cho từng tính năng
+   */
+  const buildColoredFeatureFrameXml = (
+    code: string,
+    title: string,
+    borderColor: string,
+    bgTint: string,
+    bullets: Array<[string, string]>,
+    specText: string
+  ) => {
+    const bulletXml = bullets.map(([bTitle, bDesc]) => bullet(bTitle, bDesc, borderColor)).join('\n');
+    return `<w:tbl>
+      <w:tblPr>
+        <w:tblW w:w="5000" w:type="pct"/>
+        <w:tblBorders>
+          <w:top w:val="single" w:sz="12" w:space="0" w:color="${borderColor}"/>
+          <w:left w:val="single" w:sz="12" w:space="0" w:color="${borderColor}"/>
+          <w:bottom w:val="single" w:sz="12" w:space="0" w:color="${borderColor}"/>
+          <w:right w:val="single" w:sz="12" w:space="0" w:color="${borderColor}"/>
+          <w:insideH w:val="single" w:sz="6" w:space="0" w:color="${borderColor}"/>
+        </w:tblBorders>
+        <w:tblCellMar><w:top w:w="100" w:type="dxa"/><w:left w:w="160" w:type="dxa"/><w:bottom w:w="100" w:type="dxa"/><w:right w:w="160" w:type="dxa"/></w:tblCellMar>
+      </w:tblPr>
+      <w:tr>
+        <w:tc>
+          <w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${borderColor}"/></w:tcPr>
+          <w:p>
+            <w:pPr><w:jc w:val="left"/><w:spacing w:before="20" w:after="20"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="FFFFFF"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${escapeXml(code)} — ${escapeXml(title)}</w:t></w:r>
+          </w:p>
+        </w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc>
+          <w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${bgTint}"/></w:tcPr>
+          ${bulletXml}
+          <w:p>
+            <w:pPr><w:jc w:val="both"/><w:spacing w:before="60" w:after="20"/></w:pPr>
+            <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:i/><w:color w:val="${borderColor}"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr><w:t>[Thông số kỹ thuật]: ${escapeXml(specText)}</w:t></w:r>
+          </w:p>
+        </w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:pPr><w:spacing w:before="60" w:after="60"/></w:pPr></w:p>`;
+  };
+
+  const twelveFeatureFrames = [
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 01 (KHUNG XANH LAM)',
+      'Bộ 3 Mã QR Chấm Thi Chuẩn Gốc 100% (1. QM 2025 · 2. TNMaker · 3. Azota)',
+      '1D4ED8',
+      'EFF6FF',
+      [
+        ['3 Mã QR Độc Lập Chuẩn Gốc', 'Sinh đồng thời 3 mã QR đúng chuẩn JSON/chuỗi gốc của từng phần mềm chấm thi QM 2025, TNMaker và Azota.'],
+        ['QR Tổng Hợp Đa Mã Đề & QR Từng Mã Đề', 'Quét 1 lần nạp đủ tất cả các mã đề (101, 102, 103, 104...) hoặc quét riêng từng mã đề.'],
+        ['Nhúng Word Tự Động', 'Tự động nhúng cả 3 khung mã QR vào trang cuối file Word Bảng Đáp Án.'],
+      ],
+      'JSON Payload gốc QM 2025, TNMaker, Azota · Độ tương phản 100% Đen/Trắng chuẩn Camera AI.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 02 (KHUNG XANH NGỌC LỤC BẢO)',
+      'Xuất 3 File Excel (.xlsx) Đáp Án Chuẩn Cho QM 2025, TNMaker & Azota',
+      '047857',
+      'ECFDF5',
+      [
+        ['3 File Excel .xlsx Chuyên Biệt', 'Tương thích 100% với tính năng Nhập đáp án từ Excel trên QM 2025, TNMaker và Azota.'],
+        ['Đầy Đủ 3 Phần Thi', 'Gồm Phần I (ABCD), Phần II (tách 4 ý a, b, c, d chuẩn Đ/S hoặc T/F) và Phần III (chuẩn hóa dấu thập phân).'],
+      ],
+      'Chuẩn OpenXML Spreadsheet (.xlsx) · Tải lẻ từng file hoặc đóng gói tự động trong tệp .zip.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 03 (KHUNG TÍM THẠCH ANH)',
+      'Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser) Word & PDF Scan',
+      '6D28D9',
+      'F5F3FF',
+      [
+        ['Đa Kênh Nhận Diện Đáp Án', 'Nhận diện tự động Gạch chân (<w:u>), Tô chữ màu đỏ (<w:color>) và Bảng đáp án ở cuối đề thi.'],
+        ['Bóc Tách 3 Phần Chuẩn 2025', 'Tự động chia Phần I (4 lựa chọn), Phần II (Đúng/Sai 4 ý a, b, c, d) và Phần III (Trả lời ngắn).'],
+      ],
+      'Quét đồng thời <w:t>, <m:oMath>, MathType OLE và bản chụp/scan PDF.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 04 (KHUNG VÀNG HỔ PHÁCH)',
+      'Bộ Hiển Thị & Bảo Toàn Công Thức Toán - Lý - Hóa - Sinh Đa Tầng',
+      'B45309',
+      'FFFBEB',
+      [
+        ['Toán Học & Vật Lý', 'Hiển thị sắc nét phân số, căn thức, tích phân, vectơ, hệ phương trình bằng KaTeX & Office Math.'],
+        ['Hóa Học & Sinh Học', 'Bảo toàn chỉ số trên/dưới (H₂SO₄, Fe³⁺), mũi tên phản ứng hóa học, kiểu gene (AaBb, XᴬXᵃ) và phép lai.'],
+      ],
+      'KaTeX Engine + Subscript/Superscript Parser + OpenXML Math Synthesizer.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 05 (KHUNG ĐỎ HỒNG NGỌC)',
+      'Động Cơ Xử Lý Hình Ảnh, Sơ Đồ Phả Hệ, Đồ Thị 300 DPI Không Mất Ảnh Khi Trộn',
+      'BE123C',
+      'FFF1F2',
+      [
+        ['Không Bao Giờ Mất Ảnh Khi Trộn', 'Sao chép sâu (Deep Clone) mọi đồ thị, hình học không gian, sơ đồ phả hệ đi theo đúng câu hỏi sang mọi mã đề 101-104.'],
+        ['Khóa Liền Kề Trong Word', 'Xuất ảnh In Line with Text căn giữa trang và khóa <w:keepNext/> chống nhảy trang.'],
+      ],
+      'Hỗ trợ PNG, JPEG, SVG Vector 300 DPI · Tự động khử nền xám bản chụp.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 06 (KHUNG XANH CỔ VỊT)',
+      'Trình Biên Tập Trực Tiếp (Live In-App Editor) & Tự Động Sửa Lỗi 1 Chạm',
+      '0F766E',
+      'F0FDFA',
+      [
+        ['Phát Hiện Lỗi Thời Gian Thực', 'Tự động chỉ rõ câu thiếu đáp án, thừa đáp án hoặc thiếu mệnh đề.'],
+        ['Tự Động Sửa Nhanh Tất Cả Lỗi', 'Chuẩn hóa toàn bộ đề thi chỉ bằng 1 cú nhấp chuột để mở khóa nút Trộn Đề Ngay.'],
+      ],
+      'Đồng bộ cây dữ liệu AST tức thời ngay trên trình duyệt.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 07 (KHUNG XANH CHÀM SÂU)',
+      'Khung Chỉnh Sửa Văn Bản Word Gốc & Dán Nhanh Trực Tiếp (Clipboard HTML)',
+      '4338CA',
+      'EEF2FF',
+      [
+        ['Dán Nhanh Ctrl+V Từ Word', 'Giữ nguyên định dạng gạch chân và chữ đỏ khi copy-paste trực tiếp từ Microsoft Word.'],
+        ['Sửa Văn Bản Nguồn Toàn Đề', 'Chỉnh sửa hàng loạt câu hỏi và biên dịch lại tức thì mà không làm mất hình ảnh đã gắn.'],
+      ],
+      'HTML Clipboard Rich-Text Parser + Live Source Re-compiler.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 08 (KHUNG HỒNG TÍM AI)',
+      'AI Gemini Studio — Cụm 4 Luồng Chuyên Gia Tạo Đề Tương Đương Song Song',
+      'A21CAF',
+      'FDF4FF',
+      [
+        ['Tạo Đồng Thời 4 Đề Mới', 'Nhân bản 4 mã đề tương đương (201, 202, 203, 204) giữ nguyên ma trận nhận thức và tự động giải lại đáp số.'],
+        ['Bảo Mật Zero-Trace', 'Tự động ẩn danh thông tin trường/kỳ thi và xóa bộ nhớ tạm sau khi tải đề.'],
+      ],
+      '4-Channel Parallel Gemini Engine + Nạp thẳng đề AI vào bộ trộn đề 1 chạm.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 09 (KHUNG XANH DA TRỜI)',
+      'Khung Ma Trận & Bản Đặc Tả Chuẩn Công Văn 7991/BGDĐT-GDTrH',
+      '0369A1',
+      'F0F9FF',
+      [
+        ['Phụ Lục 1 & Phụ Lục 2 Chuẩn Bộ GD&ĐT', 'Phân bổ đúng tỷ lệ: Nhận biết 40% (4,0đ) — Thông hiểu 30% (3,0đ) — Vận dụng 30% (3,0đ).'],
+        ['Xuất File Word Trình Ký BGH', 'Đầy đủ Quốc hiệu Tiêu ngữ và khung chữ ký Hiệu trưởng — Tổ trưởng — Giáo viên ra đề.'],
+      ],
+      'Theo đúng mẫu Công văn số 7991/BGDĐT-GDTrH ngày 20/12/2024.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 10 (KHUNG CAM NĂNG LƯỢNG)',
+      'Bảng Ma Trận Đáp Án Đối Chiếu Đa Mã Đề Gọn Trên 1 Trang A4',
+      'C2410C',
+      'FFF7ED',
+      [
+        ['Tiết Kiệm 70% Diện Tích Giấy In', 'Xếp các mã đề (101, 102, 103, 104...) thành các cột song song đối chiếu theo từng câu hỏi.'],
+        ['Chống Rối Mắt Tuyệt Đối', 'Phân màu rõ ràng các phương án A/B/C/D, chuỗi Đ-S-Đ-S và đáp số trả lời ngắn.'],
+      ],
+      'Cross-referencing Matrix Grid Layout vừa khít 1 trang A4.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 11 (KHUNG XANH LÁ MẠ)',
+      'Kho Đề Mẫu Chuẩn 2025 (Đề Sinh Học 12 Cuối HK1 & Đề Tổng Hợp KHTN)',
+      '4D7C0F',
+      'F7FEE7',
+      [
+        ['Đề Mẫu Sinh Học 12 Cuối HK1 (28 Câu)', 'Đầy đủ sơ đồ DNA, Operon Lac, bài tập đột biến, quy luật Mendel, liên kết giới tính, ưu thế lai và 2 sơ đồ phả hệ.'],
+        ['Đề Mẫu Tổng Hợp Toán - Lý - Hóa - Sinh', 'Đầy đủ đồ thị hàm số, hình học không gian, mạch điện và phản ứng hóa học.'],
+      ],
+      'Đính kèm sẵn 4 sơ đồ Vector SVG 300 DPI + Sạch 100% lỗi.'
+    ),
+    buildColoredFeatureFrameXml(
+      'TÍNH NĂNG 12 (KHUNG XANH BĂNG)',
+      'Đóng Gói Trọn Bộ (.zip) Đồng Nhất Quy Chuẩn Đặt Tên Tệp Khảo Thí',
+      '0E7490',
+      'ECFEFF',
+      [
+        ['Quy Chuẩn Tên File Đồng Nhất', 'Tự động đặt tên: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] - [Hậu tố].docx/.xlsx/.png/.zip.'],
+        ['Đầy Đủ 6 Thành Phần Trong 1 Gói .zip', 'Gồm bộ đề học sinh, đề gốc chuẩn, bảng đáp án A4 nhúng 3 QR, ma trận CV 7991, bộ ảnh 3 QR và 3 file Excel .xlsx.'],
+      ],
+      'Font Times New Roman 12pt chuẩn in ấn nhà trường.'
+    ),
+  ];
 
   const contentBlocks = [
     titlePara,
     h1('PHẦN I. VAI TRÒ VÀ SỨ MỆNH CỐT LÕI CỦA HỆ THỐNG'),
-    p('Hệ thống EduMix 2025 là Bộ vi xử lý, phân tích, biên tập và chuẩn hóa tài liệu đề thi cấp độ chuyên sâu (Deep Exam Parser & Word XML Synthesizer), được xây dựng riêng cho giáo viên Việt Nam nhằm phục vụ Chương trình Giáo dục Phổ thông 2018 và Kỳ thi tốt nghiệp THPT theo định hướng mới.'),
-    bullet('Tiếp nhận đa định dạng', 'Xử lý hoàn hảo tệp Word (.docx, .doc), PDF, bản chụp/scan, ảnh sơ đồ đồ thị và cả văn bản dán trực tiếp từ bộ nhớ tạm (HTML Clipboard).'),
-    bullet('Bảo toàn 100% công thức', 'Chống nuốt chữ, chống rỗng đáp án (Strict Non-Empty Rule). Bảo toàn toàn bộ công thức Toán học, Vật lý, Hóa học (chỉ số trên/dưới, mũi tên phản ứng có điều kiện) và Sinh học (phả hệ, phép lai, chuỗi thức ăn).'),
-    bullet('Chuẩn hóa đầu ra Word (.docx)', 'Xuất tệp Word chuẩn khảo thí với font Times New Roman 12pt, căn trái đều, bảng ẩn không viền chống xô lệch, khóa liền kề ảnh và tự động đánh số trang kèm số mã đề.'),
-    bullet('Vận hành an toàn Client-side', 'Toàn bộ luồng giải nén XML và trộn đề diễn ra 100% ngay trên trình duyệt máy tính của thầy cô, không lưu giữ dữ liệu đề thi lên máy chủ (Zero-Trace Verified).'),
-
-    h1('PHẦN II. TỔNG QUAN 8 HỆ THỐNG TÍNH NĂNG VÀ CÔNG NGHỆ ĐỘT PHÁ'),
-    h2('1. Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser)'),
-    bullet('Quét song song Text và Equation', 'Đọc đồng thời thẻ văn bản <w:t>, công thức Office Math Markup (<m:oMath>), MathType OLE và ảnh vector EMF/WMF.'),
-    bullet('Đa kênh nhận diện đáp án đúng', 'Tự động nhận diện đáp án đúng bằng cả 3 phương thức: Gạch chân (<w:u>), Tô màu đỏ (<w:color>) và Bảng đáp án tổng hợp ở cuối đề thi.'),
-    bullet('Nhận diện cấu trúc 3 phần chuẩn 2025', 'Tự động phân nhóm chuẩn xác Phần I (4 lựa chọn A, B, C, D), Phần II (Đúng/Sai 4 ý a, b, c, d) và Phần III (Trả lời ngắn).'),
-
-    h2('2. Trình Biên Tập Trực Tiếp 1 Chạm (Live In-App Editor)'),
-    bullet('Hệ thống tự động phát hiện lỗi', 'Bộ Validator tự động quét và chỉ rõ các câu bị thiếu/thừa đáp án, thiếu phương án lựa chọn hoặc chưa có đáp số Phần III.'),
-    bullet('Nút "Sửa ngay" 1 chạm', 'Tự động cuộn màn hình đến chính xác vị trí câu bị lỗi để giáo viên click chọn đáp án A/B/C/D hoặc gạt Đúng/Sai tức thì.'),
-    bullet('Nút "Tự Động Sửa Nhanh Tất Cả Lỗi"', 'Tự động chuẩn hóa toàn bộ đề chỉ bằng một thao tác duy nhất để mở khóa nút [Trộn đề].'),
-
-    h2('3. Động Cơ Xử Lý Hình Ảnh, Đồ Thị, Sơ Đồ 300 DPI'),
-    bullet('Tự động cắt viền & Khử nhiễu nền', 'Khử sạch nền xám của bản chụp/scan thành nền trắng tinh khiết (#FFFFFF), làm sắc nét đường viền và văn bản.'),
-    bullet('Bảo toàn tỷ lệ khung hình', 'Giữ nguyên 100% aspect ratio gốc ở độ phân giải 300 DPI, gắn thẻ [HINH_ANH_CAU_X] đồng bộ theo từng câu hỏi.'),
-    bullet('Khóa vị trí xuất Word', 'Xuất chuẩn In Line with Text, căn giữa (<w:jc w:val="center"/>) và khóa liền kề câu hỏi (<w:keepNext/>) chống nhảy trang ngoài ý muốn.'),
-
-    h2('4. AI Gemini Studio — Cụm 4 Luồng Chuyên Gia Tạo Đề Tương Đương'),
-    bullet('Tạo cùng lúc 1 đến 4 đề AI', 'Vận hành cụm 4 luồng chuyên gia song song sử dụng Gemini 3.8 Flash / Pro tạo ra các đề thi tương đương hoàn chỉnh.'),
-    bullet('Tùy biến theo chỉ dẫn sư phạm', 'Giáo viên có thể yêu cầu AI đổi số liệu chẵn dễ tính, đảo câu Đúng thành Sai, thay đổi sơ đồ sinh học nhưng giữ nguyên ma trận nhận thức.'),
-    bullet('Bảo mật Zero-Trace', 'Tự động ẩn danh tên trường, tên kỳ thi và xóa sạch bộ nhớ đệm ngay khi giáo viên tải đề về máy.'),
-
-    h2('5. Khung Ma Trận & Bản Đặc Tả Chuẩn Công Văn 7991/BGDĐT-GDTrH'),
-    bullet('Phụ lục 1 — Khung Ma Trận', 'Tự động phân bố tỉ lệ nhận thức chuẩn: Nhận biết 40% (4.0đ) - Thông hiểu 30% (3.0đ) - Vận dụng 30% (3.0đ) cho cả 3 phần.'),
-    bullet('Phụ lục 2 — Bản Đặc Tả', 'Mô tả chi tiết Yêu cầu cần đạt chuẩn GDPT 2018 cho từng chủ đề, đơn vị kiến thức và số lượng câu/lệnh tương ứng.'),
-    bullet('Xuất Word chuẩn Sư phạm', 'Có sẵn nút xuất file Word (.docx) chuyên dụng kèm khung chữ ký duyệt của Ban Giám Hiệu, Tổ trưởng chuyên môn và Giáo viên ra đề.'),
-
-    h2('6. Bảng Ma Trận Đáp Án Đối Chiếu Đa Mã Đề (Gọn Nhất & Không Rối Mắt)'),
-    bullet('Đối chiếu ngang tiết kiệm 70% diện tích', 'Xếp các mã đề (101, 102, 103, 104...) song song theo cột, nằm gọn trên 1 trang giấy duy nhất.'),
-    bullet('Trực quan & Dễ chấm', 'Phần I có badge màu nổi bật A/B/C/D; Phần II có chuỗi tổng hợp và 4 dòng lệnh chi tiết (a, b, c, d); Phần III có đáp số ngắn.'),
-    bullet('Đa chế độ xem', 'Hỗ trợ chuyển đổi linh hoạt giữa Ma Trận Đối Chiếu, Bảng Khảo Thí A4 nộp nhà trường và Thẻ 3 Cột Màu.'),
-
-    h2('7. Mã QR Tổng Hợp Đa Mã Đề (Master Multi-Exam QR Code)'),
-    bullet('Quét 1 lần nạp đủ toàn bộ mã đề', 'Tích hợp key chấm thi của tất cả các mã đề vào 1 mã QR duy nhất. Giáo viên quét 1 lần bằng điện thoại là ứng dụng (QM, Azota, TNMaker) tự động nhận diện toàn bộ các mã đề.'),
-    bullet('Tự động nhúng vào Word', 'Mã QR được nhúng ngay trang cuối của tệp Word Bảng Đáp Án và đóng gói file ảnh PNG vào tệp .zip.'),
-
-    h2('8. Đóng Gói Tệp Nén (.zip) Đồng Nhất Quy Chuẩn Tên File'),
-    bullet('Cấu trúc đặt tên chuẩn hóa', 'Đồng bộ tên file .zip và toàn bộ các tệp Word/PNG bên trong theo mẫu: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] [Hậu tố].docx/.zip.'),
-    bullet('Trọn bộ gói khảo thí', 'Bao gồm: Các đề thi hoán vị, Đề gốc đã làm sạch, Bảng đáp án khảo thí kèm mã QR, Khung ma trận đặc tả CV 7991 và Bộ mã QR chấm thi.'),
-
-    h1('PHẦN III. QUY TRÌNH HƯỚNG DẪN SỬ DỤNG 5 BƯỚC THỰC CHIẾN'),
-    bullet('Bước 1: Chuẩn bị file Word đề gốc', 'Soạn đề thi theo cấu trúc 3 phần (PHẦN I, PHẦN II, PHẦN III). Đánh dấu đáp án đúng bằng cách Gạch chân (Ctrl+U) hoặc Tô chữ màu đỏ.'),
-    bullet('Bước 2: Tải đề lên hệ thống', 'Bấm nút [Tải Word / PDF] màu xanh lam nổi bật để nạp đề. Hệ thống sẽ bóc tách toàn bộ câu hỏi và kiểm tra lỗi tự động.'),
-    bullet('Bước 3: Biên tập & Sửa lỗi (nếu có)', 'Nếu bảng thông báo có câu bị lỗi, bấm nút [Sửa ngay] để gán đáp án hoặc bấm [Tự Động Sửa Nhanh Tất Cả Lỗi] để hoàn tất.'),
-    bullet('Bước 4: Cấu hình thông tin đề thi & Trộn đề', 'Nhập Tên trường, Môn thi, Lớp, Năm học, chọn số lượng mã đề (ví dụ 4 mã: 101, 102, 103, 104) rồi bấm nút [Trộn Đề Ngay].'),
-    bullet('Bước 5: Tải bộ đề hoàn chỉnh', 'Bấm nút [Tải Trọn Bộ 4 Đề (.zip)] để nhận toàn bộ đề thi, bảng đáp án ma trận đối chiếu, mã QR và khung ma trận đặc tả CV 7991.'),
-
-    h1('PHẦN IV. QUY CHUẨN ĐỊNH DẠNG TÀI LIỆU ĐỀ THI 3 PHẦN NĂM 2025'),
-    bullet('PHẦN I: Trắc nghiệm 4 lựa chọn', 'Bắt đầu bằng dòng PHẦN I. Mỗi câu bắt đầu bằng Câu 1., Câu 2... và chứa 4 phương án A., B., C., D. Phương án đúng có Gạch chân hoặc Tô màu đỏ.'),
-    bullet('PHẦN II: Trắc nghiệm Đúng / Sai', 'Bắt đầu bằng dòng PHẦN II. Mỗi câu có 4 ý a), b), c), d). Ý nào Đúng có Gạch chân hoặc Tô màu đỏ; ý nào không gạch chân sẽ là Sai.'),
-    bullet('PHẦN III: Trắc nghiệm Trả lời ngắn', 'Bắt đầu bằng dòng PHẦN III. Mỗi câu hỏi yêu cầu điền con số hoặc từ khóa ngắn. Đáp án ghi ở cuối câu dạng: Đáp án: 150 (hoặc gạch chân/tô đỏ đáp số).'),
-
-    h1('PHẦN V. THÔNG TIN TÁC GIẢ & HỖ TRỢ KỸ THUẬT'),
-    bullet('Tác giả phần mềm', 'Thầy Hồ Tấn Khải — Giáo viên Trường THPT Mang Thít, tỉnh Vĩnh Long.'),
-    bullet('Email liên hệ & góp ý', 'khaibcmt@gmail.com'),
-    bullet('Số điện thoại / Zalo', '0939580982'),
-    bullet('Phiên bản hiện hành', 'EduMix 2025 — Phiên bản đặc biệt chuẩn hóa Công văn 7991/BGDĐT-GDTrH và Mã QR Master Đa Mã Đề.'),
+    p('Hệ thống EduMix 2025 là Bộ vi xử lý, phân tích, biên tập và chuẩn hóa tài liệu đề thi cấp độ chuyên sâu (Deep Exam Parser & Word XML Synthesizer), được xây dựng phục vụ Chương trình GDPT 2018, Công văn 7991/BGDĐT-GDTrH và Kỳ thi tốt nghiệp THPT cấu trúc 3 phần.'),
+    h1('PHẦN II. TRỌN BỘ 12 TÍNH NĂNG ĐỘT PHÁ (MỖI TÍNH NĂNG 1 KHUNG MÀU ĐỒNG BỘ)'),
+    ...twelveFeatureFrames,
+    h1('PHẦN III. QUY TRÌNH HƯỚNG DẪN SỬ DỤNG 6 BƯỚC THỰC CHIẾN'),
+    bullet('Bước 1', 'Chuẩn bị file Word đề gốc (.docx/.doc), PDF hoặc chọn ngay Đề mẫu Sinh học 12 Cuối HK1 / Đề mẫu Tổng hợp KHTN.', '1D4ED8'),
+    bullet('Bước 2', 'Bấm nút [Tải Word / PDF] hoặc dán trực tiếp nội dung từ Word (Ctrl+V).', '047857'),
+    bullet('Bước 3', 'Kiểm tra lỗi và bấm [Tự Động Sửa Nhanh Tất Cả Lỗi] để chuẩn hóa toàn bộ đề trong 1 chạm.', 'B45309'),
+    bullet('Bước 4', '(Tùy chọn) Mở AI Gemini Studio để nhân bản cùng lúc 4 đề tương đương mới.', 'A21CAF'),
+    bullet('Bước 5', 'Thiết lập thông tin trường, môn, lớp, số lượng mã đề (101, 102, 103, 104...) và bấm [Trộn Đề Ngay].', '6D28D9'),
+    bullet('Bước 6', 'Quét trực tiếp Bộ 3 Mã QR (1. QM 2025, 2. TNMaker, 3. Azota), tải 3 file Excel (.xlsx), xuất Ma trận CV 7991 và bấm [Tải Bộ Đề (.zip)].', 'BE123C'),
   ];
 
   const bodyXml = contentBlocks.join('\n');
@@ -2530,4 +2656,5 @@ export async function exportUserManualDocx(features: any[] = []): Promise<Blob> 
 
   return zip.generateAsync({ type: 'blob' });
 }
+
 
