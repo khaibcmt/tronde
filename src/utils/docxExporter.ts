@@ -278,13 +278,13 @@ function buildStandardParagraphXml(
 ): string {
   const align = options?.align || 'left';
   const spaceBefore = options?.spaceBeforeTwips ?? 0; // 0 pt
-  const spaceAfter = options?.spaceAfterTwips ?? 60; // 3 pt = 60 twips
+  const spaceAfter = options?.spaceAfterTwips ?? 30; // 1.5 pt = 30 twips (liền mạch, không khoảng trắng thừa)
   const fontSize = options?.fontSizeHalfPt ?? 24; // 12pt = 24 half-points
   const indXml = options?.hangingIndent
     ? `<w:ind w:left="360" w:hanging="360"/>`
     : '';
   const keepNextXml = options?.keepNext ? '<w:keepNext/>' : '';
-  const keepLinesXml = options?.keepLines !== false ? '<w:keepLines/>' : '';
+  const keepLinesXml = options?.keepLines ? '<w:keepLines/>' : '';
 
   const prefixColor = options?.prefixColorHex
     ? `<w:color w:val="${options.prefixColorHex}"/>`
@@ -333,10 +333,10 @@ function buildStandardParagraphXml(
 
   return `<w:p>
     <w:pPr>
-      <w:widowControl/>
+      <w:widowControl w:val="0"/>
       ${keepLinesXml}
       ${keepNextXml}
-      <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}" w:line="276" w:lineRule="auto"/>
+      <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}" w:line="252" w:lineRule="auto"/>
       ${indXml}
       <w:jc w:val="${align}"/>
     </w:pPr>
@@ -473,12 +473,13 @@ function buildExamNationalHeaderTableXml(
 }
 
 /**
- * Tự động dàn dòng phương án Phần I bằng Tab Stops cố định trong Word (<w:tabs>):
- * - Phương án ngắn (< 15 ký tự): Dàn 1 hàng (chia đều 4 cột tab: pos 2340, 4680, 7020 twips).
- * - Phương án trung bình (15 - 35 ký tự): Dàn 2 hàng (mỗi hàng 2 cột tab cân xứng: pos 4680 twips, hàng 1 có w:keepNext).
- * - Phương án dài / chứa phân số cao (> 35 ký tự): Dàn 4 hàng (mỗi phương án 1 dòng riêng với w:hangingIndent).
- * Bắt đầu mỗi phương án bằng **A.**, **B.**, **C.**, **D.** (In đậm, Times New Roman 12pt).
- * Khoảng cách dòng Multiple 1.15 pt (w:line="276"), Spacing After 3 pt (w:after="60"), Before 0 pt.
+ * Tự động dàn dòng phương án Phần I bằng ĐOẠN VĂN THUẦN (<w:p>) + TAB STOPS (<w:tabs>):
+ * - TUYỆT ĐỐI KHÔNG dùng bảng (<w:tbl>) để giáo viên dễ dàng chỉnh sửa trực tiếp từng đáp án như văn bản thường trong Word.
+ * - Không khóa keepNext/keepLines để các câu hỏi chảy liền mạch sát tới cuối trang, triệt tiêu 100% khoảng trắng thừa cuối trang.
+ * - Độ rộng vùng in chuẩn A4 (11906 - 2*1134 = 9638 twips = 17.0cm):
+ *   + 1_ROW_4_COL: Tab stops tại 2410 (4.25cm), 4820 (8.50cm), 7230 (12.75cm)
+ *   + 2_ROW_2_COL: Tab stop tại 4820 (8.50cm)
+ *   + 4_ROW_1_COL: 4 đoạn văn <w:p> độc lập
  */
 function buildPart1OptionsWithTabStopsXml(
   options: OptionPart1[],
@@ -487,10 +488,7 @@ function buildPart1OptionsWithTabStopsXml(
 ): string {
   if (!options || options.length === 0) return '';
 
-  const renderOptionCellParagraphXml = (
-    opt: OptionPart1,
-    keepNextRow: boolean
-  ) => {
+  const buildOptionRunsXml = (opt: OptionPart1): string => {
     const isMarked = highlightCorrect && opt.isCorrect;
     const prefixRun = `<w:r>
       <w:rPr>
@@ -508,80 +506,89 @@ function buildPart1OptionsWithTabStopsXml(
       fontSizeHalfPt: 24,
     });
 
-    return `<w:p>
-      <w:pPr>
-        <w:widowControl/>
-        <w:keepLines/>
-        ${keepNextRow ? '<w:keepNext/>' : ''}
-        <w:spacing w:before="0" w:after="40" w:line="276" w:lineRule="auto"/>
-        <w:ind w:left="300" w:hanging="300"/>
-        <w:jc w:val="left"/>
-      </w:pPr>
-      ${prefixRun}
-      ${bodyRuns}
-    </w:p>`;
+    return `${prefixRun}\n${bodyRuns}`;
   };
 
-  const borderlessTablePrXml = `<w:tblPr>
-    <w:tblW w:w="5000" w:type="pct"/>
-    <w:tblBorders>
-      <w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      <w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-    </w:tblBorders>
-    <w:tblCellMar>
-      <w:top w:w="0" w:type="dxa"/>
-      <w:left w:w="0" w:type="dxa"/>
-      <w:bottom w:w="20" w:type="dxa"/>
-      <w:right w:w="120" w:type="dxa"/>
-    </w:tblCellMar>
-  </w:tblPr>`;
+  const tabRunXml = `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:tab/></w:r>`;
 
   if (layout === '1_ROW_4_COL' && options.length === 4) {
-    return `<w:tbl>
-      ${borderlessTablePrXml}
-      <w:tr>
-        <w:trPr><w:cantSplit/></w:trPr>
-        <w:tc><w:tcPr><w:tcW w:w="1250" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[0], false)}</w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="1250" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[1], false)}</w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="1250" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[2], false)}</w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="1250" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[3], false)}</w:tc>
-      </w:tr>
-    </w:tbl>`;
+    const rowRuns = [
+      buildOptionRunsXml(options[0]),
+      tabRunXml,
+      buildOptionRunsXml(options[1]),
+      tabRunXml,
+      buildOptionRunsXml(options[2]),
+      tabRunXml,
+      buildOptionRunsXml(options[3]),
+    ].join('\n');
+
+    return `<w:p>
+      <w:pPr>
+        <w:widowControl w:val="0"/>
+        <w:tabs>
+          <w:tab w:val="left" w:pos="2410"/>
+          <w:tab w:val="left" w:pos="4820"/>
+          <w:tab w:val="left" w:pos="7230"/>
+        </w:tabs>
+        <w:spacing w:before="0" w:after="30" w:line="252" w:lineRule="auto"/>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${rowRuns}
+    </w:p>`;
   }
 
   if (layout === '2_ROW_2_COL' && options.length === 4) {
-    return `<w:tbl>
-      ${borderlessTablePrXml}
-      <w:tr>
-        <w:trPr><w:cantSplit/></w:trPr>
-        <w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[0], true)}</w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[1], true)}</w:tc>
-      </w:tr>
-      <w:tr>
-        <w:trPr><w:cantSplit/></w:trPr>
-        <w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[2], false)}</w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="2500" w:type="pct"/></w:tcPr>${renderOptionCellParagraphXml(options[3], false)}</w:tc>
-      </w:tr>
-    </w:tbl>`;
+    const row1Runs = [
+      buildOptionRunsXml(options[0]),
+      tabRunXml,
+      buildOptionRunsXml(options[1]),
+    ].join('\n');
+
+    const row2Runs = [
+      buildOptionRunsXml(options[2]),
+      tabRunXml,
+      buildOptionRunsXml(options[3]),
+    ].join('\n');
+
+    return `<w:p>
+      <w:pPr>
+        <w:widowControl w:val="0"/>
+        <w:tabs>
+          <w:tab w:val="left" w:pos="4820"/>
+        </w:tabs>
+        <w:spacing w:before="0" w:after="20" w:line="252" w:lineRule="auto"/>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${row1Runs}
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:widowControl w:val="0"/>
+        <w:tabs>
+          <w:tab w:val="left" w:pos="4820"/>
+        </w:tabs>
+        <w:spacing w:before="0" w:after="30" w:line="252" w:lineRule="auto"/>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${row2Runs}
+    </w:p>`;
   }
 
-  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 dòng riêng biệt)
+  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 đoạn văn riêng biệt, không thuộc tính bảng, không hangingIndent)
   return options
     .map((opt, idx) => {
       const isMarked = highlightCorrect && opt.isCorrect;
+      const isLast = idx === options.length - 1;
       return buildStandardParagraphXml(`${opt.currentLabel}. `, opt.text, {
-        hangingIndent: true,
-        keepNext: idx < options.length - 1,
-        keepLines: true,
+        hangingIndent: false,
+        keepNext: false,
+        keepLines: false,
+        underlinePrefix: isMarked,
         underlineBody: isMarked,
         redBody: isMarked,
         align: 'left',
         spaceBeforeTwips: 0,
-        spaceAfterTwips: 60,
+        spaceAfterTwips: isLast ? 30 : 20,
         fontSizeHalfPt: 24,
       });
     })
@@ -1066,8 +1073,8 @@ function buildQuestionImageDrawingXml(
 
   return `<w:p>
     <w:pPr>
-      <w:keepNext/>
-      <w:spacing w:before="80" w:after="100"/>
+      <w:widowControl w:val="0"/>
+      <w:spacing w:before="40" w:after="40"/>
       <w:jc w:val="center"/>
     </w:pPr>
     <w:r>
@@ -1226,11 +1233,6 @@ function buildQuestionsBodyXml(
           blocks.push(tblXml);
         }
       }
-      if (!q.images || q.images.length === 0) {
-        blocks.push(
-          `<w:p><w:pPr><w:keepNext/><w:spacing w:before="0" w:after="20" w:line="20" w:lineRule="exact"/></w:pPr></w:p>`
-        );
-      }
     }
     // 2. Nhúng sơ đồ, phả hệ, đồ thị hàm số/dao động dạng In Line with Text căn giữa ngay dưới phần dẫn câu hỏi
     if (q.images && q.images.length > 0 && imageRelMap) {
@@ -1250,9 +1252,10 @@ function buildQuestionsBodyXml(
         `Thí sinh trả lời từ câu ${part1[0].displayIndex} đến câu ${part1[part1.length - 1].displayIndex}. Mỗi câu hỏi thí sinh chỉ chọn một phương án.`,
         {
           keepNext: true,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 80,
-          spaceAfterTwips: 100,
+          spaceBeforeTwips: 60,
+          spaceAfterTwips: 40,
           fontSizeHalfPt: 24,
         }
       )
@@ -1260,10 +1263,11 @@ function buildQuestionsBodyXml(
     for (const q of part1) {
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
-          keepNext: true,
+          keepNext: false,
+          keepLines: false,
           align: 'left',
-          spaceBeforeTwips: 60,
-          spaceAfterTwips: 60,
+          spaceBeforeTwips: 30,
+          spaceAfterTwips: 20,
           fontSizeHalfPt: 24,
         })
       );
@@ -1288,8 +1292,8 @@ function buildQuestionsBodyXml(
             italicBody: true,
             prefixColorHex: '1D4ED8',
             align: 'left',
-            spaceBeforeTwips: 40,
-            spaceAfterTwips: 100,
+            spaceBeforeTwips: 20,
+            spaceAfterTwips: 60,
             fontSizeHalfPt: 24,
           })
         );
@@ -1304,9 +1308,10 @@ function buildQuestionsBodyXml(
         `Thí sinh trả lời từ câu ${part2[0].displayIndex} đến câu ${part2[part2.length - 1].displayIndex}. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.`,
         {
           keepNext: true,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 120,
-          spaceAfterTwips: 100,
+          spaceBeforeTwips: 80,
+          spaceAfterTwips: 40,
           fontSizeHalfPt: 24,
         }
       )
@@ -1314,10 +1319,11 @@ function buildQuestionsBodyXml(
     for (const q of part2) {
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
-          keepNext: true,
+          keepNext: false,
+          keepLines: false,
           align: 'left',
-          spaceBeforeTwips: 60,
-          spaceAfterTwips: 60,
+          spaceBeforeTwips: 30,
+          spaceAfterTwips: 20,
           fontSizeHalfPt: 24,
         })
       );
@@ -1327,15 +1333,18 @@ function buildQuestionsBodyXml(
       for (let sIdx = 0; sIdx < subs.length; sIdx++) {
         const sub = subs[sIdx];
         const isMarked = highlightCorrectAnswers && sub.isTrue;
+        const isLast = sIdx === subs.length - 1;
         blocks.push(
           buildStandardParagraphXml(`${sub.currentLabel}) `, sub.text, {
-            hangingIndent: true,
+            hangingIndent: false,
             keepNext: false,
-            keepLines: true,
+            keepLines: false,
+            underlinePrefix: isMarked,
             underlineBody: isMarked,
             redBody: isMarked,
             align: 'left',
-            spaceAfterTwips: 60,
+            spaceBeforeTwips: 0,
+            spaceAfterTwips: isLast ? 30 : 20,
             fontSizeHalfPt: 24,
           })
         );
@@ -1346,8 +1355,8 @@ function buildQuestionsBodyXml(
             italicBody: true,
             prefixColorHex: '047857',
             align: 'left',
-            spaceBeforeTwips: 40,
-            spaceAfterTwips: 100,
+            spaceBeforeTwips: 20,
+            spaceAfterTwips: 60,
             fontSizeHalfPt: 24,
           })
         );
@@ -1362,9 +1371,10 @@ function buildQuestionsBodyXml(
         `Thí sinh trả lời từ câu ${part3[0].displayIndex} đến câu ${part3[part3.length - 1].displayIndex}.`,
         {
           keepNext: true,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 120,
-          spaceAfterTwips: 100,
+          spaceBeforeTwips: 80,
+          spaceAfterTwips: 40,
           fontSizeHalfPt: 24,
         }
       )
@@ -1372,15 +1382,11 @@ function buildQuestionsBodyXml(
     for (const q of part3) {
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, q.stemText, {
-          keepNext: Boolean(
-            (q.images && q.images.length > 0) ||
-              (q.stemTables && q.stemTables.length > 0) ||
-              (highlightCorrectAnswers && q.shortAnswer) ||
-              (includeSolutions && q.explanation)
-          ),
+          keepNext: false,
+          keepLines: false,
           align: 'left',
-          spaceBeforeTwips: 60,
-          spaceAfterTwips: 60,
+          spaceBeforeTwips: 30,
+          spaceAfterTwips: 30,
           fontSizeHalfPt: 24,
         })
       );
@@ -1392,7 +1398,7 @@ function buildQuestionsBodyXml(
             underlineBody: true,
             redBody: true,
             align: 'left',
-            spaceAfterTwips: 100,
+            spaceAfterTwips: 60,
             fontSizeHalfPt: 24,
           })
         );
@@ -1403,8 +1409,8 @@ function buildQuestionsBodyXml(
             italicBody: true,
             prefixColorHex: 'B45309',
             align: 'left',
-            spaceBeforeTwips: 40,
-            spaceAfterTwips: 100,
+            spaceBeforeTwips: 20,
+            spaceAfterTwips: 60,
             fontSizeHalfPt: 24,
           })
         );
@@ -1430,113 +1436,85 @@ function buildFooterXml(
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:tbl>
-    <w:tblPr>
-      <w:tblW w:w="5000" w:type="pct"/>
-      <w:tblBorders>
-        <w:top w:val="single" w:sz="6" w:space="0" w:color="64748B"/>
-        <w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-        <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-      </w:tblBorders>
-      <w:tblCellMar>
-        <w:top w:w="80" w:type="dxa"/>
-        <w:left w:w="0" w:type="dxa"/>
-        <w:bottom w:w="0" w:type="dxa"/>
-        <w:right w:w="0" w:type="dxa"/>
-      </w:tblCellMar>
-    </w:tblPr>
-    <w:tr>
-      <w:trPr><w:cantSplit/></w:trPr>
-      <w:tc>
-        <w:tcPr>
-          <w:tcW w:w="3600" w:type="pct"/>
-          <w:vAlign w:val="center"/>
-        </w:tcPr>
-        <w:p>
-          <w:pPr>
-            <w:spacing w:before="0" w:after="0"/>
-            <w:jc w:val="left"/>
-          </w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:i/>
-              <w:color w:val="1E293B"/>
-              <w:sz w:val="22"/><w:szCs w:val="22"/>
-            </w:rPr>
-            <w:t xml:space="preserve">${escapeXml(`Môn: ${subjectLabel} — Lớp: ${gradeLabel} — Mã đề: `)}</w:t>
-          </w:r>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:b/>
-              <w:i/>
-              <w:color w:val="0F172A"/>
-              <w:sz w:val="22"/><w:szCs w:val="22"/>
-            </w:rPr>
-            <w:t xml:space="preserve">${escapeXml(cleanCode)}</w:t>
-          </w:r>
-        </w:p>
-      </w:tc>
-      <w:tc>
-        <w:tcPr>
-          <w:tcW w:w="1400" w:type="pct"/>
-          <w:vAlign w:val="center"/>
-        </w:tcPr>
-        <w:p>
-          <w:pPr>
-            <w:spacing w:before="0" w:after="0"/>
-            <w:jc w:val="right"/>
-          </w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:i/>
-              <w:color w:val="1E293B"/>
-              <w:sz w:val="22"/><w:szCs w:val="22"/>
-            </w:rPr>
-            <w:t xml:space="preserve">Trang </w:t>
-          </w:r>
-          <w:fldSimple w:instr="PAGE">
-            <w:r>
-              <w:rPr>
-                <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-                <w:b/>
-                <w:i/>
-                <w:color w:val="0F172A"/>
-                <w:sz w:val="22"/><w:szCs w:val="22"/>
-              </w:rPr>
-              <w:t>1</w:t>
-            </w:r>
-          </w:fldSimple>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:i/>
-              <w:color w:val="1E293B"/>
-              <w:sz w:val="22"/><w:szCs w:val="22"/>
-            </w:rPr>
-            <w:t xml:space="preserve"> / </w:t>
-          </w:r>
-          <w:fldSimple w:instr="NUMPAGES">
-            <w:r>
-              <w:rPr>
-                <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-                <w:b/>
-                <w:i/>
-                <w:color w:val="0F172A"/>
-                <w:sz w:val="22"/><w:szCs w:val="22"/>
-              </w:rPr>
-              <w:t>1</w:t>
-            </w:r>
-          </w:fldSimple>
-        </w:p>
-      </w:tc>
-    </w:tr>
-  </w:tbl>
+  <w:p>
+    <w:pPr>
+      <w:pBdr>
+        <w:top w:val="single" w:sz="6" w:space="4" w:color="64748B"/>
+      </w:pBdr>
+      <w:tabs>
+        <w:tab w:val="right" w:pos="9638"/>
+      </w:tabs>
+      <w:spacing w:before="40" w:after="0" w:line="240" w:lineRule="auto"/>
+    </w:pPr>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:i/>
+        <w:color w:val="334155"/>
+        <w:sz w:val="22"/><w:szCs w:val="22"/>
+      </w:rPr>
+      <w:t xml:space="preserve">${escapeXml(`Môn: ${subjectLabel} — Lớp: ${gradeLabel} — Mã đề: `)}</w:t>
+    </w:r>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:b/>
+        <w:i/>
+        <w:color w:val="0F172A"/>
+        <w:sz w:val="22"/><w:szCs w:val="22"/>
+      </w:rPr>
+      <w:t xml:space="preserve">${escapeXml(cleanCode)}</w:t>
+    </w:r>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:sz w:val="22"/><w:szCs w:val="22"/>
+      </w:rPr>
+      <w:tab/>
+    </w:r>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:i/>
+        <w:color w:val="334155"/>
+        <w:sz w:val="22"/><w:szCs w:val="22"/>
+      </w:rPr>
+      <w:t xml:space="preserve">Trang </w:t>
+    </w:r>
+    <w:fldSimple w:instr="PAGE">
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+          <w:b/>
+          <w:i/>
+          <w:color w:val="0F172A"/>
+          <w:sz w:val="22"/><w:szCs w:val="22"/>
+        </w:rPr>
+        <w:t>1</w:t>
+      </w:r>
+    </w:fldSimple>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:i/>
+        <w:color w:val="334155"/>
+        <w:sz w:val="22"/><w:szCs w:val="22"/>
+      </w:rPr>
+      <w:t xml:space="preserve"> / </w:t>
+    </w:r>
+    <w:fldSimple w:instr="NUMPAGES">
+      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+          <w:b/>
+          <w:i/>
+          <w:color w:val="0F172A"/>
+          <w:sz w:val="22"/><w:szCs w:val="22"/>
+        </w:rPr>
+        <w:t>1</w:t>
+      </w:r>
+    </w:fldSimple>
+  </w:p>
 </w:ftr>`;
 }
 
@@ -1625,7 +1603,7 @@ async function packOpenXmlDocx(
     <w:sectPr>
       <w:footerReference w:type="default" r:id="rIdFooter1"/>
       <w:pgSz w:w="11906" w:h="16838"/>
-      <w:pgMar w:top="992" w:right="1134" w:bottom="992" w:left="1134" w:header="567" w:footer="567" w:gutter="0"/>
+      <w:pgMar w:top="850" w:right="1134" w:bottom="680" w:left="1134" w:header="425" w:footer="425" w:gutter="0"/>
     </w:sectPr>
   </w:body>
 </w:document>`;

@@ -60,11 +60,17 @@ export function computeAutoLayoutForOptions(
   options: OptionPart1[]
 ): '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL' {
   if (!options || options.length === 0) return '4_ROW_1_COL';
+  const hasNewlineOrTallMath = options.some((o) =>
+    /[\r\n]|\\(?:frac|dfrac|sqrt|int|sum|begin)/i.test(o.text)
+  );
+  if (hasNewlineOrTallMath) {
+    return '4_ROW_1_COL';
+  }
   const maxLen = Math.max(...options.map((o) => o.text.trim().length));
-  if (maxLen < 15) {
+  if (maxLen <= 14) {
     return '1_ROW_4_COL';
   }
-  if (maxLen <= 35) {
+  if (maxLen <= 32) {
     return '2_ROW_2_COL';
   }
   return '4_ROW_1_COL';

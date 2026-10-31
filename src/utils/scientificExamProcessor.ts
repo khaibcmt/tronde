@@ -858,9 +858,8 @@ export function buildStructuredStemTableXml(table: ExamStemTable): string {
             </w:tcPr>
             <w:p>
               <w:pPr>
-                <w:keepLines/>
-                <w:keepNext/>
-                <w:spacing w:before="40" w:after="40" w:line="240" w:lineRule="auto"/>
+                <w:widowControl w:val="0"/>
+                <w:spacing w:before="30" w:after="30" w:line="240" w:lineRule="auto"/>
                 <w:jc w:val="${align}"/>
               </w:pPr>
               ${buildRichScientificRunsAndMathXml(cell.text, {
