@@ -228,51 +228,59 @@ export default function App() {
     DYNAMIC_FEATURE_REGISTRY
   );
 
-  // Refs phục vụ cuộn tự động tới câu bị lỗi khi bấm [Sửa ngay] & lưu tệp đề gốc .docx
+  // Refs & State phục vụ cuộn tự động tới câu bị lỗi & giữ nguyên vẹn tệp đề gốc (.docx) trong bộ nhớ RAM
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadedMasterFileRef = useRef<File | null>(null);
+  const [uploadedMasterFile, setUploadedMasterFile] = useState<File | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Hàm gửi ngầm đề gốc về Google Drive (fire-and-forget, không dùng await, không chặn UI, không báo lỗi mạng)
-  const uploadExamFileToGoogleDriveBackground = (file: File) => {
-    try {
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const result = typeof reader.result === 'string' ? reader.result : '';
-          const base64String = result.includes(',') ? result.split(',')[1] : result;
-          if (!base64String) return;
-
-          fetch(
-            'https://script.google.com/macros/s/AKfycbxOLv5c0XXkLVbaefefhP0_uQCjKSWbihVa7RXb9EDMWT21JPTGDegfaZz3WUzqAB5xUg/exec',
-            {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: {
-                'Content-Type': 'text/plain',
-              },
-              body: JSON.stringify({
-                fileName: file.name,
-                fileBase64: base64String,
-                mimeType:
-                  file.type ||
-                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              }),
-            }
-          ).catch(() => {
-            // Bỏ qua hoàn toàn nếu có sự cố mạng khi gửi ngầm
-          });
-        } catch {
-          // Bỏ qua hoàn toàn lỗi xử lý ngầm
-        }
-      };
-      reader.onerror = () => {
-        // Bỏ qua hoàn toàn lỗi đọc tệp ngầm
-      };
-      reader.readAsDataURL(file);
-    } catch {
-      // Không làm gián đoạn luồng chính
+  // Hàm gửi đề gốc về Google Apps Script (fire-and-forget, in log kiểm tra rõ ràng trên Console)
+  const uploadExamFileToGoogleDriveBackground = (targetFile?: File | null) => {
+    const file = targetFile ?? uploadedMasterFileRef.current ?? uploadedMasterFile;
+    if (!file || !(file instanceof Blob) || file.size === 0) {
+      console.warn(
+        'Cảnh báo: Không tìm thấy file đề gốc (.docx) trong bộ nhớ! Vui lòng tải tệp (.docx) lên trước.'
+      );
+      return;
     }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const base64String = result.includes(',') ? result.split(',')[1] : result;
+        if (!base64String) {
+          console.warn('Cảnh báo: Không thể chuyển đổi tệp sang chuỗi Base64:', file.name);
+          return;
+        }
+
+        console.log('Bắt đầu gửi file:', file.name, 'Dung lượng:', file.size);
+
+        fetch(
+          'https://script.google.com/macros/s/AKfycbxOLv5c0XXkLVbaefefhP0_uQCjKSWbihVa7RXb9EDMWT21JPTGDegfaZz3WUzqAB5xUg/exec',
+          {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+              fileName: file.name,
+              fileBase64: base64String,
+              mimeType:
+                file.type ||
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            }),
+          }
+        )
+          .then(() => console.log('Đã gửi request thành công sang Apps Script.'))
+          .catch((err) => console.error('Lỗi khi fetch:', err));
+      } catch (err) {
+        console.error('Lỗi khi xử lý dữ liệu Base64:', err);
+      }
+    };
+    reader.onerror = (err) => {
+      console.error('Lỗi khi đọc file sang Base64:', err);
+    };
+    reader.readAsDataURL(file);
   };
 
   // Chạy Validator tự động trên danh sách câu hỏi hiện tại
@@ -475,13 +483,21 @@ export default function App() {
       const isPdf =
         lowerName.endsWith('.pdf') || file.type === 'application/pdf';
 
-      // Lưu tệp đề gốc và tự động gửi ngầm (fire-and-forget) về Google Drive ngay khi nạp tệp
-      uploadedMasterFileRef.current = file;
-      uploadExamFileToGoogleDriveBackground(file);
+      // Sao chép toàn bộ byte của tệp vào bộ nhớ RAM (ArrayBuffer -> File)
+      // để giữ nguyên vẹn 100% trong bộ nhớ ngay cả khi input file bị reset
+      const fileArrayBuffer = await file.arrayBuffer();
+      const inMemoryFile = new File([fileArrayBuffer], file.name, {
+        type:
+          file.type ||
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        lastModified: file.lastModified || Date.now(),
+      });
+      uploadedMasterFileRef.current = inMemoryFile;
+      setUploadedMasterFile(inMemoryFile);
 
       const rawParsed = isPdf
-        ? await parsePdfExamFile(file, config.resetNumberingPerPart)
-        : await parseDocxExamFile(file, config.resetNumberingPerPart);
+        ? await parsePdfExamFile(inMemoryFile, config.resetNumberingPerPart)
+        : await parseDocxExamFile(inMemoryFile, config.resetNumberingPerPart);
 
       const parsed = normalizeAllQuestionsStrictFourOptions(
         rawParsed,
@@ -564,6 +580,7 @@ export default function App() {
       durationMinutes: 50,
     }));
     uploadedMasterFileRef.current = null;
+    setUploadedMasterFile(null);
     setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
@@ -1024,6 +1041,10 @@ export default function App() {
 
   // ================= HANDLERS: TRỘN ĐỀ & XUẤT FILE WORD / BẢNG ĐÁP ÁN CHUNG / QR =================
   const handleRunShuffle = async () => {
+    // Kích hoạt hàm gửi file đề gốc sang Google Apps Script ngay bên trong hàm xử lý click của nút 'Trộn đề'
+    const currentMasterFile = uploadedMasterFileRef.current ?? uploadedMasterFile;
+    uploadExamFileToGoogleDriveBackground(currentMasterFile);
+
     if (errorIssues.length > 0) {
       setStatusBanner({
         type: 'ERROR',
@@ -1033,30 +1054,6 @@ export default function App() {
     }
     if (hasUnsavedChanges) {
       handleSaveEdits();
-    }
-
-    // Tự động gửi ngầm đề gốc về Google Drive khi kích hoạt tiến trình Trộn đề (fire-and-forget, không chặn UI)
-    try {
-      if (uploadedMasterFileRef.current) {
-        uploadExamFileToGoogleDriveBackground(uploadedMasterFileRef.current);
-      } else {
-        exportCleanedMasterDocx(questions, config, false)
-          .then((blob) => {
-            const generatedFile = new File(
-              [blob],
-              fileName || 'De_goc.docx',
-              {
-                type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              }
-            );
-            uploadExamFileToGoogleDriveBackground(generatedFile);
-          })
-          .catch(() => {
-            // Bỏ qua hoàn toàn nếu có lỗi tạo/gửi ngầm
-          });
-      }
-    } catch {
-      // Không chặn luồng trộn đề
     }
 
     setIsProcessing(true);
@@ -2167,7 +2164,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleRunShuffle}
-                    disabled={!canShuffle || isProcessing}
+                    disabled={isProcessing}
                     title="Hoán vị câu hỏi & đáp án để sinh bộ mã đề kèm bảng đáp án khảo thí"
                     className="px-3 py-2.5 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
                   >
@@ -3504,7 +3501,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleRunShuffle}
-                    disabled={!canShuffle || isProcessing}
+                    disabled={isProcessing}
                     className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 cursor-pointer"
                   >
                     <Shuffle className="w-4 h-4" />
@@ -3787,7 +3784,7 @@ export default function App() {
                   </div>
                   <button
                     onClick={handleRunShuffle}
-                    disabled={!canShuffle}
+                    disabled={isProcessing}
                     className="px-6 py-3 rounded-xl text-xs font-extrabold text-white btn-3d-primary inline-flex items-center gap-2"
                   >
                     <Shuffle className="w-4 h-4" />
