@@ -339,8 +339,8 @@ const ALL_12_SYSTEM_FEATURES: ComprehensiveFeatureItem[] = [
     code: 'TÍNH NĂNG 03 · KHUNG TÍM THẠCH ANH',
     group: 'CORE_STEM',
     groupLabel: 'Bóc Tách & Công Thức',
-    title: 'Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser) Word & PDF Scan',
-    subtitle: 'Đọc sâu cấu trúc XML của file Word (.docx, .doc) và nhận diện bản chụp/scan PDF',
+    title: 'Bộ Vi Xử Lý Bóc Tách Đa Tầng 4 Phần (Trắc Nghiệm & Phần IV Tự Luận Thông Minh)',
+    subtitle: 'Đọc sâu cấu trúc XML của file Word (.docx, .doc), giữ nguyên Phần Tự Luận & tự động đánh số phần linh hoạt',
     icon: <Cpu className="w-6 h-6" />,
     theme: SYNCHRONIZED_THEMES[2], // Violet
     bullets: [
@@ -349,17 +349,17 @@ const ALL_12_SYSTEM_FEATURES: ComprehensiveFeatureItem[] = [
         text: 'Tự động phát hiện phương án đúng thông qua: (1) Gạch chân (<w:u>), (2) Tô chữ màu đỏ (<w:color>), hoặc (3) Bảng đáp án tổng hợp đặt ở cuối đề thi.',
       },
       {
-        bold: 'Phân tách chuẩn xác 3 phần thi 2025',
-        text: 'Tự động nhận diện ranh giới PHẦN I (4 lựa chọn), PHẦN II (Đúng/Sai 4 ý a, b, c, d) và PHẦN III (Trả lời ngắn) ngay cả khi đề gốc đánh số câu liên tục hoặc đánh số lại từ Câu 1.',
+        bold: 'Hỗ trợ Phần IV Tự Luận (Giữ nguyên câu hỏi — Không trộn)',
+        text: 'Tiếp nhận và giữ nguyên thứ tự các câu hỏi Phần IV. Tự luận ở mọi mã đề. Nếu đề gốc không có Phần III (câu hỏi trả lời ngắn), khi xuất đề hệ thống tự động trình bày theo thứ tự: PHẦN I, PHẦN II, PHẦN III. Tự luận.',
       },
       {
-        bold: 'Luật bất biến chống mất chữ (Strict Non-Empty Rule)',
-        text: 'Đảm bảo không bao giờ bỏ sót phương án A, B, C, D hoặc nội dung mệnh đề ngay cả khi phương án chỉ chứa 1 ký hiệu toán học hoặc 1 hình ảnh.',
+        bold: 'Tích hợp thông minh Tự Luận vào Bảng Đáp Án',
+        text: 'Trong phần đáp án xuất ra: nếu câu tự luận có sẵn đáp án/lời giải sẽ tự động tích hợp vào; nếu chưa có đáp án thì phần đáp án vẫn hiển thị nguyên vẹn câu hỏi tự luận (không đóng khung bảng) để giáo viên dễ dàng chỉnh sửa.',
       },
     ],
-    techSpecTitle: 'CƠ CHẾ BÓC TÁCH AST & OPENXML',
+    techSpecTitle: 'CƠ CHẾ BÓC TÁCH AST & OPENXML 4 PHẦN',
     techSpecDetail:
-      'Quét đồng thời <w:p>, <w:tbl>, <w:r>, <m:oMathPara> · Nhận diện mã màu đỏ (#FF0000, #C00000, #ED1C24, #DC2626) & mọi kiểu gạch chân.',
+      'Quét đồng thời Phần I, II, III và Phần IV (Tự luận) · Tự động co giãn tiêu đề PHẦN III / PHẦN IV · Bảo toàn câu hỏi tự luận trong Bảng đáp án.',
   },
   {
     code: 'TÍNH NĂNG 04 · KHUNG VÀNG HỔ PHÁCH',
@@ -1215,13 +1215,13 @@ III. QUY TRÌNH HƯỚNG DẪN SỬ DỤNG 6 BƯỚC THỰC CHIẾN
              ===================================================================== */}
           {activeTab === 'SPEC_2025' && (
             <div className="space-y-6">
-              {/* Phần A: 3 Phần cấu trúc đề thi 2025 (3 Khung màu đồng bộ) */}
+              {/* Phần A: 4 Phần cấu trúc đề thi 2025 (Trắc nghiệm & Tự luận) */}
               <div>
                 <h3 className="text-base font-black text-slate-900 mb-3 flex items-center gap-2">
                   <Code2 className="w-5 h-5 text-blue-600" />
-                  A. Quy Chuẩn Nhận Diện 3 Phần Thi Theo Cấu Trúc Đề Minh Họa 2025
+                  A. Quy Chuẩn Nhận Diện 4 Phần Thi (Phần I, Phần II, Phần III & Phần IV Tự Luận)
                 </h3>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {[
                     {
                       badge: 'PHẦN I · KHUNG XANH LAM',
@@ -1255,6 +1255,17 @@ III. QUY TRÌNH HƯỚNG DẪN SỬ DỤNG 6 BƯỚC THỰC CHIẾN
                       ],
                       sample: 'Câu 1. Tính hiệu suất phản ứng (%) làm tròn đến hàng đơn vị.\nĐáp án: 75',
                       theme: SYNCHRONIZED_THEMES[1], // Emerald
+                    },
+                    {
+                      badge: 'PHẦN IV (HOẶC PHẦN III) · KHUNG VÀNG HỔ PHÁCH',
+                      title: 'Phần Tự Luận (Giữ Nguyên Thứ Tự Câu Hỏi — Không Trộn)',
+                      rules: [
+                        'Bắt đầu bằng tiêu đề "PHẦN IV. Tự luận" (hoặc "PHẦN III. Tự luận"). Hệ thống giữ nguyên thứ tự các câu hỏi tự luận đưa lên, không đảo thứ tự câu.',
+                        'Nếu đề gốc KHÔNG có Phần III (trả lời ngắn), khi xuất đề hệ thống tự động trình bày theo thứ tự: PHẦN I, PHẦN II, PHẦN III. Tự luận.',
+                        'Nếu câu tự luận có sẵn "Đáp án:" / "Lời giải:" thì tự động tích hợp vào bảng đáp án; nếu không có đáp án thì bảng đáp án vẫn giữ nguyên câu hỏi tự luận (không có thuộc tính bảng) để giáo viên dễ dàng chỉnh sửa.',
+                      ],
+                      sample: 'PHẦN IV. Tự luận\nCâu 1. Trình bày cơ chế tái bản DNA ở sinh vật nhân thực.\nĐáp án: Quá trình diễn ra theo nguyên tắc bổ sung và bán bảo toàn...',
+                      theme: SYNCHRONIZED_THEMES[3], // Amber
                     },
                   ].map((part) => {
                     const t = part.theme;

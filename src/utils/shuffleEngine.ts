@@ -333,12 +333,13 @@ export async function generateShuffledVariants(
   const part1Source = sourceQuestions.filter((q) => q.part === 'PART_1');
   const part2Source = sourceQuestions.filter((q) => q.part === 'PART_2');
   const part3Source = sourceQuestions.filter((q) => q.part === 'PART_3');
+  const part4Source = sourceQuestions.filter((q) => q.part === 'PART_4');
 
   const labelsP1: ('A' | 'B' | 'C' | 'D')[] = ['A', 'B', 'C', 'D'];
   const labelsP2: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
 
   for (const examCode of codes) {
-    // 1. Trộn thứ tự câu trong từng phần trắc nghiệm độc lập
+    // 1. Trộn thứ tự câu trong từng phần trắc nghiệm độc lập (Phần IV Tự luận giữ nguyên thứ tự gốc, KHÔNG trộn)
     const p1Questions = config.shuffleQuestions
       ? fisherYatesShuffle(part1Source)
       : [...part1Source];
@@ -348,6 +349,7 @@ export async function generateShuffledVariants(
     const p3Questions = config.shuffleQuestions
       ? fisherYatesShuffle(part3Source)
       : [...part3Source];
+    const p4Questions = [...part4Source];
 
     let continuousCounter = 1;
 
@@ -414,7 +416,19 @@ export async function generateShuffledVariants(
       };
     });
 
-    // 5. Tổng hợp bảng đáp án cho mã đề này
+    // 5. Xử lý Phần IV (Tự luận): Giữ nguyên 100% thứ tự câu hỏi và nội dung gốc, không trộn
+    const processedP4: ExamQuestion[] = p4Questions.map((q, idx) => {
+      const displayIndex = config.resetNumberingPerPart
+        ? idx + 1
+        : continuousCounter++;
+
+      return {
+        ...q,
+        displayIndex,
+      };
+    });
+
+    // 6. Tổng hợp bảng đáp án cho mã đề này
     const answerKeyP1 = processedP1.map((q) => {
       const correctOpt = (q.options || []).find((o) => o.isCorrect);
       return {
@@ -441,10 +455,21 @@ export async function generateShuffledVariants(
       answer: (q.shortAnswer || '0').trim(),
     }));
 
+    const answerKeyP4 = processedP4.map((q) => {
+      const explicitAns = (q.essayAnswer || q.explanation || q.shortAnswer || '').trim();
+      return {
+        questionNumber: q.displayIndex,
+        questionText: q.stemText.trim(),
+        answer: explicitAns,
+        hasExplicitAnswer: Boolean(explicitAns),
+      };
+    });
+
     const answerKey = {
       part1: answerKeyP1,
       part2: answerKeyP2,
       part3: answerKeyP3,
+      part4: answerKeyP4,
     };
 
     // Sinh đủ 3 mã QR (QM 2025, TNMaker, Azota) cho mã đề này
@@ -464,6 +489,7 @@ export async function generateShuffledVariants(
         ...processedP1,
         ...processedP2,
         ...processedP3,
+        ...processedP4,
       ]),
       qrPayload: selectedQr.qrPayload,
       qrDataUrl: selectedQr.qrDataUrl,

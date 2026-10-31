@@ -1,4 +1,4 @@
-export type PartType = 'PART_1' | 'PART_2' | 'PART_3';
+export type PartType = 'PART_1' | 'PART_2' | 'PART_3' | 'PART_4';
 
 export type LayoutMode = 'AUTO' | '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL';
 
@@ -99,6 +99,9 @@ export interface ExamQuestion {
   // Phần III: Trắc nghiệm Trả lời ngắn / Điền khuyết
   shortAnswer?: string;
   shortAnswerDetectedBy?: 'KEYWORD' | 'UNDERLINE_RED' | 'MANUAL' | 'NONE';
+
+  // Phần IV: Tự luận (giữ nguyên thứ tự câu hỏi, không trộn)
+  essayAnswer?: string;
 }
 
 export interface ValidationIssue {
@@ -169,6 +172,12 @@ export interface ShuffledVariant {
     part1: { questionNumber: number; answer: 'A' | 'B' | 'C' | 'D' }[];
     part2: { questionNumber: number; answers: ('Đ' | 'S')[]; tfString: string; dsString: string }[];
     part3: { questionNumber: number; answer: string }[];
+    part4: {
+      questionNumber: number;
+      questionText: string;
+      answer: string;
+      hasExplicitAnswer: boolean;
+    }[];
   };
 }
 

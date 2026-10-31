@@ -88,6 +88,7 @@ export function recalculateQuestionNumbering(
     PART_1: 1,
     PART_2: 1,
     PART_3: 1,
+    PART_4: 1,
   };
 
   return questions.map((q) => {
@@ -120,7 +121,9 @@ export function validateExamQuestions(
         ? 'Phần I'
         : q.part === 'PART_2'
         ? 'Phần II'
-        : 'Phần III';
+        : q.part === 'PART_3'
+        ? 'Phần III'
+        : 'Phần IV (Tự luận)';
 
     if (q.part === 'PART_1') {
       const opts = q.options || [];
@@ -2822,6 +2825,7 @@ export function buildQuestionsFromParsedParagraphs(
       subItems: currentPart === 'PART_2' ? [] : undefined,
       shortAnswer: currentPart === 'PART_3' ? '' : undefined,
       shortAnswerDetectedBy: currentPart === 'PART_3' ? 'NONE' : undefined,
+      essayAnswer: currentPart === 'PART_4' ? '' : undefined,
     };
 
     if (currentPart === 'PART_3') {
@@ -2841,6 +2845,15 @@ export function buildQuestionsFromParsedParagraphs(
             currentQuestion.shortAnswerDetectedBy = 'UNDERLINE_RED';
           }
         }
+      }
+    } else if (currentPart === 'PART_4') {
+      const essayAnsMatch = stemContent.match(
+        /(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?)\s*[:=]\s*(.+)$/i
+      );
+      if (essayAnsMatch) {
+        currentQuestion.essayAnswer = essayAnsMatch[1].trim();
+        currentQuestion.explanation = essayAnsMatch[1].trim();
+        currentQuestion.stemText = stemContent.slice(0, essayAnsMatch.index).trim();
       }
     }
   };
@@ -2889,6 +2902,16 @@ export function buildQuestionsFromParsedParagraphs(
             .trim();
         }
       }
+    } else if (currentQuestion.part === 'PART_4') {
+      const mergedEssayAns = (
+        currentQuestion.essayAnswer ||
+        currentQuestion.explanation ||
+        ''
+      ).trim();
+      currentQuestion.essayAnswer = mergedEssayAns || undefined;
+      if (mergedEssayAns && !currentQuestion.explanation) {
+        currentQuestion.explanation = mergedEssayAns;
+      }
     }
     questions.push(currentQuestion);
     currentQuestion = null;
@@ -2936,16 +2959,17 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
 
-    // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III (Bỏ qua phần Tự luận nếu có trong đề)
+    // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III, PHẦN IV (Tự luận)
     const strippedHeaderPrefix = text.replace(/^[*#•\-–—\s]+/, '');
     if (
-      /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|TỰ\s+LUẬN\b)/i.test(
+      /^(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|TỰ\s+LUẬN\b)/i.test(
         strippedHeaderPrefix
       )
     ) {
       pushCurrentQuestion();
       pendingStemParagraphs = [];
-      inIgnoredEssaySection = true;
+      inIgnoredEssaySection = false;
+      currentPart = 'PART_4';
       continue;
     }
     if (
@@ -3040,12 +3064,17 @@ export function buildQuestionsFromParsedParagraphs(
 
     // Kiểm tra dòng Lời giải / Hướng dẫn giải TRƯỚC khi tách phương án để tránh lời giải chứa "a) Đúng... b) Sai..." làm hỏng câu hỏi
     const expMatch = text.match(
-      /^(?:[*#•+\-–—\s])*(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*giải|\s*chấm)?|Giải\s*chi\s*tiết)\s*[:=.-]\s*(.+)$/i
+      /^(?:[*#•+\-–—\s])*(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*giải|\s*chấm)?|Giải\s*chi\s*tiết|Đáp\s*án(?:\s*tự\s*luận)?)\s*[:=.-]\s*(.+)$/i
     );
-    if (expMatch && currentQuestion) {
+    if (expMatch && currentQuestion && (currentQuestion.part !== 'PART_3' || !/^[-\d.,]+$/.test(expMatch[1].trim()))) {
       currentQuestion.explanation = currentQuestion.explanation
         ? `${currentQuestion.explanation}\n${expMatch[1].trim()}`
         : expMatch[1].trim();
+      if (currentQuestion.part === 'PART_4') {
+        currentQuestion.essayAnswer = currentQuestion.essayAnswer
+          ? `${currentQuestion.essayAnswer}\n${expMatch[1].trim()}`
+          : expMatch[1].trim();
+      }
       if (para.images.length > 0) {
         currentQuestion.hasImage = true;
         currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
@@ -3234,6 +3263,22 @@ export function buildQuestionsFromParsedParagraphs(
         }
       } else {
         currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+      }
+    } else if (currentQuestion.part === 'PART_4') {
+      const essayAnsLine = text.match(
+        /^(?:[*#•+\-–—\s])*(?:Đáp\s*án|Đáp\s*số|ĐS|Kết\s*quả|Lời\s*giải|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|Giải)\s*[:=.-]\s*(.*)$/i
+      );
+      if (essayAnsLine) {
+        const ansBody = essayAnsLine[1].trim();
+        currentQuestion.essayAnswer = currentQuestion.essayAnswer
+          ? `${currentQuestion.essayAnswer}\n${ansBody}`.trim()
+          : ansBody;
+        currentQuestion.explanation = currentQuestion.essayAnswer;
+      } else if (currentQuestion.essayAnswer !== undefined && currentQuestion.essayAnswer.length > 0) {
+        currentQuestion.essayAnswer = `${currentQuestion.essayAnswer}\n${text}`;
+        currentQuestion.explanation = currentQuestion.essayAnswer;
+      } else {
+        currentQuestion.stemText += (currentQuestion.stemText ? '\n' : '') + text;
       }
     }
   }
@@ -3488,6 +3533,7 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
   const p1 = questions.filter((q) => q.part === 'PART_1');
   const p2 = questions.filter((q) => q.part === 'PART_2');
   const p3 = questions.filter((q) => q.part === 'PART_3');
+  const p4 = questions.filter((q) => q.part === 'PART_4');
 
   const sections: string[] = [];
 
@@ -3516,6 +3562,19 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
     for (const q of p3) {
       sections.push(
         `Câu ${q.displayIndex}. ${q.stemText}\nĐáp án: ${q.shortAnswer || ''}`
+      );
+    }
+  }
+
+  if (p4.length > 0) {
+    const essayRoman = p3.length === 0 ? 'PHẦN III' : 'PHẦN IV';
+    sections.push(`\n${essayRoman}. Tự luận.`);
+    for (const q of p4) {
+      const ansText = (q.essayAnswer || q.explanation || '').trim();
+      sections.push(
+        ansText
+          ? `Câu ${q.displayIndex}. ${q.stemText}\nĐáp án: ${ansText}`
+          : `Câu ${q.displayIndex}. ${q.stemText}`
       );
     }
   }

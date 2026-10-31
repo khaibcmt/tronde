@@ -982,7 +982,53 @@ export function buildVariant3ColumnAnswerCardXml(variant: ShuffledVariant): stri
         <w:p><w:pPr><w:spacing w:before="0" w:after="20"/></w:pPr></w:p>
       </w:tc>
     </w:tr>
-  </w:tbl>`;
+  </w:tbl>${
+    variant.answerKey.part4 && variant.answerKey.part4.length > 0
+      ? '\n' +
+        buildStandardParagraphXml(
+          `${variant.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN (ĐÁP ÁN / CÂU HỎI TỰ LUẬN): `,
+          '',
+          {
+            prefixColorHex: '6D28D9',
+            underlinePrefix: true,
+            spaceBeforeTwips: 80,
+            spaceAfterTwips: 40,
+            fontSizeHalfPt: 24,
+          }
+        ) +
+        '\n' +
+        variant.answerKey.part4
+          .map((item) => {
+            const qPara = buildStandardParagraphXml(
+              `Câu ${item.questionNumber}. `,
+              item.questionText,
+              {
+                align: 'left',
+                spaceBeforeTwips: 30,
+                spaceAfterTwips: item.hasExplicitAnswer ? 15 : 40,
+                fontSizeHalfPt: 24,
+              }
+            );
+            const ansPara =
+              item.hasExplicitAnswer && item.answer
+                ? '\n' +
+                  buildStandardParagraphXml(
+                    `→ Đáp án / Hướng dẫn chấm: `,
+                    item.answer,
+                    {
+                      prefixColorHex: 'DC2626',
+                      align: 'left',
+                      spaceBeforeTwips: 10,
+                      spaceAfterTwips: 40,
+                      fontSizeHalfPt: 24,
+                    }
+                  )
+                : '';
+            return qPara + ansPara;
+          })
+          .join('\n')
+      : ''
+  }`;
 }
 
 /**
@@ -1221,6 +1267,7 @@ function buildQuestionsBodyXml(
   const part1 = cleanQuestions.filter((q) => q.part === 'PART_1');
   const part2 = cleanQuestions.filter((q) => q.part === 'PART_2');
   const part3 = cleanQuestions.filter((q) => q.part === 'PART_3');
+  const part4 = cleanQuestions.filter((q) => q.part === 'PART_4');
 
   const blocks: string[] = [];
 
@@ -1414,6 +1461,93 @@ function buildQuestionsBodyXml(
             fontSizeHalfPt: 24,
           })
         );
+      }
+    }
+  }
+
+  if (part4.length > 0) {
+    // Nếu đề gốc không có Phần III (câu hỏi trả lời ngắn) thì tự động trình bày là PHẦN III. Tự luận cho đúng thứ tự
+    const essayRoman = part3.length === 0 ? 'PHẦN III' : 'PHẦN IV';
+    const essayRangeInstruction =
+      part4.length === 1
+        ? `Thí sinh trình bày lời giải chi tiết câu ${part4[0].displayIndex}.`
+        : `Thí sinh trình bày lời giải chi tiết từ câu ${part4[0].displayIndex} đến câu ${part4[part4.length - 1].displayIndex}.`;
+
+    blocks.push(
+      buildStandardParagraphXml(
+        `${essayRoman}. Tự luận. `,
+        essayRangeInstruction,
+        {
+          keepNext: true,
+          keepLines: true,
+          align: 'left',
+          spaceBeforeTwips: 80,
+          spaceAfterTwips: 40,
+          fontSizeHalfPt: 24,
+        }
+      )
+    );
+
+    for (const q of part4) {
+      const stemLines = q.stemText
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      const firstLine = stemLines[0] || q.stemText;
+
+      blocks.push(
+        buildStandardParagraphXml(`Câu ${q.displayIndex}. `, firstLine, {
+          keepNext: false,
+          keepLines: false,
+          align: 'left',
+          spaceBeforeTwips: 30,
+          spaceAfterTwips: stemLines.length > 1 ? 15 : 30,
+          fontSizeHalfPt: 24,
+        })
+      );
+
+      for (let i = 1; i < stemLines.length; i++) {
+        blocks.push(
+          buildStandardParagraphXml('', stemLines[i], {
+            keepNext: false,
+            keepLines: false,
+            align: 'left',
+            spaceBeforeTwips: 10,
+            spaceAfterTwips: i === stemLines.length - 1 ? 30 : 15,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
+
+      appendQuestionTablesAndImages(q);
+
+      const essayAns = (q.essayAnswer || q.explanation || q.shortAnswer || '').trim();
+      if ((highlightCorrectAnswers || includeSolutions) && essayAns) {
+        const ansLines = essayAns
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        blocks.push(
+          buildStandardParagraphXml(`Đáp án / Hướng dẫn chấm: `, ansLines[0] || essayAns, {
+            italicBody: false,
+            prefixColorHex: '6D28D9',
+            align: 'left',
+            spaceBeforeTwips: 20,
+            spaceAfterTwips: ansLines.length > 1 ? 15 : 60,
+            fontSizeHalfPt: 24,
+          })
+        );
+        for (let i = 1; i < ansLines.length; i++) {
+          blocks.push(
+            buildStandardParagraphXml('', ansLines[i], {
+              italicBody: false,
+              align: 'left',
+              spaceBeforeTwips: 10,
+              spaceAfterTwips: i === ansLines.length - 1 ? 60 : 15,
+              fontSizeHalfPt: 24,
+            })
+          );
+        }
       }
     }
   }
@@ -1969,7 +2103,91 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
     }
   }
 
-  return `<w:tbl>
+  // --- PHẦN TỰ LUẬN (PHẦN III NẾU KHÔNG CÓ TRẢ LỜI NGẮN, HOẶC PHẦN IV NẾU CÓ TRẢ LỜI NGẮN) ---
+  // Xuất dưới dạng các đoạn văn bản chuẩn (không đóng khung bảng) để giáo viên dễ dàng chỉnh sửa trực tiếp trong Word
+  const p4Items = variants[0]?.answerKey?.part4 || [];
+  const essayRoman = maxP3 === 0 ? 'PHẦN III' : 'PHẦN IV';
+  const p4ParagraphsXml: string[] = [];
+
+  if (p4Items.length > 0) {
+    p4ParagraphsXml.push(
+      buildStandardParagraphXml(
+        `${essayRoman}. TỰ LUẬN `,
+        `(Giữ nguyên thứ tự câu hỏi ở tất cả các mã đề — Giáo viên dễ dàng chỉnh sửa trực tiếp):`,
+        {
+          prefixColorHex: '6D28D9',
+          underlinePrefix: true,
+          align: 'left',
+          spaceBeforeTwips: 120,
+          spaceAfterTwips: 40,
+          fontSizeHalfPt: 24,
+        }
+      )
+    );
+
+    for (const item of p4Items) {
+      const qLines = item.questionText
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .filter(Boolean);
+      p4ParagraphsXml.push(
+        buildStandardParagraphXml(
+          `Câu ${item.questionNumber}. `,
+          qLines[0] || item.questionText,
+          {
+            align: 'left',
+            spaceBeforeTwips: 40,
+            spaceAfterTwips: qLines.length > 1 || item.hasExplicitAnswer ? 15 : 40,
+            fontSizeHalfPt: 24,
+          }
+        )
+      );
+      for (let i = 1; i < qLines.length; i++) {
+        p4ParagraphsXml.push(
+          buildStandardParagraphXml('', qLines[i], {
+            align: 'left',
+            spaceBeforeTwips: 10,
+            spaceAfterTwips: i === qLines.length - 1 && !item.hasExplicitAnswer ? 40 : 15,
+            fontSizeHalfPt: 24,
+          })
+        );
+      }
+
+      if (item.hasExplicitAnswer && item.answer.trim()) {
+        const ansLines = item.answer
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean);
+        p4ParagraphsXml.push(
+          buildStandardParagraphXml(
+            `→ Đáp án / Hướng dẫn chấm: `,
+            ansLines[0] || item.answer,
+            {
+              prefixColorHex: 'DC2626',
+              align: 'left',
+              spaceBeforeTwips: 15,
+              spaceAfterTwips: ansLines.length > 1 ? 15 : 50,
+              fontSizeHalfPt: 24,
+            }
+          )
+        );
+        for (let i = 1; i < ansLines.length; i++) {
+          p4ParagraphsXml.push(
+            buildStandardParagraphXml('', ansLines[i], {
+              align: 'left',
+              spaceBeforeTwips: 10,
+              spaceAfterTwips: i === ansLines.length - 1 ? 50 : 15,
+              fontSizeHalfPt: 24,
+            })
+          );
+        }
+      }
+    }
+  }
+
+  const hasObjectiveRows = maxP1 > 0 || maxP2 > 0 || maxP3 > 0;
+  const matrixTblXml = hasObjectiveRows
+    ? `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
       <w:tblBorders>
@@ -1991,7 +2209,10 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
     ${p1RowsXml.join('\n')}
     ${p2RowsXml.join('\n')}
     ${p3RowsXml.join('\n')}
-  </w:tbl>`;
+  </w:tbl>`
+    : '';
+
+  return [matrixTblXml, ...p4ParagraphsXml].filter(Boolean).join('\n');
 }
 
 /**
@@ -2816,14 +3037,14 @@ export async function exportUserManualDocx(features: any[] = []): Promise<Blob> 
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 03 (KHUNG TÍM THẠCH ANH)',
-      'Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser) Word & PDF Scan',
+      'Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser) 4 Phần (Trắc Nghiệm & Tự Luận)',
       '6D28D9',
       'F5F3FF',
       [
         ['Đa Kênh Nhận Diện Đáp Án', 'Nhận diện tự động Gạch chân (<w:u>), Tô chữ màu đỏ (<w:color>) và Bảng đáp án ở cuối đề thi.'],
-        ['Bóc Tách 3 Phần Chuẩn 2025', 'Tự động chia Phần I (4 lựa chọn), Phần II (Đúng/Sai 4 ý a, b, c, d) và Phần III (Trả lời ngắn).'],
+        ['Hỗ Trợ Đầy Đủ Phần IV Tự Luận (Không Trộn)', 'Giữ nguyên thứ tự các câu hỏi Tự luận đã tải lên. Nếu đề không có Phần III trả lời ngắn, hệ thống tự động đánh thứ tự thành PHẦN III. Tự luận. Trong bảng đáp án, nếu câu tự luận có đáp án sẽ tự động tích hợp vào, nếu chưa có đáp án vẫn hiển thị nguyên vẹn câu hỏi tự luận để giáo viên chấm và chỉnh sửa.'],
       ],
-      'Quét đồng thời <w:t>, <m:oMath>, MathType OLE và bản chụp/scan PDF.'
+      'Quét đồng thời <w:t>, <m:oMath>, MathType OLE, Tự luận và bản chụp/scan PDF.'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 04 (KHUNG VÀNG HỔ PHÁCH)',

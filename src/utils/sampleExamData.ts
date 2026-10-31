@@ -832,6 +832,16 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
  */
 export const DYNAMIC_FEATURE_REGISTRY: FeatureReleaseItem[] = [
   {
+    id: 'feat-part4-essay-smart-engine',
+    version: 'v4.1.0',
+    releaseDate: '2026-10',
+    title: 'Tích Hợp Phần IV Tự Luận Thông Minh (Giữ Nguyên Câu Hỏi · Tự Động Đánh Thứ Tự Phần · Tích Hợp Đáp Án)',
+    category: 'CORE_PARSER',
+    description: 'Nhận diện và giữ nguyên 100% thứ tự các câu hỏi Phần IV (Tự luận) ở tất cả các mã đề (không trộn câu tự luận). Nếu đề gốc không có Phần III (câu hỏi trả lời ngắn), hệ thống tự động trình bày nối tiếp theo thứ tự: PHẦN I, PHẦN II, PHẦN III. Tự luận. Khi xuất Bảng đáp án: nếu câu tự luận có đáp án/hướng dẫn chấm sẽ tự động tích hợp vào; nếu chưa có đáp án thì phần đáp án vẫn hiển thị nguyên vẹn câu hỏi tự luận (không đóng khung bảng) để giáo viên dễ dàng chỉnh sửa.',
+    technicalSpec: 'Preserved Order PART_4 · Dynamic Roman Numeral (PHẦN III / PHẦN IV) · Answer/Prompt Fallback.',
+    autoDetected: true,
+  },
+  {
     id: 'feat-triple-qr-engine-2025',
     version: 'v4.0.0',
     releaseDate: '2026-10',

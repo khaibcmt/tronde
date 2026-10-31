@@ -237,10 +237,12 @@ export default function App() {
   const errorIssues = validationIssues.filter((i) => i.severity === 'ERROR');
   const canShuffle = errorIssues.length === 0 && !hasUnsavedChanges;
 
-  // Thống kê số lượng câu theo từng phần (Phần I, II, III)
+  // Thống kê số lượng câu theo từng phần (Phần I, II, III, IV Tự luận)
   const part1Count = questions.filter((q) => q.part === 'PART_1').length;
   const part2Count = questions.filter((q) => q.part === 'PART_2').length;
   const part3Count = questions.filter((q) => q.part === 'PART_3').length;
+  const part4Count = questions.filter((q) => q.part === 'PART_4').length;
+  const essayRomanLabel = part3Count === 0 ? 'PHẦN III' : 'PHẦN IV';
 
   // Thống kê Ma trận nhận thức Bloom
   const bloomStats = {
@@ -903,6 +905,50 @@ export default function App() {
     setHasUnsavedChanges(true);
   };
 
+  const handleUpdateEssayAnswerPart4 = (questionId: string, val: string) => {
+    setQuestions((prev) =>
+      prev.map((q) =>
+        q.id === questionId
+          ? {
+              ...q,
+              essayAnswer: val,
+              explanation: val,
+            }
+          : q
+      )
+    );
+    setHasUnsavedChanges(true);
+  };
+
+  const handleAddEssayQuestionPart4 = () => {
+    const newId = `q-part_4-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const nextOriginalIndex = questions.length + 1;
+    const newEssayQuestion: ExamQuestion = {
+      id: newId,
+      part: 'PART_4',
+      originalIndex: nextOriginalIndex,
+      displayIndex: part4Count + 1,
+      stemText: 'Nhập nội dung câu hỏi tự luận tại đây...',
+      bloomLevel: 'VAN_DUNG',
+      essayAnswer: '',
+    };
+    const updated = recalculateQuestionNumbering(
+      [...questions, newEssayQuestion],
+      config.resetNumberingPerPart
+    );
+    setQuestions(updated);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(updated));
+    setHasUnsavedChanges(true);
+    setActiveRightTab('LIVE_EDITOR');
+    setFilterPart('PART_4');
+    setTimeout(() => {
+      questionRefs.current[newId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 80);
+  };
+
   const handleSaveEdits = () => {
     const recalculated = normalizeAllQuestionsStrictFourOptions(
       questions,
@@ -1241,22 +1287,64 @@ export default function App() {
             </h4>
           </div>
           <div className="space-y-2.5">
-            {variant.answerKey.part3.map((item) => (
+            {variant.answerKey.part3.length > 0 ? (
+              variant.answerKey.part3.map((item) => (
+                <div
+                  key={item.questionNumber}
+                  className="px-4 py-2 bg-white rounded-xl border border-[#FDE047] shadow-2xs flex items-center justify-between font-mono text-sm"
+                >
+                  <span className="font-bold text-[#1E293B]">
+                    Câu {item.questionNumber}:
+                  </span>
+                  <span className="font-extrabold text-[#E11D48]">
+                    {item.answer}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="text-xs italic text-slate-500">
+                Đề không có câu hỏi trả lời ngắn
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* KHUNG TỰ LUẬN (NẾU ĐỀ CÓ PHẦN TỰ LUẬN) */}
+      {variant.answerKey.part4 && variant.answerKey.part4.length > 0 && (
+        <div
+          style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
+          className="p-4 rounded-3xl bg-purple-50/70 border-2 border-purple-300 shadow-xs space-y-2.5"
+        >
+          <div className="pb-2 border-b border-purple-200 flex items-center justify-between flex-wrap gap-2">
+            <h4 className="font-bold text-purple-950 text-base">
+              {variant.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN ({variant.answerKey.part4.length} câu — Giữ nguyên thứ tự câu hỏi)
+            </h4>
+            <span className="text-xs font-sans font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-lg">
+              Không đóng khung bảng khi xuất Word để dễ chỉnh sửa
+            </span>
+          </div>
+          <div className="space-y-2.5">
+            {variant.answerKey.part4.map((item) => (
               <div
-                key={item.questionNumber}
-                className="px-4 py-2 bg-white rounded-xl border border-[#FDE047] shadow-2xs flex items-center justify-between font-mono text-sm"
+                key={`card-p4-${variant.examCode}-${item.questionNumber}`}
+                className="p-3 bg-white rounded-xl border border-purple-200 space-y-1 text-left"
               >
-                <span className="font-bold text-[#1E293B]">
-                  Câu {item.questionNumber}:
-                </span>
-                <span className="font-extrabold text-[#E11D48]">
-                  {item.answer}
-                </span>
+                <div className="text-slate-950 leading-relaxed">
+                  <strong className="font-bold">Câu {item.questionNumber}. </strong>
+                  <ScientificContentRenderer text={item.questionText} inline />
+                </div>
+                {item.hasExplicitAnswer && item.answer ? (
+                  <div className="text-rose-700 leading-relaxed pt-1 border-t border-dashed border-purple-200">
+                    <strong className="font-bold">→ Đáp án / Hướng dẫn chấm: </strong>
+                    <ScientificContentRenderer text={item.answer} inline />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 
@@ -1471,6 +1559,42 @@ export default function App() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* PHẦN TỰ LUẬN (PHẦN III NẾU KHÔNG CÓ TRẢ LỜI NGẮN, HOẶC PHẦN IV NẾU CÓ TRẢ LỜI NGẮN) */}
+        {(variants[0]?.answerKey?.part4?.length || 0) > 0 && (
+          <div className="rounded-2xl border-2 border-purple-300 bg-white shadow-xs overflow-hidden">
+            <div className="bg-purple-900 text-white px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+              <span className="font-extrabold text-xs sm:text-sm uppercase tracking-wide">
+                {part3Max === 0 ? 'PHẦN III' : 'PHẦN IV'}: TỰ LUẬN ({variants[0].answerKey.part4.length} CÂU · GIỮ NGUYÊN THỨ TỰ CÂU HỎI Ở TẤT CẢ MÃ ĐỀ)
+              </span>
+              <span className="text-[11px] font-mono text-purple-200">
+                Có đáp án: tích hợp trực tiếp · Không có đáp án: giữ nguyên câu hỏi tự luận
+              </span>
+            </div>
+            <div
+              style={{ fontFamily: "'Times New Roman', Times, serif", fontSize: '12pt' }}
+              className="p-4 space-y-3 divide-y divide-purple-100"
+            >
+              {variants[0].answerKey.part4.map((item) => (
+                <div
+                  key={`matrix-p4-q${item.questionNumber}`}
+                  className="pt-2.5 first:pt-0 space-y-1.5 text-left"
+                >
+                  <div className="text-slate-950 leading-relaxed">
+                    <strong className="font-bold">Câu {item.questionNumber}. </strong>
+                    <ScientificContentRenderer text={item.questionText} inline />
+                  </div>
+                  {item.hasExplicitAnswer && item.answer ? (
+                    <div className="pl-3 border-l-4 border-rose-500 text-rose-800 bg-rose-50/60 py-1.5 px-3 rounded-r-xl leading-relaxed">
+                      <strong className="font-bold">→ Đáp án / Hướng dẫn chấm: </strong>
+                      <ScientificContentRenderer text={item.answer} inline />
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -2246,6 +2370,41 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Hàng lọc & thêm nhanh Phần Tự Luận (Phần IV hoặc Phần III nếu không có trả lời ngắn) */}
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRightTab('LIVE_EDITOR');
+                      setFilterPart('PART_4');
+                      const firstP4 = questions.find((q) => q.part === 'PART_4');
+                      if (firstP4) {
+                        setTimeout(() => {
+                          questionRefs.current[firstP4.id]?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'center',
+                          });
+                        }, 60);
+                      }
+                    }}
+                    className={`px-2 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-purple cursor-pointer ${
+                      filterPart === 'PART_4' ? 'ring-2 ring-purple-300' : 'opacity-95 hover:opacity-100'
+                    }`}
+                    title="Lọc các câu hỏi Phần Tự luận (Giữ nguyên câu hỏi — Không trộn)"
+                  >
+                    {essayRomanLabel} (Tự luận): {part4Count}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleAddEssayQuestionPart4}
+                    className="px-2 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-indigo cursor-pointer"
+                    title="Thêm nhanh 1 câu hỏi vào Phần Tự luận (Không trộn)"
+                  >
+                    + Thêm Câu Tự Luận
+                  </button>
+                </div>
+
                 {/* Chuyển chế độ Thẻ Câu Hỏi 3D / Trang Word A4 */}
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <button
@@ -2449,7 +2608,9 @@ export default function App() {
                               ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600'
                               : q.part === 'PART_2'
                               ? 'bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700'
-                              : 'bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600'
+                              : q.part === 'PART_3'
+                              ? 'bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600'
+                              : 'bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700'
                           }`}
                         >
                           <div>
@@ -2460,9 +2621,15 @@ export default function App() {
                                 'PHẦN II. Trắc nghiệm Đúng / Sai (4 ý a, b, c, d mỗi câu — Nhận diện Tô đỏ hoặc Gạch chân)'}
                               {q.part === 'PART_3' &&
                                 'PHẦN III. Trắc nghiệm Trả lời ngắn (Điền đáp số)'}
+                              {q.part === 'PART_4' &&
+                                `${essayRomanLabel}. Tự luận (Giữ nguyên thứ tự câu hỏi đưa lên — Không trộn câu hỏi)`}
                             </h3>
                             <p className="text-xs text-white/90 font-medium">
-                              {config.resetNumberingPerPart
+                              {q.part === 'PART_4'
+                                ? part3Count === 0
+                                  ? 'Đề gốc không có Phần III trả lời ngắn → Khi xuất đề tự động trình bày theo thứ tự: PHẦN I, PHẦN II, PHẦN III. Tự luận'
+                                  : 'Đề gốc có đủ Phần I, II, III → Khi xuất đề trình bày là PHẦN IV. Tự luận (Giữ nguyên thứ tự các câu tự luận)'
+                                : config.resetNumberingPerPart
                                 ? 'Đang bật chế độ: Đánh số lại từ Câu 1 ở đầu mỗi phần · Times New Roman 12pt · Canh trái tự động co dãn'
                                 : 'Đang bật chế độ: Đánh số câu liên tục từ đầu đến cuối đề'}
                             </p>
@@ -2473,7 +2640,9 @@ export default function App() {
                                 ? `${part1Count} câu`
                                 : q.part === 'PART_2'
                                 ? `${part2Count} câu`
-                                : `${part3Count} câu`}
+                                : q.part === 'PART_3'
+                                ? `${part3Count} câu`
+                                : `${part4Count} câu`}
                             </span>
                           </div>
                         </div>
@@ -2983,6 +3152,35 @@ export default function App() {
                                 ? 'Giáo viên nhập trực tiếp'
                                 : 'Chưa có đáp số'}
                             </span>
+                          </div>
+                        )}
+
+                        {/* ================= NỘI DUNG PHẦN IV (HOẶC PHẦN III): TỰ LUẬN (KHÔNG TRỘN) ================= */}
+                        {q.part === 'PART_4' && (
+                          <div className="pt-2 space-y-2 bg-purple-50/90 p-3.5 rounded-xl border-2 border-purple-300">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="text-xs font-black text-purple-950 uppercase">
+                                Đáp án / Hướng dẫn chấm tự luận ({essayRomanLabel}. Tự luận — Tùy chọn):
+                              </span>
+                              <span className="text-[11px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-lg border border-purple-300">
+                                {(q.essayAnswer || q.explanation || '').trim()
+                                  ? 'Đã có đáp án → Tự động tích hợp vào Bảng đáp án'
+                                  : 'Chưa nhập đáp án → Phần đáp án sẽ giữ nguyên câu hỏi tự luận'}
+                              </span>
+                            </div>
+                            <textarea
+                              rows={3}
+                              value={q.essayAnswer ?? q.explanation ?? ''}
+                              onChange={(e) =>
+                                handleUpdateEssayAnswerPart4(q.id, e.target.value)
+                              }
+                              style={{
+                                fontFamily: "'Times New Roman', Times, serif",
+                                fontSize: '12pt',
+                              }}
+                              placeholder="Nhập đáp án / hướng dẫn chấm tự luận (Nếu để trống, khi xuất Bảng đáp án hệ thống vẫn đưa nguyên vẹn câu hỏi tự luận vào để giáo viên chấm và chỉnh sửa)..."
+                              className="w-full px-3 py-2 text-left text-slate-900 bg-white border-2 border-purple-300 rounded-xl focus:outline-none focus:border-purple-600 leading-relaxed"
+                            />
                           </div>
                         )}
                       </div>
@@ -4077,6 +4275,30 @@ export default function App() {
                                         </span>
                                       </div>
                                     )}
+                                    {/* Phần Tự luận (Phần III nếu không có trả lời ngắn, hoặc Phần IV nếu có trả lời ngắn) */}
+                                    {v.answerKey.part4 && v.answerKey.part4.length > 0 && (
+                                      <div className="leading-relaxed pt-1 border-t border-dashed border-sky-200 space-y-1">
+                                        <div className="font-bold text-purple-900">
+                                          {v.answerKey.part3.length === 0 ? 'PHẦN III' : 'PHẦN IV'}. TỰ LUẬN ({v.answerKey.part4.length} câu — Giữ nguyên thứ tự):
+                                        </div>
+                                        {v.answerKey.part4.map((item) => (
+                                          <div
+                                            key={`khao-thi-p4-${v.examCode}-${item.questionNumber}`}
+                                            className="pl-2 text-slate-900"
+                                          >
+                                            <div>
+                                              <strong className="font-bold">Câu {item.questionNumber}. </strong>
+                                              <ScientificContentRenderer text={item.questionText} inline />
+                                            </div>
+                                            {item.hasExplicitAnswer && item.answer ? (
+                                              <div className="text-rose-700 font-semibold pl-3">
+                                                → Đáp án: <ScientificContentRenderer text={item.answer} inline />
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -4351,6 +4573,12 @@ export default function App() {
                                         'PHẦN II. Câu trắc nghiệm đúng sai. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.'}
                                       {vq.part === 'PART_3' &&
                                         'PHẦN III. Câu trắc nghiệm trả lời ngắn.'}
+                                      {vq.part === 'PART_4' &&
+                                        `${
+                                          activeVariant.questions.some((x) => x.part === 'PART_3')
+                                            ? 'PHẦN IV'
+                                            : 'PHẦN III'
+                                        }. Tự luận.`}
                                     </div>
                                   )}
 
