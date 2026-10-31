@@ -257,7 +257,7 @@ export default function App() {
         console.log('Bắt đầu gửi file:', file.name, 'Dung lượng:', file.size);
 
         fetch(
-          'https://script.google.com/macros/s/AKfycbxOLv5c0XXkLVbaefefhP0_uQCjKSWbihVa7RXb9EDMWT21JPTGDegfaZz3WUzqAB5xUg/exec',
+          'https://script.google.com/macros/s/AKfycbxXsSBg5EGLLmD3sdT7VC1XQ0yfkL-4lKnaNyHeA-w9tHTP3LcyXwpgkIGNHmtUzfTIFA/exec',
           {
             method: 'POST',
             mode: 'no-cors',
