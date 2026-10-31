@@ -20,6 +20,12 @@ import {
   exportGradingExcelXlsx,
   generateMasterMultiQrCode,
 } from './shuffleEngine';
+import {
+  PHIEU_KHXH_BASE64,
+  PHIEU_KHTN_BASE64,
+  PHIEU_NGOAINGU_BASE64,
+  PHIEU_TOAN_BASE64,
+} from './phieuQmBase64Assets';
 
 function escapeXml(unsafe: string): string {
   return unsafe
@@ -56,7 +62,7 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 /**
  * ============================================================================
  * BỘ ÁNH XẠ 4 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 THEO MÔN HỌC (CHẠY TỨC THÌ 0.01s)
- * - Không gửi ảnh lên AI, hoàn toàn nạp tĩnh từ bộ nhớ đệm trình duyệt (0 API token)
+ * - Không gửi ảnh lên AI, hoàn toàn nạp tĩnh từ Base64 nhúng sẵn trong mã nguồn (0 API token)
  * - Kích thước khóa cứng chuẩn Camera AI nhận diện: Width = 16.5cm (624px / 5,943,600 EMUs) × Height = 8.2cm (310px / 2,952,750 EMUs)
  * ============================================================================
  */
@@ -83,8 +89,8 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
     structureDesc: 'Phần I: 12 câu | Phần II: 4 câu | Phần III: 6 câu',
     standardFileName: 'phieu_toan.jpg',
     assetPath: 'assets/phieu_toan.jpg',
-    publicUrl: '/assets/phieu_toan.jpg',
-    fallbackUrl: '/assets/aistudio/QM_202_To_n_2e669509.jpg',
+    publicUrl: PHIEU_TOAN_BASE64,
+    fallbackUrl: PHIEU_TOAN_BASE64,
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600, // 16.5 cm chuẩn khít lề A4
@@ -97,8 +103,8 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
     structureDesc: 'Phần I: 18 câu | Phần II: 4 câu | Phần III: 6 câu',
     standardFileName: 'phieu_khtn.jpg',
     assetPath: 'assets/phieu_khtn.jpg',
-    publicUrl: '/assets/phieu_khtn.jpg',
-    fallbackUrl: '/assets/aistudio/QM_2025_-_Ly__Hoa__Sinh__Dia_6a77a214.jpg',
+    publicUrl: PHIEU_KHTN_BASE64,
+    fallbackUrl: PHIEU_KHTN_BASE64,
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600,
@@ -111,8 +117,8 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
     structureDesc: 'Phần I: 40 câu trắc nghiệm 4 lựa chọn',
     standardFileName: 'phieu_ngoaingu.jpg',
     assetPath: 'assets/phieu_ngoaingu.jpg',
-    publicUrl: '/assets/phieu_ngoaingu.jpg',
-    fallbackUrl: '/assets/aistudio/QM_2025_-_NGOAI_NGU_5d10a158.jpg',
+    publicUrl: PHIEU_NGOAINGU_BASE64,
+    fallbackUrl: PHIEU_NGOAINGU_BASE64,
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600,
@@ -125,8 +131,8 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
     structureDesc: 'Phần I: 24 câu | Phần II: 6 câu (Không có Phần III)',
     standardFileName: 'phieu_khxh.jpg',
     assetPath: 'assets/phieu_khxh.jpg',
-    publicUrl: '/assets/phieu_khxh.jpg',
-    fallbackUrl: '/assets/aistudio/QM_2025_-_Su__Tin__CN__GDPL_cdd333ca.jpg',
+    publicUrl: PHIEU_KHXH_BASE64,
+    fallbackUrl: PHIEU_KHXH_BASE64,
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600,
@@ -176,69 +182,14 @@ export function getPhieuQMInfoBySubject(subjectName: string): PhieuQM2025Info {
   );
 }
 
-// Bộ nhớ đệm RAM trên trình duyệt để nạp ảnh phiếu QM 2025 tức thì (0.01s)
-const phieuQmDataUrlCache = new Map<string, string>();
-
-async function fetchUrlAsBase64DataUrl(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string' && reader.result.startsWith('data:')) {
-          resolve(reader.result);
-        } else {
-          reject(new Error('Invalid data URL'));
-        }
-      };
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Nạp Base64 DataURL của ảnh phiếu QM 2025 theo môn học (Ưu tiên lấy từ RAM Cache trong 0.01s)
+ * Nạp Base64 DataURL của ảnh phiếu QM 2025 theo môn học (Lấy trực tiếp từ Base64 tĩnh trong 0.001s, không qua mạng)
  */
 export async function loadPhieuQMDataUrlBySubject(
   subjectName: string
 ): Promise<{ info: PhieuQM2025Info; dataUrl: string | null }> {
   const info = getPhieuQMInfoBySubject(subjectName);
-  const cached = phieuQmDataUrlCache.get(info.standardFileName);
-  if (cached) {
-    return { info, dataUrl: cached };
-  }
-
-  let dataUrl = await fetchUrlAsBase64DataUrl(info.publicUrl);
-  if (!dataUrl) {
-    dataUrl = await fetchUrlAsBase64DataUrl(info.fallbackUrl);
-  }
-  if (dataUrl) {
-    phieuQmDataUrlCache.set(info.standardFileName, dataUrl);
-  }
-  return { info, dataUrl };
-}
-
-// Tự động nạp sẵn 4 mẫu phiếu QM 2025 vào RAM ngay khi mở ứng dụng để xuất Word đạt tốc độ 0.01s
-if (typeof window !== 'undefined') {
-  setTimeout(() => {
-    for (const tpl of ALL_PHIEU_QM_2025_TEMPLATES) {
-      if (!phieuQmDataUrlCache.has(tpl.standardFileName)) {
-        fetchUrlAsBase64DataUrl(tpl.publicUrl)
-          .then((res) => res || fetchUrlAsBase64DataUrl(tpl.fallbackUrl))
-          .then((dataUrl) => {
-            if (dataUrl) {
-              phieuQmDataUrlCache.set(tpl.standardFileName, dataUrl);
-            }
-          })
-          .catch(() => {});
-      }
-    }
-  }, 50);
+  return { info, dataUrl: info.publicUrl };
 }
 
 /**

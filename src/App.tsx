@@ -4297,35 +4297,29 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap items-center justify-between gap-2 py-1 border-b border-slate-200">
+                          <div className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-200">
                             {config.embedPhieuQM2025 === false ? (
-                              <div className="font-bold">
+                              <div className="font-bold min-w-0 flex-1">
                                 Họ và tên thí sinh: ......................................................... Số báo danh: ....................
                               </div>
                             ) : (
-                              <div className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                              <div className="text-xs font-sans font-bold text-emerald-800 flex items-center gap-1.5 min-w-0 flex-1">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                <span>
+                                <span className="truncate sm:whitespace-normal">
                                   Đã nhúng tự động <strong>{activePhieuQMInfo.standardFileName}</strong> ({activePhieuQMInfo.groupName}: {activePhieuQMInfo.structureDesc}) — Khóa tỷ lệ 16.5cm × 8.2cm
                                 </span>
                               </div>
                             )}
-                            <div className="px-3 py-0.5 border-2 border-slate-900 font-bold">
+                            <div className="px-3 py-0.5 border-2 border-slate-900 font-bold shrink-0 whitespace-nowrap ml-auto">
                               MÃ ĐỀ THI: {activeVariant.examCode}
                             </div>
                           </div>
 
                           {/* HIỂN THỊ TRỰC QUAN ẢNH PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 NGAY DƯỚI HEADER TRANG 1 */}
                           {config.embedPhieuQM2025 !== false && (
-                            <div className="py-2 flex flex-col items-center justify-center border-b-2 border-dashed border-slate-300 bg-slate-50/50 rounded-xl">
+                            <div className="py-2.5 px-2 flex flex-col items-center justify-center border-b-2 border-dashed border-slate-300 bg-slate-50/50 rounded-xl">
                               <img
                                 src={activePhieuQMInfo.publicUrl}
-                                onError={(e) => {
-                                  const target = e.currentTarget;
-                                  if (target.src !== window.location.origin + activePhieuQMInfo.fallbackUrl) {
-                                    target.src = activePhieuQMInfo.fallbackUrl;
-                                  }
-                                }}
                                 alt={`Phiếu trả lời trắc nghiệm QM 2025 - ${activePhieuQMInfo.groupName}`}
                                 className="w-full max-w-[624px] h-auto object-contain border border-slate-300 rounded-lg shadow-xs bg-white cursor-pointer hover:shadow-md transition-shadow"
                                 onClick={() =>
@@ -4335,7 +4329,7 @@ export default function App() {
                                   })
                                 }
                               />
-                              <span className="mt-1 text-[11px] font-sans font-semibold text-slate-500">
+                              <span className="mt-1.5 text-[11px] font-sans font-semibold text-slate-500 text-center">
                                 ▲ Ảnh Phiếu QM 2025 ({activePhieuQMInfo.standardFileName} · 16.5cm × 8.2cm) được chèn tự động ngay dưới Header Trang 1 trong file De_{activeVariant.examCode}.docx (Bấm vào ảnh để phóng to)
                               </span>
                             </div>
