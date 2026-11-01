@@ -17,26 +17,29 @@
   <body>
     <div id="root"></div>
     <script type="module" src="./src/main.tsx"></script>
-  <!-- ================= HỘP THOẠI ĐĂNG KÝ / ĐĂNG NHẬP GMAIL ================= -->
+  <!-- ================= HỘP THOẠI ĐĂNG NHẬP GMAIL CHUẨN ================= -->
 <div id="authGateModal" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(15,23,42,0.85); backdrop-filter:blur(5px); align-items:center; justify-content:center; padding:16px; font-family:sans-serif;">
   <div style="background:#fff; border-radius:18px; max-width:390px; width:100%; padding:28px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.35); text-align:center;">
     <div style="width:52px; height:52px; background:#eff6ff; color:#2563eb; border-radius:14px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto; font-size:22px;">
       <i class="fa-solid fa-envelope-circle-check"></i>
     </div>
     <h3 style="margin:0 0 6px 0; font-size:19px; font-weight:bold; color:#1e293b;">Đăng nhập hệ thống</h3>
-    <p style="margin:0 0 18px 0; font-size:12.5px; color:#64748b; line-height:1.4;">Nhập Gmail và thông tin cá nhân để bắt đầu sử dụng phần mềm Tronde</p>
+    <p style="margin:0 0 18px 0; font-size:12.5px; color:#64748b; line-height:1.4;">Nhập Gmail chính thức để kích hoạt phần mềm Tronde</p>
 
     <form id="formAuthGate" style="text-align:left;">
+      <!-- 1. Ô NHẬP GMAIL (BẮT BUỘC ĐỂ ĐẨY VÀO CỘT B) -->
       <div style="margin-bottom:12px;">
         <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Địa chỉ Gmail: <span style="color:#ef4444;">*</span></label>
         <input type="email" id="authGmail" required placeholder="vidu@gmail.com" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
       </div>
 
+      <!-- 2. Ô NHẬP HỌ TÊN -->
       <div style="margin-bottom:12px;">
         <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Họ và tên Thầy / Cô: <span style="color:#ef4444;">*</span></label>
         <input type="text" id="authTeacherName" required placeholder="Ví dụ: Hồ Tấn Khải" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
       </div>
       
+      <!-- 3. Ô NHẬP TRƯỜNG -->
       <div style="margin-bottom:16px;">
         <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Trường công tác: <span style="color:#ef4444;">*</span></label>
         <input type="text" id="authSchoolName" required placeholder="Ví dụ: THPT Mang Thít" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
@@ -45,7 +48,7 @@
       <div id="authErrorMsg" style="display:none; padding:10px; border-radius:8px; font-size:12px; font-weight:500; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; margin-bottom:14px; line-height:1.4;"></div>
 
       <button type="submit" id="btnSubmitAuth" style="width:100%; background:#2563eb; color:#fff; border:none; padding:11px; border-radius:8px; font-weight:bold; font-size:14px; cursor:pointer; transition:0.2s;">
-        Xác nhận & Sử dụng
+        Xác nhận & Bắt đầu
       </button>
     </form>
   </div>
@@ -78,9 +81,9 @@
         btnSubmit.disabled = true;
         btnSubmit.innerText = "Đang kiểm tra Gmail...";
 
-        const gmail = document.getElementById("authGmail").value.trim().toLowerCase();
-        const name = document.getElementById("authTeacherName").value.trim();
-        const school = document.getElementById("authSchoolName").value.trim();
+        const gmailVal = document.getElementById("authGmail").value.trim().toLowerCase();
+        const nameVal = document.getElementById("authTeacherName").value.trim();
+        const schoolVal = document.getElementById("authSchoolName").value.trim();
 
         let ip = "---";
         try {
@@ -90,9 +93,9 @@
         } catch (err) {}
 
         const payload = {
-          gmail: gmail,
-          teacherName: name,
-          schoolName: school,
+          gmail: gmailVal,
+          teacherName: nameVal,
+          schoolName: schoolVal,
           deviceId: deviceId,
           ipAddress: ip
         };
@@ -108,13 +111,13 @@
             errBox.innerText = "⚠️ " + result.message;
             errBox.style.display = "block";
             btnSubmit.disabled = false;
-            btnSubmit.innerText = "Xác nhận & Sử dụng";
+            btnSubmit.innerText = "Xác nhận & Bắt đầu";
           } else {
-            localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmail, name: name, school: school }));
+            localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmailVal, name: nameVal, school: schoolVal }));
             modal.style.display = "none";
           }
         } catch (error) {
-          localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmail, name: name, school: school }));
+          localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmailVal, name: nameVal, school: schoolVal }));
           modal.style.display = "none";
         }
       });
