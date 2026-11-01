@@ -122,6 +122,11 @@ export default function App() {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [lastSavedAt, setLastSavedAt] = useState<string>('Vừa khởi tạo');
   const [editedQuestionIds, setEditedQuestionIds] = useState<string[]>([]);
+  const [unsavedQuestionIds, setUnsavedQuestionIds] = useState<string[]>([]);
+  const [savedQuestionTimestamps, setSavedQuestionTimestamps] = useState<
+    Record<string, string>
+  >({});
+  const lastEditSourceRef = useRef<'CARDS_3D' | 'WORD_A4_PAGE'>('CARDS_3D');
   const [isSavedAndReadyState, setIsSavedAndReadyState] = useState<boolean>(false);
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null);
   const [activeRightTab, setActiveRightTab] = useState<
@@ -494,6 +499,9 @@ export default function App() {
         setWordRawDocumentText(serializeQuestionsToWordRawText(parsed));
         setHasUnsavedChanges(false);
         setEditedQuestionIds([]);
+        setUnsavedQuestionIds([]);
+        setSavedQuestionTimestamps({});
+        lastEditSourceRef.current = 'CARDS_3D';
         setIsSavedAndReadyState(issuesAfterParse.length === 0);
         setShuffledVariants([]);
         setClonedQuestions([]);
@@ -562,6 +570,9 @@ export default function App() {
     setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
     setHasUnsavedChanges(false);
     setEditedQuestionIds([]);
+    setUnsavedQuestionIds([]);
+    setSavedQuestionTimestamps({});
+    lastEditSourceRef.current = 'CARDS_3D';
     setIsSavedAndReadyState(true);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
     setStatusBanner({
@@ -865,24 +876,42 @@ export default function App() {
   };
 
   const markQuestionEdited = (questionId: string) => {
+    lastEditSourceRef.current = 'CARDS_3D';
     setHasUnsavedChanges(true);
     setIsSavedAndReadyState(false);
     setEditedQuestionIds((prev) =>
       prev.includes(questionId) ? prev : [...prev, questionId]
     );
+    setUnsavedQuestionIds((prev) =>
+      prev.includes(questionId) ? prev : [...prev, questionId]
+    );
+    setSavedQuestionTimestamps((prev) => {
+      if (!(questionId in prev)) return prev;
+      const next = { ...prev };
+      delete next[questionId];
+      return next;
+    });
   };
 
   const handleUpdateStemText = (questionId: string, newStem: string) => {
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === questionId ? { ...q, stemText: newStem } : q))
-    );
+    setQuestions((prev) => {
+      const next = prev.map((q) =>
+        q.id === questionId ? { ...q, stemText: newStem } : q
+      );
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
   const handleUpdateBloomLevel = (questionId: string, level: BloomLevel) => {
-    setQuestions((prev) =>
-      prev.map((q) => (q.id === questionId ? { ...q, bloomLevel: level } : q))
-    );
+    setQuestions((prev) => {
+      const next = prev.map((q) =>
+        q.id === questionId ? { ...q, bloomLevel: level } : q
+      );
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
@@ -890,13 +919,15 @@ export default function App() {
     questionId: string,
     optionId: string
   ) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
+    setQuestions((prev) => {
+      const next = prev.map((q) => {
         if (q.id !== questionId || !q.options) return q;
         const updatedOpts: OptionPart1[] = q.options.map((opt) => {
           const isTarget = opt.id === optionId;
+          const cleanText = (opt.text || '').replace(/^\s*\*\s*/, '');
           return {
             ...opt,
+            text: cleanText,
             isUnderline: isTarget,
             isRed: isTarget,
             isCorrect: isTarget,
@@ -906,8 +937,10 @@ export default function App() {
           ...q,
           options: updatedOpts,
         };
-      })
-    );
+      });
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
@@ -916,24 +949,28 @@ export default function App() {
     optionId: string,
     prop: 'isUnderline' | 'isRed'
   ) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
+    setQuestions((prev) => {
+      const next = prev.map((q) => {
         if (q.id !== questionId || !q.options) return q;
         const updatedOpts: OptionPart1[] = q.options.map((opt) => {
           if (opt.id !== optionId) return opt;
           const nextVal = !opt[prop];
           const nextUnderline = prop === 'isUnderline' ? nextVal : opt.isUnderline;
           const nextRed = prop === 'isRed' ? nextVal : opt.isRed;
+          const cleanText = (opt.text || '').replace(/^\s*\*\s*/, '');
           return {
             ...opt,
+            text: cleanText,
             isUnderline: nextUnderline,
             isRed: nextRed,
             isCorrect: nextUnderline || nextRed,
           };
         });
         return { ...q, options: updatedOpts };
-      })
-    );
+      });
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
@@ -942,8 +979,8 @@ export default function App() {
     optionId: string,
     newText: string
   ) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
+    setQuestions((prev) => {
+      const next = prev.map((q) => {
         if (q.id !== questionId || !q.options) return q;
         const updatedOpts = q.options.map((opt) =>
           opt.id === optionId ? { ...opt, text: newText } : opt
@@ -953,8 +990,10 @@ export default function App() {
           options: updatedOpts,
           computedLayout: computeAutoLayoutForOptions(updatedOpts),
         };
-      })
-    );
+      });
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
@@ -963,23 +1002,30 @@ export default function App() {
     subItemId: string,
     forceValue?: boolean
   ) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
+    setQuestions((prev) => {
+      const next = prev.map((q) => {
         if (q.id !== questionId || !q.subItems) return q;
         const updatedSubs: SubItemPart2[] = q.subItems.map((sub) => {
           if (sub.id !== subItemId) return sub;
           const nextTrue =
             typeof forceValue === 'boolean' ? forceValue : !sub.isTrue;
+          const cleanText = (sub.text || '')
+            .replace(/^\s*\*\s*/, '')
+            .replace(/\s*\(\s*(?:Đúng|Sai|Đ|S|True|False|T|F)\s*\)\s*$/i, '')
+            .replace(/\s*\[\s*(?:Đúng|Sai|Đ|S|True|False|T|F)\s*\]\s*$/i, '');
           return {
             ...sub,
+            text: cleanText,
             isTrue: nextTrue,
             isUnderline: nextTrue,
             isRed: nextTrue,
           };
         });
         return { ...q, subItems: updatedSubs };
-      })
-    );
+      });
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
@@ -988,8 +1034,8 @@ export default function App() {
     subItemId: string,
     newText: string
   ) => {
-    setQuestions((prev) =>
-      prev.map((q) => {
+    setQuestions((prev) => {
+      const next = prev.map((q) => {
         if (q.id !== questionId || !q.subItems) return q;
         return {
           ...q,
@@ -997,14 +1043,16 @@ export default function App() {
             sub.id === subItemId ? { ...sub, text: newText } : sub
           ),
         };
-      })
-    );
+      });
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
   const handleUpdateShortAnswerPart3 = (questionId: string, val: string) => {
-    setQuestions((prev) =>
-      prev.map((q) =>
+    setQuestions((prev) => {
+      const next = prev.map((q) =>
         q.id === questionId
           ? {
               ...q,
@@ -1012,14 +1060,16 @@ export default function App() {
               shortAnswerDetectedBy: val.trim() ? 'MANUAL' : 'NONE',
             }
           : q
-      )
-    );
+      );
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
   const handleUpdateEssayAnswerPart4 = (questionId: string, val: string) => {
-    setQuestions((prev) =>
-      prev.map((q) =>
+    setQuestions((prev) => {
+      const next = prev.map((q) =>
         q.id === questionId
           ? {
               ...q,
@@ -1027,8 +1077,10 @@ export default function App() {
               explanation: val,
             }
           : q
-      )
-    );
+      );
+      setWordRawDocumentText(serializeQuestionsToWordRawText(next));
+      return next;
+    });
     markQuestionEdited(questionId);
   };
 
@@ -1059,6 +1111,138 @@ export default function App() {
         block: 'center',
       });
     }, 80);
+  };
+
+  // Lưu cố định riêng từng câu hỏi đang chỉnh sửa (Đảm bảo chuyển sang câu khác không bao giờ bị mất hoặc thay đổi chỉnh sửa)
+  const handleSaveSingleQuestion = (
+    questionId: string,
+    moveToNextQuestion = false
+  ) => {
+    lastEditSourceRef.current = 'CARDS_3D';
+    const recalculated = normalizeAllQuestionsStrictFourOptions(
+      questions,
+      config.resetNumberingPerPart
+    );
+    const savedTime = new Date().toLocaleTimeString('vi-VN');
+    setQuestions(recalculated);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(recalculated));
+    setEditedQuestionIds((prev) =>
+      prev.includes(questionId) ? prev : [...prev, questionId]
+    );
+    setSavedQuestionTimestamps((prev) => ({
+      ...prev,
+      [questionId]: savedTime,
+    }));
+
+    const remainingUnsaved = unsavedQuestionIds.filter((id) => id !== questionId);
+    setUnsavedQuestionIds(remainingUnsaved);
+    if (remainingUnsaved.length === 0) {
+      setHasUnsavedChanges(false);
+    }
+    setLastSavedAt(savedTime);
+
+    const targetQ = recalculated.find((q) => q.id === questionId);
+    const allIssues = validateExamQuestions(recalculated);
+    const targetQIssues = allIssues.filter((i) => i.questionId === questionId);
+    const allErrors = allIssues.filter((i) => i.severity === 'ERROR');
+    setIsSavedAndReadyState(allErrors.length === 0);
+
+    if (moveToNextQuestion) {
+      const nextErrIssue = allIssues.find((i) => i.questionId !== questionId);
+      if (nextErrIssue) {
+        handleScrollToQuestion(nextErrIssue.questionId);
+        setStatusBanner({
+          type: 'SUCCESS',
+          text: `Đã lưu cố định Câu ${targetQ?.displayIndex ?? ''} (lúc ${savedTime})! Đã chuyển sang Câu ${nextErrIssue.questionIndex} để tiếp tục chỉnh sửa mà không làm thay đổi Câu ${targetQ?.displayIndex ?? ''}.`,
+        });
+        return;
+      }
+      const currentIdx = recalculated.findIndex((q) => q.id === questionId);
+      if (currentIdx >= 0 && currentIdx + 1 < recalculated.length) {
+        const nextQ = recalculated[currentIdx + 1];
+        handleScrollToQuestion(nextQ.id);
+        setStatusBanner({
+          type: 'SUCCESS',
+          text: `Đã lưu cố định Câu ${targetQ?.displayIndex ?? ''} (lúc ${savedTime}) và chuyển sang Câu ${nextQ.displayIndex}!`,
+        });
+        return;
+      }
+    }
+
+    if (targetQIssues.length === 0) {
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã lưu cố định chỉnh sửa Câu ${targetQ?.displayIndex ?? ''} (lúc ${savedTime})! Giáo viên có thể chuyển sang câu khác thoải mái mà không lo bị thay đổi nội dung đã sửa.`,
+      });
+    } else {
+      setStatusBanner({
+        type: 'INFO',
+        text: `Đã lưu tạm Câu ${targetQ?.displayIndex ?? ''} (lúc ${savedTime}). Lưu ý: Câu này vẫn còn nhắc nhở: ${targetQIssues[0].message}`,
+      });
+    }
+  };
+
+  // Lưu cố định toàn bộ chỉnh sửa của tất cả các câu (Không tự động nhảy tab để giáo viên yên tâm chuyển qua lại giữa các câu)
+  const handleSaveAllEditsOnly = () => {
+    let baseQuestions = questions;
+    if (
+      editorViewMode === 'WORD_A4_PAGE' &&
+      lastEditSourceRef.current === 'WORD_A4_PAGE' &&
+      hasUnsavedChanges
+    ) {
+      const rawFromWord = parseRawTextToExamQuestions(
+        wordRawDocumentText,
+        config.resetNumberingPerPart
+      );
+      if (rawFromWord.length > 0) {
+        baseQuestions = mergeRichMetadataFromExistingQuestions(
+          rawFromWord,
+          questions
+        );
+      }
+    }
+
+    const recalculated = normalizeAllQuestionsStrictFourOptions(
+      baseQuestions,
+      config.resetNumberingPerPart
+    );
+    const savedTime = new Date().toLocaleTimeString('vi-VN');
+    setQuestions(recalculated);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(recalculated));
+    setHasUnsavedChanges(false);
+    setUnsavedQuestionIds([]);
+    setLastSavedAt(savedTime);
+    lastEditSourceRef.current = 'CARDS_3D';
+
+    const idsToMark = Array.from(
+      new Set([...editedQuestionIds, ...unsavedQuestionIds])
+    );
+    setSavedQuestionTimestamps((prev) => {
+      const next = { ...prev };
+      idsToMark.forEach((id) => {
+        next[id] = savedTime;
+      });
+      return next;
+    });
+
+    const remainingErrors = validateExamQuestions(recalculated).filter(
+      (i) => i.severity === 'ERROR'
+    );
+    setIsSavedAndReadyState(remainingErrors.length === 0);
+
+    if (remainingErrors.length === 0) {
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã lưu cố định TOÀN BỘ chỉnh sửa (${
+          idsToMark.length > 0 ? `${idsToMark.length} câu đã sửa · ` : ''
+        }lúc ${savedTime})! Mọi câu hỏi đều được giữ nguyên 100% khi chuyển qua lại. Giáo viên có thể bấm "Trộn Đề" hoặc "Lưu & Trộn Đề" bất kỳ lúc nào.`,
+      });
+    } else {
+      setStatusBanner({
+        type: 'INFO',
+        text: `Đã lưu cố định toàn bộ các câu vừa sửa (lúc ${savedTime})! Các câu đã lưu được khóa an toàn không bị thay đổi khi chuyển câu. Hiện còn ${remainingErrors.length} câu cần bổ sung đáp án trước khi trộn đề.`,
+      });
+    }
   };
 
   // Hàm thực thi trộn đề trực tiếp từ danh sách câu hỏi đã chuẩn hóa (Tránh lỗi state bất đồng bộ khi vừa bấm Lưu)
@@ -1099,7 +1283,11 @@ export default function App() {
 
   const handleSaveEdits = async () => {
     let baseQuestions = questions;
-    if (editorViewMode === 'WORD_A4_PAGE' && hasUnsavedChanges) {
+    if (
+      editorViewMode === 'WORD_A4_PAGE' &&
+      lastEditSourceRef.current === 'WORD_A4_PAGE' &&
+      hasUnsavedChanges
+    ) {
       const rawFromWord = parseRawTextToExamQuestions(
         wordRawDocumentText,
         config.resetNumberingPerPart
@@ -1120,7 +1308,20 @@ export default function App() {
     setQuestions(recalculated);
     setWordRawDocumentText(serializeQuestionsToWordRawText(recalculated));
     setHasUnsavedChanges(false);
+    setUnsavedQuestionIds([]);
     setLastSavedAt(savedTime);
+    lastEditSourceRef.current = 'CARDS_3D';
+
+    const idsToMark = Array.from(
+      new Set([...editedQuestionIds, ...unsavedQuestionIds])
+    );
+    setSavedQuestionTimestamps((prev) => {
+      const next = { ...prev };
+      idsToMark.forEach((id) => {
+        next[id] = savedTime;
+      });
+      return next;
+    });
 
     const remainingErrors = validateExamQuestions(recalculated).filter(
       (i) => i.severity === 'ERROR'
@@ -1129,10 +1330,8 @@ export default function App() {
       setIsSavedAndReadyState(true);
       await executeShuffleWithQuestions(
         recalculated,
-        `Đã lưu chỉnh sửa (${
-          editedQuestionIds.length > 0
-            ? `Cập nhật ${editedQuestionIds.length} câu hỏi · `
-            : ''
+        `Đã lưu toàn bộ chỉnh sửa (${
+          idsToMark.length > 0 ? `Cập nhật ${idsToMark.length} câu hỏi · ` : ''
         }lúc ${savedTime}) và tự động trộn thành công ${config.numVariants} mã đề kèm Bảng Đáp Án Chung!`
       );
     } else {
@@ -1142,7 +1341,7 @@ export default function App() {
       handleScrollToQuestion(remainingErrors[0].questionId);
       setStatusBanner({
         type: 'INFO',
-        text: `Đã lưu chỉnh sửa lúc ${savedTime}! Hiện còn ${remainingErrors.length} câu cần hoàn thiện đáp án (Đã cuộn tới Câu ${remainingErrors[0].questionIndex}: ${remainingErrors[0].message}) để tự động trộn đề.`,
+        text: `Đã lưu cố định các câu vừa chỉnh sửa lúc ${savedTime}! Hiện còn ${remainingErrors.length} câu cần hoàn thiện đáp án (Đã chuyển tới Câu ${remainingErrors[0].questionIndex}: ${remainingErrors[0].message}) để tự động trộn đề.`,
       });
     }
   };
@@ -1153,10 +1352,12 @@ export default function App() {
       questions,
       config.resetNumberingPerPart
     );
+    const savedTime = new Date().toLocaleTimeString('vi-VN');
     setQuestions(normalized);
     setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
     setHasUnsavedChanges(false);
-    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
+    setUnsavedQuestionIds([]);
+    setLastSavedAt(savedTime);
 
     const remainingIssues = validateExamQuestions(normalized);
     if (remainingIssues.length > 0) {
@@ -1185,7 +1386,11 @@ export default function App() {
   // ================= HANDLERS: TRỘN ĐỀ & XUẤT FILE WORD / BẢNG ĐÁP ÁN CHUNG / QR =================
   const handleRunShuffle = async () => {
     let baseQuestions = questions;
-    if (editorViewMode === 'WORD_A4_PAGE' && hasUnsavedChanges) {
+    if (
+      editorViewMode === 'WORD_A4_PAGE' &&
+      lastEditSourceRef.current === 'WORD_A4_PAGE' &&
+      hasUnsavedChanges
+    ) {
       const rawFromWord = parseRawTextToExamQuestions(
         wordRawDocumentText,
         config.resetNumberingPerPart
@@ -1206,7 +1411,20 @@ export default function App() {
     setQuestions(normalized);
     setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
     setHasUnsavedChanges(false);
+    setUnsavedQuestionIds([]);
     setLastSavedAt(savedTime);
+    lastEditSourceRef.current = 'CARDS_3D';
+
+    const idsToMark = Array.from(
+      new Set([...editedQuestionIds, ...unsavedQuestionIds])
+    );
+    setSavedQuestionTimestamps((prev) => {
+      const next = { ...prev };
+      idsToMark.forEach((id) => {
+        next[id] = savedTime;
+      });
+      return next;
+    });
 
     const currentErrors = validateExamQuestions(normalized).filter(
       (i) => i.severity === 'ERROR'
@@ -1218,7 +1436,7 @@ export default function App() {
       handleScrollToQuestion(currentErrors[0].questionId);
       setStatusBanner({
         type: 'ERROR',
-        text: `Vui lòng sửa ${currentErrors.length} lỗi đáp án trước khi trộn đề (Đã cuộn tới Câu ${currentErrors[0].questionIndex}: ${currentErrors[0].message}).`,
+        text: `Đã lưu cố định các câu vừa sửa! Vui lòng hoàn thiện thêm ${currentErrors.length} lỗi đáp án trước khi trộn đề (Đã cuộn tới Câu ${currentErrors[0].questionIndex}: ${currentErrors[0].message}).`,
       });
       return;
     }
@@ -2561,7 +2779,7 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Hàng 2: 2 Nút tiện ích — [Đề Mẫu 18-4-6] & [Lưu Chỉnh Sửa] */}
+                {/* Hàng 2: 2 Nút tiện ích — [Đề Mẫu 18-4-6] & [Lưu Toàn Bộ Chỉnh Sửa] */}
                 <div className="grid grid-cols-2 gap-2 pt-0.5">
                   <button
                     type="button"
@@ -2575,15 +2793,37 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={handleSaveEdits}
+                    onClick={handleSaveAllEditsOnly}
                     disabled={isProcessing}
-                    title="Lưu mọi chỉnh sửa nội dung câu hỏi & đáp án hiện tại và tự động bắt đầu trộn đề"
+                    title="Lưu cố định toàn bộ các câu đã chỉnh sửa để chuyển sang câu khác không bị thay đổi"
                     className={`px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      hasUnsavedChanges ? 'btn-3d-amber ring-2 ring-amber-300' : 'btn-3d-emerald'
+                      hasUnsavedChanges ? 'btn-3d-amber ring-2 ring-amber-300' : 'btn-3d-indigo'
                     }`}
                   >
                     <Save className="w-3.5 h-3.5 shrink-0" />
-                    <span>{hasUnsavedChanges ? 'Lưu & Trộn Đề*' : 'Lưu & Trộn Đề'}</span>
+                    <span>
+                      {hasUnsavedChanges
+                        ? `Lưu Toàn Bộ (${unsavedQuestionIds.length || 1})*`
+                        : 'Lưu Toàn Bộ Chỉnh Sửa'}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Hàng 2.5: Nút [Lưu Toàn Bộ & Bắt Đầu Trộn Đề Ngay] */}
+                <div className="pt-0.5">
+                  <button
+                    type="button"
+                    onClick={handleSaveEdits}
+                    disabled={isProcessing}
+                    title="Lưu toàn bộ chỉnh sửa hiện tại và tự động bắt đầu trộn đề ngay"
+                    className="w-full px-3 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-emerald flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>
+                      {hasUnsavedChanges
+                        ? 'Lưu Toàn Bộ & Bắt Đầu Trộn Đề Ngay*'
+                        : 'Lưu & Trộn Đề Ngay'}
+                    </span>
                   </button>
                 </div>
 
@@ -2779,26 +3019,39 @@ export default function App() {
               {/* Nhóm 3: Khung cảnh báo câu hỏi chưa hợp lệ & trạng thái chỉnh sửa */}
               <div className="space-y-1.5">
                 {hasUnsavedChanges ? (
-                  <div className="px-3 py-2 rounded-xl bg-amber-50 border-2 border-amber-500 text-amber-950 text-xs font-black flex items-center justify-between gap-2 shadow-2xs">
+                  <div className="px-3 py-2 rounded-xl bg-amber-50 border-2 border-amber-500 text-amber-950 text-xs font-black flex flex-col gap-1.5 shadow-2xs">
                     <div className="flex items-center gap-1.5">
                       <Edit3 className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
                       <span>
-                        Đang chỉnh sửa ({editedQuestionIds.length || 1} câu) ·{' '}
+                        Đang sửa {unsavedQuestionIds.length || 1} câu (Tổng đã sửa:{' '}
+                        {editedQuestionIds.length || 1} câu) ·{' '}
                         {validationIssues.length === 0
-                          ? 'Đã hết lỗi! Bấm Lưu để trộn đề ngay'
+                          ? 'Đã hết lỗi! Có thể Lưu Toàn Bộ hoặc Trộn Đề ngay'
                           : `Còn ${validationIssues.length} lỗi cần sửa`}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleSaveEdits}
-                      disabled={isProcessing}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
-                      title="Lưu trạng thái đã chỉnh sửa và tự động bắt đầu trộn đề"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Lưu &amp; Trộn Đề</span>
-                    </button>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleSaveAllEditsOnly}
+                        disabled={isProcessing}
+                        className="px-2 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-black flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                        title="Lưu cố định toàn bộ các câu vừa chỉnh sửa để chuyển sang câu khác không bị thay đổi"
+                      >
+                        <Save className="w-3.5 h-3.5 shrink-0" />
+                        <span>Lưu Toàn Bộ Chỉnh Sửa</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveEdits}
+                        disabled={isProcessing}
+                        className="px-2 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                        title="Lưu trạng thái đã chỉnh sửa và tự động bắt đầu trộn đề"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        <span>Lưu &amp; Trộn Đề</span>
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   editedQuestionIds.length > 0 &&
@@ -2950,6 +3203,7 @@ export default function App() {
                     value={wordRawDocumentText}
                     onPaste={handleWordA4ClipboardPaste}
                     onChange={(e) => {
+                      lastEditSourceRef.current = 'WORD_A4_PAGE';
                       setWordRawDocumentText(e.target.value);
                       setHasUnsavedChanges(true);
                     }}
@@ -2962,6 +3216,55 @@ export default function App() {
                   />
                 </div>
               )}
+
+              {/* Thanh Công Cụ Lưu Toàn Bộ Chỉnh Sửa Cố Định Phía Trên Danh Sách Câu Hỏi */}
+              <div className="sticky top-2 z-30 p-3 rounded-2xl bg-white/95 backdrop-blur-md border-2 border-indigo-300 shadow-lg flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-1 rounded-lg bg-indigo-700 text-white text-xs font-black flex items-center gap-1.5">
+                    <Save className="w-3.5 h-3.5 shrink-0" />
+                    <span>CHẾ ĐỘ BẢO TOÀN CHỈNH SỬA TỪNG CÂU</span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-700">
+                    {unsavedQuestionIds.length > 0
+                      ? `Đang có ${unsavedQuestionIds.length} câu vừa sửa chưa bấm lưu cố định`
+                      : editedQuestionIds.length > 0
+                      ? `Đã lưu cố định ${editedQuestionIds.length} câu đã chỉnh sửa (Lúc ${lastSavedAt})`
+                      : 'Mọi chỉnh sửa ở từng câu đều được giữ nguyên khi chuyển sang câu khác'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={handleSaveAllEditsOnly}
+                    disabled={isProcessing}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                      unsavedQuestionIds.length > 0
+                        ? 'btn-3d-amber ring-2 ring-amber-300'
+                        : 'btn-3d-indigo'
+                    }`}
+                    title="Lưu cố định toàn bộ chỉnh sửa của tất cả các câu (Giữ nguyên vị trí hiện tại để tiếp tục xem/chuyển sang câu khác)"
+                  >
+                    <Save className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {unsavedQuestionIds.length > 0
+                        ? `Lưu Toàn Bộ Chỉnh Sửa (${unsavedQuestionIds.length} câu)*`
+                        : 'Lưu Toàn Bộ Chỉnh Sửa'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveEdits}
+                    disabled={isProcessing}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 cursor-pointer shadow-sm"
+                    title="Lưu toàn bộ chỉnh sửa và bắt đầu trộn đề ngay"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Lưu Toàn Bộ &amp; Trộn Đề Ngay</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Danh sách câu hỏi trực quan trên các khung thẻ 3D */}
               <div className="space-y-4">
@@ -3047,16 +3350,18 @@ export default function App() {
                             {editedQuestionIds.includes(q.id) && (
                               <span
                                 className={`px-2 py-0.5 rounded-md text-[11px] font-black border flex items-center gap-1 ${
-                                  hasUnsavedChanges
+                                  unsavedQuestionIds.includes(q.id)
                                     ? 'bg-amber-100 border-amber-400 text-amber-900'
                                     : 'bg-emerald-100 border-emerald-400 text-emerald-900'
                                 }`}
                               >
                                 <CheckCircle2 className="w-3 h-3 shrink-0" />
                                 <span>
-                                  {hasUnsavedChanges
-                                    ? 'Đã chỉnh sửa (Chờ lưu)'
-                                    : `Đã lưu chỉnh sửa (${lastSavedAt})`}
+                                  {unsavedQuestionIds.includes(q.id)
+                                    ? `Đang sửa Câu ${q.displayIndex} (Chưa bấm lưu câu này)`
+                                    : `Đã lưu cố định Câu ${q.displayIndex} (${
+                                        savedQuestionTimestamps[q.id] || lastSavedAt
+                                      }) ✓`}
                                 </span>
                               </span>
                             )}
@@ -3093,35 +3398,56 @@ export default function App() {
                             )}
                           </div>
 
-                          {questionIssues.length > 0 ? (
-                            <div className="flex items-center gap-1.5 text-xs font-extrabold text-rose-700">
-                              <AlertTriangle className="w-4 h-4 shrink-0" />
-                              <span>{questionIssues[0].message}</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1">
-                                <CheckCircle2 className="w-4 h-4" />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {questionIssues.length > 0 ? (
+                              <div className="flex items-center gap-1 text-xs font-extrabold text-rose-700 bg-rose-100/90 px-2.5 py-1 rounded-lg border border-rose-300">
+                                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                <span>{questionIssues[0].message}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
+                                <CheckCircle2 className="w-3.5 h-3.5" />
                                 <span>
                                   {editedQuestionIds.includes(q.id)
                                     ? 'Đã chỉnh sửa hợp lệ'
                                     : 'Đạt chuẩn 2025'}
                                 </span>
                               </span>
-                              {(hasUnsavedChanges || editedQuestionIds.includes(q.id)) && (
-                                <button
-                                  type="button"
-                                  onClick={handleSaveEdits}
-                                  disabled={isProcessing}
-                                  className="px-3 py-1 rounded-lg text-xs font-black text-white btn-3d-emerald flex items-center gap-1 cursor-pointer shadow-xs"
-                                  title="Lưu chỉnh sửa và bắt đầu trộn đề ngay"
-                                >
-                                  <Save className="w-3.5 h-3.5" />
-                                  <span>Lưu &amp; Trộn Đề Ngay</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
+                            )}
+
+                            {/* Nút Lưu riêng từng câu ngay trên thanh tiêu đề của câu */}
+                            <button
+                              type="button"
+                              onClick={() => handleSaveSingleQuestion(q.id, false)}
+                              disabled={isProcessing}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-black text-white flex items-center gap-1 cursor-pointer shadow-xs ${
+                                unsavedQuestionIds.includes(q.id)
+                                  ? 'btn-3d-amber ring-2 ring-amber-300'
+                                  : 'btn-3d-sky'
+                              }`}
+                              title={`Lưu cố định chỉnh sửa của riêng Câu ${q.displayIndex} (Chuyển sang câu khác không bị thay đổi)`}
+                            >
+                              <Save className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                {unsavedQuestionIds.includes(q.id)
+                                  ? `Lưu Câu ${q.displayIndex}*`
+                                  : savedQuestionTimestamps[q.id]
+                                  ? `Đã Lưu Câu ${q.displayIndex} ✓`
+                                  : `Lưu Câu ${q.displayIndex}`}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleSaveAllEditsOnly}
+                              disabled={isProcessing}
+                              className="px-2.5 py-1 rounded-lg text-xs font-black text-white btn-3d-indigo flex items-center gap-1 cursor-pointer shadow-xs"
+                              title="Lưu cố định toàn bộ các câu đã chỉnh sửa trong đề"
+                            >
+                              <Save className="w-3.5 h-3.5 shrink-0" />
+                              <span>Lưu Toàn Bộ</span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* Ô biên tập trực tiếp thân câu hỏi (Times New Roman 12pt, canh trái) */}
@@ -3750,6 +4076,81 @@ export default function App() {
                             />
                           </div>
                         )}
+
+                        {/* Thanh Lưu Chỉnh Sửa Cuối Thẻ Câu Hỏi (Lưu riêng câu này / Lưu & Sang câu tiếp / Lưu toàn bộ chỉnh sửa) */}
+                        <div className="mt-4 pt-3 border-t border-sky-200/90 flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                            {unsavedQuestionIds.includes(q.id) ? (
+                              <span className="text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 font-black">
+                                ● Câu {q.displayIndex} có thay đổi mới — Hãy bấm &quot;Lưu Câu {q.displayIndex}&quot; hoặc &quot;Lưu Toàn Bộ&quot; để khóa cố định
+                              </span>
+                            ) : savedQuestionTimestamps[q.id] ? (
+                              <span className="text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300 font-black">
+                                ✓ Đã lưu cố định Câu {q.displayIndex} (lúc {savedQuestionTimestamps[q.id]}) — Chuyển câu khác không bị thay đổi
+                              </span>
+                            ) : (
+                              <span className="text-slate-600">
+                                Chỉnh sửa trực tiếp Câu {q.displayIndex} (Mọi thay đổi được giữ nguyên khi chuyển sang câu khác)
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveSingleQuestion(q.id, false)}
+                              disabled={isProcessing}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1.5 cursor-pointer shadow-xs ${
+                                unsavedQuestionIds.includes(q.id)
+                                  ? 'btn-3d-amber ring-2 ring-amber-300'
+                                  : 'btn-3d-sky'
+                              }`}
+                              title={`Lưu cố định riêng Câu ${q.displayIndex}`}
+                            >
+                              <Save className="w-3.5 h-3.5 shrink-0" />
+                              <span>
+                                {unsavedQuestionIds.includes(q.id)
+                                  ? `Lưu Câu ${q.displayIndex} Này*`
+                                  : `Lưu Câu ${q.displayIndex} Này`}
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleSaveSingleQuestion(q.id, true)}
+                              disabled={isProcessing}
+                              className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-cyan flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              title={`Lưu cố định Câu ${q.displayIndex} và chuyển sang câu tiếp theo mà không làm thay đổi Câu ${q.displayIndex}`}
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Lưu Câu {q.displayIndex} &amp; Sang Câu Tiếp</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={handleSaveAllEditsOnly}
+                              disabled={isProcessing}
+                              className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              title="Lưu cố định toàn bộ chỉnh sửa của tất cả các câu trong đề"
+                            >
+                              <Save className="w-3.5 h-3.5 shrink-0" />
+                              <span>Lưu Toàn Bộ Chỉnh Sửa</span>
+                            </button>
+
+                            {validationIssues.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={handleSaveEdits}
+                                disabled={isProcessing}
+                                className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                title="Lưu toàn bộ chỉnh sửa và bắt đầu trộn đề ngay"
+                              >
+                                <Shuffle className="w-3.5 h-3.5 shrink-0" />
+                                <span>Lưu &amp; Trộn Đề Ngay</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </React.Fragment>
                   );

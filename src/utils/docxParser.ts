@@ -2036,9 +2036,11 @@ export function enforceStrictFourOptionsPart1(
   let finalOptions: OptionPart1[] = [];
 
   if (
-    existingOpts.length === 4 &&
-    existingOpts.every((o) => o.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(o.text.trim())) &&
-    (questionRuns.length === 0 || (!stemHasClumpedFour && !anyOptionHasClumpedNext))
+    (questionRuns.length === 0 && existingOpts.length === 4) ||
+    (existingOpts.length === 4 &&
+      existingOpts.every((o) => o.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(o.text.trim())) &&
+      !stemHasClumpedFour &&
+      !anyOptionHasClumpedNext)
   ) {
     finalOptions = existingOpts.map((o, idx) => {
       const lbl = labels[idx];
@@ -2058,10 +2060,13 @@ export function enforceStrictFourOptionsPart1(
           : Boolean(o.isCorrect || o.isUnderline || o.isRed || explicitCorrect);
       const isUnderline = isCorrect ? Boolean(o.isUnderline || explicitCorrect || isCorrect) : false;
       const isRed = isCorrect ? Boolean(o.isRed || explicitCorrect || isCorrect) : false;
-      const safeText = sanitizeAndEnforceNonEmptyOptionText(cleanText, lbl, idx, finalStem, questionRuns);
+      const safeText =
+        questionRuns.length === 0
+          ? cleanText
+          : sanitizeAndEnforceNonEmptyOptionText(cleanText, lbl, idx, finalStem, questionRuns);
       return {
         ...o,
-        id: o.id || `${question.id}-opt-${lbl}`,
+        id: o.id || `${question.id}-opt-${lbl}-${idx}`,
         originalLabel: lbl,
         currentLabel: o.currentLabel || lbl,
         text: safeText,
@@ -2149,7 +2154,7 @@ export function enforceStrictFourOptionsPart1(
         const safeText = sanitizeAndEnforceNonEmptyOptionText(cleanOptText, seg.label, idx, finalStem, questionRuns);
 
         return {
-          id: prevOpt?.id || `${question.id}-opt-${seg.label}`,
+          id: `${question.id}-opt-${seg.label}-${idx}`,
           originalLabel: seg.label,
           currentLabel: seg.label,
           text: safeText,
@@ -2201,7 +2206,7 @@ export function enforceStrictFourOptionsPart1(
         const safeText = sanitizeAndEnforceNonEmptyOptionText(rawT, lbl, idx, finalStem, questionRuns);
 
         return {
-          id: prevOpt?.id || `${question.id}-opt-${lbl}`,
+          id: `${question.id}-opt-${lbl}-${idx}`,
           originalLabel: lbl,
           currentLabel: lbl,
           text: safeText,
@@ -2262,9 +2267,11 @@ export function enforceStrictFourSubItemsPart2(
   let finalSubs: SubItemPart2[] = [];
 
   if (
-    existingSubs.length === 4 &&
-    existingSubs.every((s) => s.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(s.text.trim())) &&
-    (questionRuns.length === 0 || (!stemHasClumpedFour && !anySubHasClumpedNext))
+    (questionRuns.length === 0 && existingSubs.length === 4) ||
+    (existingSubs.length === 4 &&
+      existingSubs.every((s) => s.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(s.text.trim())) &&
+      !stemHasClumpedFour &&
+      !anySubHasClumpedNext)
   ) {
     finalSubs = existingSubs.map((s, idx) => {
       const lbl = labels[idx];
@@ -2293,11 +2300,14 @@ export function enforceStrictFourSubItemsPart2(
           : Boolean(s.isTrue || s.isUnderline || s.isRed);
       const isUnderline = isTrue ? Boolean(s.isUnderline || explicitTrue === true || isTrue) : false;
       const isRed = isTrue ? Boolean(s.isRed || explicitTrue === true || isTrue) : false;
-      const safeText = sanitizeAndEnforceNonEmptySubItemText(cleanSubText, lbl, idx, finalStem, questionRuns);
+      const safeText =
+        questionRuns.length === 0
+          ? cleanSubText
+          : sanitizeAndEnforceNonEmptySubItemText(cleanSubText, lbl, idx, finalStem, questionRuns);
 
       return {
         ...s,
-        id: s.id || `${question.id}-sub-${lbl}`,
+        id: s.id || `${question.id}-sub-${lbl}-${idx}`,
         originalLabel: lbl,
         currentLabel: s.currentLabel || lbl,
         text: safeText,
@@ -2399,7 +2409,7 @@ export function enforceStrictFourSubItemsPart2(
         const safeText = sanitizeAndEnforceNonEmptySubItemText(cleanSubText, seg.label, idx, finalStem, questionRuns);
 
         return {
-          id: prevSub?.id || `${question.id}-sub-${seg.label}`,
+          id: `${question.id}-sub-${seg.label}-${idx}`,
           originalLabel: seg.label,
           currentLabel: seg.label,
           text: safeText,
@@ -2446,7 +2456,7 @@ export function enforceStrictFourSubItemsPart2(
         const rawT = item ? item.text : '';
         const safeText = sanitizeAndEnforceNonEmptySubItemText(rawT, lbl, idx, finalStem, questionRuns);
         return {
-          id: `${question.id}-sub-${lbl}`,
+          id: `${question.id}-sub-${lbl}-${idx}`,
           originalLabel: lbl,
           currentLabel: lbl,
           text: safeText,
