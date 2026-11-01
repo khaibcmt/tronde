@@ -17,39 +17,76 @@
   <body>
     <div id="root"></div>
     <script type="module" src="./src/main.tsx"></script>
-<!-- ================= HỘP THOẠI ĐĂNG KÝ GMAIL TRONDE ================= -->
-<div id="authGateModal" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(15,23,42,0.85); backdrop-filter:blur(5px); align-items:center; justify-content:center; padding:16px; font-family:sans-serif;">
-  <div style="background:#fff; border-radius:18px; max-width:390px; width:100%; padding:28px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.35); text-align:center;">
-    <div style="width:52px; height:52px; background:#eff6ff; color:#2563eb; border-radius:14px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto; font-size:22px;">
-      <i class="fa-solid fa-envelope-circle-check"></i>
-    </div>
-    <h3 style="margin:0 0 6px 0; font-size:19px; font-weight:bold; color:#1e293b;">Đăng nhập sử dụng</h3>
-    <p style="margin:0 0 18px 0; font-size:12.5px; color:#64748b; line-height:1.4;">Nhập Gmail và thông tin cá nhân để bắt đầu sử dụng phần mềm Tronde</p>
+<!-- ================= HỘP THOẠI ĐĂNG NHẬP GMAIL CHUYÊN NGHIỆP ================= -->
+<div id="authGateModal" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(15,23,42,0.7); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); align-items:center; justify-content:center; padding:16px; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <div style="background:#ffffff; border-radius:24px; max-width:420px; width:100%; padding:32px 28px; box-shadow:0 25px 50px -12px rgba(15,23,42,0.35), 0 0 0 1px rgba(226,232,240,0.8); text-align:center; position:relative; overflow:hidden;">
+    
+    <!-- Dải màu gradient trang trí góc trên -->
+    <div style="position:absolute; top:0; left:0; right:0; height:6px; background:linear-gradient(90deg, #3b82f6, #6366f1, #8b5cf6);"></div>
 
+    <!-- Icon biểu trưng -->
+    <div style="width:60px; height:60px; background:linear-gradient(135deg, #eff6ff, #dbeafe); color:#2563eb; border-radius:18px; display:flex; align-items:center; justify-content:center; margin:4px auto 16px auto; font-size:26px; box-shadow:0 8px 16px -4px rgba(37,99,235,0.2);">
+      <i class="fa-solid fa-graduation-cap"></i>
+    </div>
+
+    <!-- Tiêu đề & Giới thiệu -->
+    <div style="display:inline-block; padding:4px 12px; background:#f1f5f9; color:#475569; border-radius:20px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">
+      EduMix • Tronde 2025
+    </div>
+    <h3 style="margin:0 0 6px 0; font-size:21px; font-weight:800; color:#0f172a; letter-spacing:-0.5px;">Xác nhận thông tin</h3>
+    <p style="margin:0 0 22px 0; font-size:13px; color:#64748b; line-height:1.5;">Vui lòng điền thông tin để bắt đầu sử dụng công cụ trộn đề thi trắc nghiệm</p>
+
+    <!-- Biểu mẫu nhập liệu -->
     <form id="formAuthGate" style="text-align:left;">
+      
       <!-- 1. Ô ĐỊA CHỈ GMAIL -->
-      <div style="margin-bottom:12px;">
-        <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Địa chỉ Gmail: <span style="color:#ef4444;">*</span></label>
-        <input type="email" id="authGmail" required placeholder="nhap_email@gmail.com" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
+      <div style="margin-bottom:14px;">
+        <label style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#334155; margin-bottom:6px;">
+          <span>Địa chỉ Gmail</span>
+          <span style="color:#ef4444; font-size:11px;">* Bắt buộc</span>
+        </label>
+        <div style="position:relative; display:flex; align-items:center;">
+          <span style="position:absolute; left:14px; color:#94a3b8; font-size:14px;"><i class="fa-regular fa-envelope"></i></span>
+          <input type="email" id="authGmail" required placeholder="thayco@gmail.com" style="width:100%; box-sizing:border-box; padding:11px 14px 11px 40px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:13.5px; color:#1e293b; background:#f8fafc; outline:none; transition:all 0.2s;" onfocus="this.style.borderColor='#3b82f6'; this.style.background='#fff';" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc';">
+        </div>
       </div>
 
       <!-- 2. Ô HỌ VÀ TÊN -->
-      <div style="margin-bottom:12px;">
-        <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Họ và tên Thầy / Cô: <span style="color:#ef4444;">*</span></label>
-        <input type="text" id="authTeacherName" required placeholder="Ví dụ: Hồ Tấn Khải" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
+      <div style="margin-bottom:14px;">
+        <label style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#334155; margin-bottom:6px;">
+          <span>Họ và tên Thầy / Cô</span>
+          <span style="color:#ef4444; font-size:11px;">* Bắt buộc</span>
+        </label>
+        <div style="position:relative; display:flex; align-items:center;">
+          <span style="position:absolute; left:14px; color:#94a3b8; font-size:14px;"><i class="fa-regular fa-user"></i></span>
+          <input type="text" id="authTeacherName" required placeholder="Ví dụ: Hồ Tấn Khải" style="width:100%; box-sizing:border-box; padding:11px 14px 11px 40px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:13.5px; color:#1e293b; background:#f8fafc; outline:none; transition:all 0.2s;" onfocus="this.style.borderColor='#3b82f6'; this.style.background='#fff';" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc';">
+        </div>
       </div>
       
-      <!-- 3. Ô TRƯỜNG CÔNG TÁC -->
-      <div style="margin-bottom:16px;">
-        <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Trường công tác: <span style="color:#ef4444;">*</span></label>
-        <input type="text" id="authSchoolName" required placeholder="Ví dụ: THPT Mang Thít" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
+      <!-- 3. Ô ĐƠN VỊ CÔNG TÁC -->
+      <div style="margin-bottom:20px;">
+        <label style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; color:#334155; margin-bottom:6px;">
+          <span>Trường công tác</span>
+          <span style="color:#ef4444; font-size:11px;">* Bắt buộc</span>
+        </label>
+        <div style="position:relative; display:flex; align-items:center;">
+          <span style="position:absolute; left:14px; color:#94a3b8; font-size:14px;"><i class="fa-solid fa-school"></i></span>
+          <input type="text" id="authSchoolName" required placeholder="Ví dụ: THPT Mang Thít" style="width:100%; box-sizing:border-box; padding:11px 14px 11px 40px; border:1.5px solid #e2e8f0; border-radius:12px; font-size:13.5px; color:#1e293b; background:#f8fafc; outline:none; transition:all 0.2s;" onfocus="this.style.borderColor='#3b82f6'; this.style.background='#fff';" onblur="this.style.borderColor='#e2e8f0'; this.style.background='#f8fafc';">
+        </div>
       </div>
 
-      <div id="authErrorMsg" style="display:none; padding:10px; border-radius:8px; font-size:12px; font-weight:500; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; margin-bottom:14px; line-height:1.4;"></div>
+      <!-- Khung báo lỗi -->
+      <div id="authErrorMsg" style="display:none; padding:12px 14px; border-radius:12px; font-size:12.5px; font-weight:500; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; margin-bottom:16px; line-height:1.4;"></div>
 
-      <button type="submit" id="btnSubmitAuth" style="width:100%; background:#2563eb; color:#fff; border:none; padding:11px; border-radius:8px; font-weight:bold; font-size:14px; cursor:pointer; transition:0.2s;">
-        Xác nhận & Bắt đầu
+      <!-- Nút gửi -->
+      <button type="submit" id="btnSubmitAuth" style="width:100%; background:linear-gradient(135deg, #2563eb, #1d4ed8); color:#ffffff; border:none; padding:13px; border-radius:12px; font-weight:700; font-size:14.5px; cursor:pointer; box-shadow:0 10px 20px -5px rgba(37,99,235,0.4); display:flex; align-items:center; justify-content:center; gap:8px; transition:transform 0.15s, box-shadow 0.15s;" onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 12px 24px -5px rgba(37,99,235,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 10px 20px -5px rgba(37,99,235,0.4)';">
+        <span>Vào phần mềm</span>
+        <i class="fa-solid fa-arrow-right" style="font-size:13px;"></i>
       </button>
+
+      <p style="margin:14px 0 0 0; text-align:center; font-size:11px; color:#94a3b8;">
+        Hệ thống tự động ghi nhớ tài khoản cho các lần sử dụng tiếp theo
+      </p>
     </form>
   </div>
 </div>
@@ -58,7 +95,6 @@
   (function() {
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzwdXDqUQbWShXFFYrgX17fCnhi0jc4TLFaoECm6DvTi8zcDO8i37dsxnLQfErZNRfj/exec";
 
-    // Kiểm tra trạng thái đã đăng nhập trên máy
     const savedUser = localStorage.getItem("tronde_current_user");
     const modal = document.getElementById("authGateModal");
     const errBox = document.getElementById("authErrorMsg");
@@ -68,7 +104,6 @@
       modal.style.display = "flex";
     }
 
-    // Tạo mã thiết bị duy nhất nếu chưa có
     let deviceId = localStorage.getItem("tronde_device_id");
     if (!deviceId) {
       deviceId = "TRON-" + Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -81,13 +116,12 @@
         e.preventDefault();
         errBox.style.display = "none";
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "Đang kiểm tra Gmail...";
+        btnSubmit.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Đang xác nhận...</span>`;
 
         const gmailVal = document.getElementById("authGmail").value.trim().toLowerCase();
         const nameVal = document.getElementById("authTeacherName").value.trim();
         const schoolVal = document.getElementById("authSchoolName").value.trim();
 
-        // Lấy IP mạng ngầm
         let ip = "---";
         try {
           const resIp = await fetch("https://api.ipify.org?format=json");
@@ -112,17 +146,15 @@
           const result = await response.json();
 
           if (result.status === "duplicate" || result.status === "error") {
-            errBox.innerText = "⚠️ " + result.message;
+            errBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation" style="margin-right:6px;"></i>` + result.message;
             errBox.style.display = "block";
             btnSubmit.disabled = false;
-            btnSubmit.innerText = "Xác nhận & Bắt đầu";
+            btnSubmit.innerHTML = `<span>Vào phần mềm</span><i class="fa-solid fa-arrow-right" style="font-size:13px;"></i>`;
           } else {
-            // Thành công: Ghi nhớ vào trình duyệt và đóng modal
             localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmailVal, name: nameVal, school: schoolVal }));
             modal.style.display = "none";
           }
         } catch (error) {
-          // Dự phòng nếu lỗi CORS từ trình duyệt
           localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmailVal, name: nameVal, school: schoolVal }));
           modal.style.display = "none";
         }
