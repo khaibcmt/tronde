@@ -17,7 +17,7 @@
   <body>
     <div id="root"></div>
     <script type="module" src="./src/main.tsx"></script>
- <!-- ================= HỘP THOẠI ĐĂNG KÝ / ĐĂNG NHẬP GMAIL CHUẨN ================= -->
+<!-- ================= HỘP THOẠI ĐĂNG KÝ GMAIL TRONDE ================= -->
 <div id="authGateModal" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(15,23,42,0.85); backdrop-filter:blur(5px); align-items:center; justify-content:center; padding:16px; font-family:sans-serif;">
   <div style="background:#fff; border-radius:18px; max-width:390px; width:100%; padding:28px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.35); text-align:center;">
     <div style="width:52px; height:52px; background:#eff6ff; color:#2563eb; border-radius:14px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px auto; font-size:22px;">
@@ -27,7 +27,7 @@
     <p style="margin:0 0 18px 0; font-size:12.5px; color:#64748b; line-height:1.4;">Nhập Gmail và thông tin cá nhân để bắt đầu sử dụng phần mềm Tronde</p>
 
     <form id="formAuthGate" style="text-align:left;">
-      <!-- 1. Ô GMAIL -->
+      <!-- 1. Ô ĐỊA CHỈ GMAIL -->
       <div style="margin-bottom:12px;">
         <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Địa chỉ Gmail: <span style="color:#ef4444;">*</span></label>
         <input type="email" id="authGmail" required placeholder="nhap_email@gmail.com" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
@@ -39,7 +39,7 @@
         <input type="text" id="authTeacherName" required placeholder="Ví dụ: Hồ Tấn Khải" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
       </div>
       
-      <!-- 3. Ô TRƯỜNG -->
+      <!-- 3. Ô TRƯỜNG CÔNG TÁC -->
       <div style="margin-bottom:16px;">
         <label style="display:block; font-size:12px; font-weight:bold; color:#334155; margin-bottom:5px;">Trường công tác: <span style="color:#ef4444;">*</span></label>
         <input type="text" id="authSchoolName" required placeholder="Ví dụ: THPT Mang Thít" style="width:100%; box-sizing:border-box; padding:9px 12px; border:1px solid #cbd5e1; border-radius:8px; font-size:13.5px; outline:none;">
@@ -58,7 +58,7 @@
   (function() {
     const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzcvMr0k6HaQGSE792JcBz4k-XlmC6NAKbVGSf263XMiG4CjLZijPRzU889c_EJgKMy/exec";
 
-    // Kiểm tra đăng nhập
+    // Kiểm tra trạng thái đã đăng nhập trên máy
     const savedUser = localStorage.getItem("tronde_current_user");
     const modal = document.getElementById("authGateModal");
     const errBox = document.getElementById("authErrorMsg");
@@ -68,7 +68,7 @@
       modal.style.display = "flex";
     }
 
-    // Mã máy duy nhất
+    // Tạo mã thiết bị duy nhất nếu chưa có
     let deviceId = localStorage.getItem("tronde_device_id");
     if (!deviceId) {
       deviceId = "TRON-" + Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -81,12 +81,13 @@
         e.preventDefault();
         errBox.style.display = "none";
         btnSubmit.disabled = true;
-        btnSubmit.innerText = "Đang xác thực...";
+        btnSubmit.innerText = "Đang kiểm tra Gmail...";
 
         const gmailVal = document.getElementById("authGmail").value.trim().toLowerCase();
         const nameVal = document.getElementById("authTeacherName").value.trim();
         const schoolVal = document.getElementById("authSchoolName").value.trim();
 
+        // Lấy IP mạng ngầm
         let ip = "---";
         try {
           const resIp = await fetch("https://api.ipify.org?format=json");
@@ -116,10 +117,12 @@
             btnSubmit.disabled = false;
             btnSubmit.innerText = "Xác nhận & Bắt đầu";
           } else {
+            // Thành công: Ghi nhớ vào trình duyệt và đóng modal
             localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmailVal, name: nameVal, school: schoolVal }));
             modal.style.display = "none";
           }
         } catch (error) {
+          // Dự phòng nếu lỗi CORS từ trình duyệt
           localStorage.setItem("tronde_current_user", JSON.stringify({ gmail: gmailVal, name: nameVal, school: schoolVal }));
           modal.style.display = "none";
         }
