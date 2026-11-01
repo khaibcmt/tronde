@@ -1,8 +1,28 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Times New Roman', Times, serif;
+  --font-serif: 'Times New Roman', Times, serif;
+  --font-mono: 'Times New Roman', Times, serif;
+}
+
 @layer base {
+  html,
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  code,
+  pre,
+  .font-sans,
+  .font-serif,
+  .font-mono {
+    font-family: 'Times New Roman', Times, serif !important;
+  }
+
   body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: 'Times New Roman', Times, serif !important;
     background: linear-gradient(135deg, #E0F2FE 0%, #CFFAFE 50%, #D1FAE5 100%);
     background-attachment: fixed;
     color: #0F172A;
@@ -12,7 +32,7 @@
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Times New Roman', Times, serif !important;
     font-variant-numeric: tabular-nums;
   }
 }
@@ -680,3 +700,49 @@
   color: #F472B6;
   text-shadow: 0 0 12px rgba(244, 114, 182, 0.55);
 }
+
+/* ================= HỘP THOẠI ĐĂNG KÝ / ĐĂNG NHẬP GMAIL 3D NỔI BẬT (EDUMIX PRO2025) ================= */
+@keyframes trondePulseGlow {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.6), 0 0 30px rgba(139, 92, 246, 0.4);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 25px rgba(236, 72, 153, 0.8), 0 0 45px rgba(59, 130, 246, 0.7);
+  }
+}
+
+@keyframes badgeBlink {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 8px #38bdf8);
+  }
+  50% {
+    opacity: 0.45;
+    filter: drop-shadow(0 0 2px #38bdf8);
+  }
+}
+
+@keyframes gradientText {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.tronde-input-3d {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tronde-input-3d:hover {
+  transform: translateY(-2px);
+}
+.tronde-input-3d:focus-within {
+  transform: translateY(-3px) scale(1.01);
+}
+

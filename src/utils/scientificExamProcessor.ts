@@ -226,7 +226,7 @@ function buildOmmlRun(text: string, italic = true): string {
   return `<m:r>
     <m:rPr>${italic ? '' : '<m:nor/>'}</m:rPr>
     <w:rPr>
-      <w:rFonts w:ascii="Cambria Math" w:hAnsi="Cambria Math" w:cs="Cambria Math"/>
+      <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
       <w:sz w:val="24"/><w:szCs w:val="24"/>
     </w:rPr>
     <m:t>${escapeXmlText(clean)}</m:t>

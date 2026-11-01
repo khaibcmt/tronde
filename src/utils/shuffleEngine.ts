@@ -218,7 +218,7 @@ async function addBottomCaptionToQrDataUrl(
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
         ctx.fillStyle = captionColor;
-        ctx.font = `bold ${Math.max(12, Math.round(h * 0.048))}px sans-serif`;
+        ctx.font = `bold ${Math.max(12, Math.round(h * 0.048))}px "Times New Roman", Times, serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(captionText, w / 2, h + extraHeight * 0.48);

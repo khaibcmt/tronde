@@ -106,6 +106,10 @@ import { UserGuideModal } from './components/UserGuideModal';
 import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModal';
 import { ScientificContentRenderer } from './components/ScientificContentRenderer';
+import {
+  TeacherAuthGateModal,
+  TeacherAuthUser,
+} from './components/TeacherAuthGateModal';
 
 export default function App() {
   // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề Kiểm Tra Cuối Học Kì 1 — Môn Sinh Học 12 Chuẩn Cấu Trúc 2025)
@@ -220,10 +224,33 @@ export default function App() {
   const [selectedVariantCode, setSelectedVariantCode] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp
+  // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp & Xác thực Giáo viên (QuanLy_TronDe)
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [isCoffeeModalOpen, setIsCoffeeModalOpen] = useState<boolean>(false);
+  const [currentTeacherUser, setCurrentTeacherUser] =
+    useState<TeacherAuthUser | null>(() => {
+      try {
+        const raw = localStorage.getItem('tronde_current_user');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.gmail && parsed.name) {
+          return parsed as TeacherAuthUser;
+        }
+        return null;
+      } catch {
+        return null;
+      }
+    });
+  const [isAuthGateModalOpen, setIsAuthGateModalOpen] = useState<boolean>(
+    () => {
+      try {
+        return !localStorage.getItem('tronde_current_user');
+      } catch {
+        return true;
+      }
+    }
+  );
   const [featureRegistry, setFeatureRegistry] = useState<FeatureReleaseItem[]>(
     DYNAMIC_FEATURE_REGISTRY
   );
@@ -1806,7 +1833,21 @@ export default function App() {
               </div>
             </a>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsAuthGateModalOpen(true)}
+                className="px-3 py-1 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title="Xem hoặc cập nhật thông tin Giáo viên đăng nhập hệ thống (Đồng bộ QuanLy_TronDe)"
+              >
+                <i className="fa-solid fa-user-check text-emerald-300" />
+                <span>
+                  {currentTeacherUser
+                    ? `GV: ${currentTeacherUser.name} (${currentTeacherUser.school})`
+                    : 'Đăng nhập Giáo viên'}
+                </span>
+              </button>
+
               <span
                 className="text-xs font-mono font-bold text-emerald-950 bg-emerald-100/90 px-3 py-1 rounded-xl border border-emerald-300 truncate max-w-[340px] shadow-2xs"
                 title={`Tên tệp xuất ra: ${buildStandardExportFileName(config, 'docx')}`}
@@ -5358,6 +5399,29 @@ export default function App() {
       <BuyCoffeeModal
         isOpen={isCoffeeModalOpen}
         onClose={() => setIsCoffeeModalOpen(false)}
+      />
+
+      {/* Hộp thoại Xác thực & Đăng nhập Giáo viên 3D (Đồng bộ Google Apps Script QuanLy_TronDe) */}
+      <TeacherAuthGateModal
+        isOpen={isAuthGateModalOpen}
+        currentUser={currentTeacherUser}
+        onCloseIfAuthenticated={() => setIsAuthGateModalOpen(false)}
+        onAuthenticated={(user) => {
+          setCurrentTeacherUser(user);
+          setIsAuthGateModalOpen(false);
+          if (user.school) {
+            setConfig((prev) => ({
+              ...prev,
+              schoolName: user.school.toUpperCase().startsWith('TRƯỜNG')
+                ? user.school.toUpperCase()
+                : `TRƯỜNG ${user.school.toUpperCase()}`,
+            }));
+          }
+          setStatusBanner({
+            type: 'SUCCESS',
+            text: `Chào mừng Thầy/Cô ${user.name} (${user.school}) đã đăng nhập hệ thống EduMix Pro2025!`,
+          });
+        }}
       />
 
       {/* ================= CHÂN TRANG SIÊU GỌN CHỈ GỒM 1 HÀNG DUY NHẤT (CHIẾM DIỆN TÍCH NHỎ NHẤT CÓ THỂ) ================= */}
