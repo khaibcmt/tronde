@@ -190,9 +190,9 @@ export async function parsePdfExamFile(
           originalLabel: 'A',
           currentLabel: 'A',
           text: 'Phương án A',
-          isUnderline: true,
-          isRed: true,
-          isCorrect: true,
+          isUnderline: false,
+          isRed: false,
+          isCorrect: false,
         },
         {
           id: `opt-scan-${idx}-B`,

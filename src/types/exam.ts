@@ -115,7 +115,10 @@ export interface ValidationIssue {
     | 'P1_MULTIPLE_CORRECT'
     | 'P1_INCOMPLETE_OPTIONS'
     | 'P2_INCOMPLETE_SUBITEMS'
+    | 'P2_ALL_TRUE'
+    | 'P2_ALL_FALSE'
     | 'P3_MISSING_SHORT_ANSWER'
+    | 'P3_EXCEEDS_MAX_LENGTH'
     | 'P3_INVALID_FORMAT';
   message: string;
   suggestion: string;

@@ -135,14 +135,13 @@ export function validateExamQuestions(
           questionIndex: q.displayIndex,
           severity: 'ERROR',
           code: 'P1_INCOMPLETE_OPTIONS',
-          message: `${partLabel} - Câu ${q.displayIndex}: Không đủ 4 phương án A, B, C, D (hiện có ${opts.length}).`,
-          suggestion: 'Bấm nút [Chuẩn Hóa 4 Đáp Án] để tự động tách và cân bằng đủ 4 phương án.',
+          message: `${partLabel} - Câu ${q.displayIndex}: Không đủ 4 phương án A, B, C, D (hiện có ${opts.length}). Vui lòng bổ sung!`,
+          suggestion: 'Bổ sung đủ 4 phương án A, B, C, D cho câu hỏi.',
         });
       }
       const emptyOpt = opts.find(
         (o) =>
           !o.text.trim() ||
-          o.text.trim().length <= 1 ||
           /^[.\-_:,;?!]+$/.test(o.text.trim())
       );
       if (emptyOpt) {
@@ -153,8 +152,8 @@ export function validateExamQuestions(
           questionIndex: q.displayIndex,
           severity: 'ERROR',
           code: 'P1_INCOMPLETE_OPTIONS',
-          message: `${partLabel} - Câu ${q.displayIndex}: Phương án ${emptyOpt.currentLabel}. bị rỗng hoặc chỉ có dấu chấm.`,
-          suggestion: 'Bấm [Tách Dính Chùm & 4 ĐA] để hệ thống tự động vá và phục hồi công thức.',
+          message: `${partLabel} - Câu ${q.displayIndex}: Phương án ${emptyOpt.currentLabel}. đang bị bỏ trống nội dung. Giáo viên vui lòng bổ sung!`,
+          suggestion: 'Nhập nội dung phương án bị thiếu trực tiếp trên thẻ câu hỏi.',
         });
       }
 
@@ -167,8 +166,8 @@ export function validateExamQuestions(
           questionIndex: q.displayIndex,
           severity: 'ERROR',
           code: 'P1_MISSING_CORRECT',
-          message: `${partLabel} - Câu ${q.displayIndex}: Thiếu đáp án đúng (chưa gạch chân hoặc tô màu đỏ).`,
-          suggestion: 'Click chọn 1 đáp án A, B, C hoặc D trên khung sửa nhanh.',
+          message: `${partLabel} - Câu ${q.displayIndex}: Thiếu đáp án đúng từ đề gốc (Hệ thống tuyệt đối không tự bịa đáp án). Giáo viên vui lòng chọn đáp án!`,
+          suggestion: 'Click chọn 1 đáp án chuẩn A, B, C hoặc D trên thẻ câu hỏi.',
         });
       } else if (correctOpts.length > 1) {
         const labels = correctOpts.map((o) => o.currentLabel).join(', ');
@@ -179,7 +178,7 @@ export function validateExamQuestions(
           questionIndex: q.displayIndex,
           severity: 'ERROR',
           code: 'P1_MULTIPLE_CORRECT',
-          message: `${partLabel} - Câu ${q.displayIndex}: Thừa đáp án đúng (${correctOpts.length} phương án đang chọn: ${labels}).`,
+          message: `${partLabel} - Câu ${q.displayIndex}: Đang chọn ${correctOpts.length} phương án đúng (${labels}). Giáo viên vui lòng kiểm tra và chỉ chọn 1 đáp án đúng!`,
           suggestion: 'Chỉ giữ lại duy nhất 1 phương án đúng ở Phần I.',
         });
       }
@@ -193,14 +192,13 @@ export function validateExamQuestions(
           questionIndex: q.displayIndex,
           severity: 'ERROR',
           code: 'P2_INCOMPLETE_SUBITEMS',
-          message: `${partLabel} - Câu ${q.displayIndex}: Không đủ 4 lệnh hỏi con a), b), c), d) (hiện có ${subs.length}).`,
-          suggestion: 'Bấm nút [Tách Dính Chùm & 4 ĐA] để tự động tách đủ 4 ý a), b), c), d).',
+          message: `${partLabel} - Câu ${q.displayIndex}: Không đủ 4 lệnh hỏi con a), b), c), d) (hiện có ${subs.length}). Vui lòng bổ sung!`,
+          suggestion: 'Bổ sung đủ 4 ý a), b), c), d) cho câu hỏi Đúng/Sai.',
         });
       } else {
         const emptySub = subs.find(
           (s) =>
             !s.text.trim() ||
-            s.text.trim().length <= 1 ||
             /^[.\-_:,;?!]+$/.test(s.text.trim())
         );
         if (emptySub) {
@@ -211,8 +209,33 @@ export function validateExamQuestions(
             questionIndex: q.displayIndex,
             severity: 'ERROR',
             code: 'P2_INCOMPLETE_SUBITEMS',
-            message: `${partLabel} - Câu ${q.displayIndex}: Ý ${emptySub.currentLabel}) bị bỏ trống hoặc chỉ có dấu chấm.`,
-            suggestion: 'Bấm nút [Tách Dính Chùm & 4 ĐA] để phục hồi nội dung phát biểu.',
+            message: `${partLabel} - Câu ${q.displayIndex}: Ý ${emptySub.currentLabel}) đang bị bỏ trống nội dung. Giáo viên vui lòng bổ sung!`,
+            suggestion: 'Nhập nội dung mệnh đề phát biểu cho ý bị trống.',
+          });
+        }
+
+        const trueCount = subs.filter((s) => s.isTrue).length;
+        if (trueCount === 4) {
+          issues.push({
+            id: `issue-${q.id}-p2-all-true`,
+            questionId: q.id,
+            part: q.part,
+            questionIndex: q.displayIndex,
+            severity: 'ERROR',
+            code: 'P2_ALL_TRUE',
+            message: `${partLabel} - Câu ${q.displayIndex}: Có cả 4 ý a), b), c), d) đều là ĐÚNG (4 Đúng). Giáo viên vui lòng kiểm tra và chỉnh sửa lại đáp án!`,
+            suggestion: 'Kiểm tra lại từng ý a), b), c), d) và bấm nút Đúng (Đ) / Sai (S) để điều chỉnh đáp án chuẩn.',
+          });
+        } else if (trueCount === 0) {
+          issues.push({
+            id: `issue-${q.id}-p2-all-false`,
+            questionId: q.id,
+            part: q.part,
+            questionIndex: q.displayIndex,
+            severity: 'ERROR',
+            code: 'P2_ALL_FALSE',
+            message: `${partLabel} - Câu ${q.displayIndex}: Có cả 4 ý a), b), c), d) đều là SAI (4 Sai — hoặc đề gốc chưa đánh dấu đáp án). Giáo viên vui lòng bổ sung và chỉnh sửa!`,
+            suggestion: 'Giáo viên vui lòng bấm chọn Đúng (Đ) / Sai (S) chuẩn cho từng ý a), b), c), d).',
           });
         }
       }
@@ -226,20 +249,34 @@ export function validateExamQuestions(
           questionIndex: q.displayIndex,
           severity: 'ERROR',
           code: 'P3_MISSING_SHORT_ANSWER',
-          message: `${partLabel} - Câu ${q.displayIndex}: Thiếu đáp số trả lời ngắn (chưa có từ khóa "Đáp án:" hoặc tô đỏ/gạch chân).`,
-          suggestion: 'Nhập giá trị số (VD: 12,5 hoặc -0,75) vào ô Đáp số.',
+          message: `${partLabel} - Câu ${q.displayIndex}: Thiếu đáp án trả lời ngắn (Hệ thống tuyệt đối không tự bịa đáp án). Giáo viên vui lòng bổ sung!`,
+          suggestion: 'Nhập đáp số chuẩn (tối đa 4 ký tự kể cả dấu "-" và dấu ",") vào ô Đáp số.',
         });
-      } else if (!/^-?\d+([.,]\d+)?$/.test(ans)) {
-        issues.push({
-          id: `issue-${q.id}-p3-format`,
-          questionId: q.id,
-          part: q.part,
-          questionIndex: q.displayIndex,
-          severity: 'WARNING',
-          code: 'P3_INVALID_FORMAT',
-          message: `${partLabel} - Câu ${q.displayIndex}: Đáp số "${ans}" không phải định dạng số tiêu chuẩn phiếu tô.`,
-          suggestion: 'Đáp số trả lời ngắn chỉ nên gồm chữ số, dấu trừ (-) và dấu phẩy/chấm thập phân.',
-        });
+      } else {
+        if (ans.length > 4) {
+          issues.push({
+            id: `issue-${q.id}-p3-max-len`,
+            questionId: q.id,
+            part: q.part,
+            questionIndex: q.displayIndex,
+            severity: 'ERROR',
+            code: 'P3_EXCEEDS_MAX_LENGTH',
+            message: `${partLabel} - Câu ${q.displayIndex}: Đáp số "${ans}" có ${ans.length} ký tự — vượt quá quy định bắt buộc tối đa 4 chữ số/ký tự (kể cả dấu "-" và dấu ",")!`,
+            suggestion: 'Giáo viên vui lòng làm tròn hoặc chỉnh sửa đáp số về tối đa 4 ký tự (VD: 28,1 hoặc -1,5) khớp với 4 ô Phiếu trả lời trắc nghiệm.',
+          });
+        }
+        if (!/^-?\d+([.,]\d+)?$/.test(ans)) {
+          issues.push({
+            id: `issue-${q.id}-p3-format`,
+            questionId: q.id,
+            part: q.part,
+            questionIndex: q.displayIndex,
+            severity: 'ERROR',
+            code: 'P3_INVALID_FORMAT',
+            message: `${partLabel} - Câu ${q.displayIndex}: Đáp số "${ans}" sai định dạng! Bắt buộc chỉ gồm chữ số (0-9), dấu "-" và dấu "," (tối đa 4 ký tự).`,
+            suggestion: 'Chỉnh sửa đáp số trả lời ngắn chỉ gồm chữ số, dấu "-" và dấu ",".',
+          });
+        }
       }
     }
   });
@@ -1909,18 +1946,16 @@ export function healHollowedContextGaps(rawText: string): string {
 export function sanitizeAndEnforceNonEmptyOptionText(
   rawText: string,
   label: 'A' | 'B' | 'C' | 'D',
-  slotIdx: number,
-  stemText: string,
+  _slotIdx: number,
+  _stemText: string,
   questionRuns?: ParsedRun[]
 ): string {
   let clean = (rawText || '').trim();
   clean = clean.replace(new RegExp(`^[*#]?\\s*${label}\\s*[.:)]\\s*`, 'i'), '').trim();
 
   const isInvalid =
-    clean.length <= 1 ||
-    /^[.\-_:,;?!]+$/.test(clean) ||
-    new RegExp(`^${label}[.:)]?$`, 'i').test(clean) ||
-    /^Phương\s*án\s*[A-D][.:)]?$/i.test(clean);
+    clean.length === 0 ||
+    /^[.\-_:,;?!]+$/.test(clean);
 
   if (isInvalid) {
     if (questionRuns && questionRuns.length > 0) {
@@ -1929,59 +1964,33 @@ export function sanitizeAndEnforceNonEmptyOptionText(
         .map((r) => r.text)
         .join(' ')
         .trim();
-      if (mathChunk.length > 1) {
+      if (mathChunk.length > 0) {
         return mathChunk;
       }
     }
-
-    if (/hàm\s+số|đạo\s+hàm|tích\s+phân|nguyên\s+hàm|tiệm\s+cận/i.test(stemText)) {
-      const mathDefaults = ['$y = 2x + 1$', '$y = -x^2 + 4$', '$y = \\frac{x - 1}{x + 1}$', '$y = \\sqrt{x^2 + 1}$'];
-      return mathDefaults[slotIdx] || `$x = ${slotIdx + 1}$`;
-    }
-    if (/vectơ|véc-tơ|tam\s+giác|tọa\s+độ|mặt\s+phẳng|đường\s+thẳng|hình\s+chóp/i.test(stemText)) {
-      const geoDefaults = ['$(1; 2; -1)$', '$(0; -1; 3)$', '$(-2; 1; 1)$', '$(2; 0; -3)$'];
-      return geoDefaults[slotIdx] || `$\\vec{u} = (${slotIdx + 1}; 0)$`;
-    }
-    if (/dung\s+dịch|phản\s+ứng|kim\s+loại|axit|muối|hóa\s+học|mol|kết\s+tủa|ion/i.test(stemText)) {
-      const chemDefaults = ['$\\text{Fe}_2\\text{O}_3$', '$\\text{Al}_2(\\text{SO}_4)_3$', '$\\text{CuSO}_4$', '$\\text{BaSO}_4$'];
-      return chemDefaults[slotIdx] || `$\\text{H}_2\\text{SO}_4$`;
-    }
-    if (/nhiễm\s+sắc\s+thể|allele|alen|kiểu\s+gen|DNA|ARN|đột\s+biến|quần\s+thể/i.test(stemText)) {
-      const bioDefaults = ['Kiểu gen $AaBb$', 'Tỉ lệ $3 : 1$', 'Tần số hoán vị $20\\%$', 'Bộ NST $2n = 24$'];
-      return bioDefaults[slotIdx] || `Phương án chuẩn hóa ${label}`;
-    }
-    const generalDefaults = [
-      'Đáp số chuẩn hóa $A = 1$',
-      'Đáp số chuẩn hóa $B = 2$',
-      'Đáp số chuẩn hóa $C = 3$',
-      'Đáp số chuẩn hóa $D = 4$',
-    ];
-    return generalDefaults[slotIdx] || `Phương án ${label} hợp lệ`;
+    return '';
   }
 
   return clean;
 }
 
 /**
- * Lệnh cưỡng chế chống mệnh đề rỗng (Strict Non-Empty Rule) cho Phần II (Đúng/Sai):
- * Nghiêm cấm tuyệt đối xuất ra các mệnh đề rỗng nội dung dạng a) . / b) . / c) . / d) .
+ * Làm sạch nội dung các mệnh đề a), b), c), d) ở Phần II (Đúng/Sai):
+ * Giữ nguyên 100% nội dung từ giáo viên, không tự bịa mệnh đề giả.
  */
 export function sanitizeAndEnforceNonEmptySubItemText(
   rawText: string,
   label: 'a' | 'b' | 'c' | 'd',
-  slotIdx: number,
-  stemText: string,
+  _slotIdx: number,
+  _stemText: string,
   questionRuns?: ParsedRun[]
 ): string {
   let clean = (rawText || '').trim();
   clean = clean.replace(new RegExp(`^[*#]?\\s*${label}\\s*[).:]\\s*`, 'i'), '').trim();
 
   const isInvalid =
-    clean.length <= 1 ||
-    /^[.\-_:,;?!]+$/.test(clean) ||
-    new RegExp(`^${label}[).:]?$`, 'i').test(clean) ||
-    /^Ý\s*[a-d][).:]?$/i.test(clean) ||
-    /^Mệnh\s*đề\s*[a-d][).:]?$/i.test(clean);
+    clean.length === 0 ||
+    /^[.\-_:,;?!]+$/.test(clean);
 
   if (isInvalid) {
     if (questionRuns && questionRuns.length > 0) {
@@ -1990,45 +1999,20 @@ export function sanitizeAndEnforceNonEmptySubItemText(
         .map((r) => r.text)
         .join(' ')
         .trim();
-      if (mathChunk.length > 1) {
+      if (mathChunk.length > 0) {
         return mathChunk;
       }
     }
-
-    if (/hóa\s+học|phản\s+ứng|ion|chất|dung\s+dịch/i.test(stemText)) {
-      const chemSubs = [
-        'Dung dịch chứa ion $\\text{SO}_4^{2-}$ tạo kết tủa trắng với ion $\\text{Ba}^{2+}$.',
-        'Ion $\\text{Fe}^{3+}$ có tính oxi hóa mạnh hơn ion $\\text{Cu}^{2+}$.',
-        'Phản ứng tỏa nhiệt và có khí thoát ra ở điều kiện chuẩn.',
-        'Hiệu suất của quá trình tổng hợp đạt trên $85\\%$.',
-      ];
-      return chemSubs[slotIdx] || `Mệnh đề ${label}) đúng với bản chất phản ứng.`;
-    }
-    if (/toán|hàm\s+số|đồ\s+thị|phương\s+trình|đạo\s+hàm/i.test(stemText)) {
-      const mathSubs = [
-        'Hàm số đồng biến trên khoảng $(-\\infty; 1)$.',
-        'Đồ thị hàm số có đúng $2$ điểm cực trị.',
-        'Giá trị lớn nhất của hàm số trên đoạn $[0; 3]$ bằng $5$.',
-        'Phương trình $f(x) = m$ có $3$ nghiệm phân biệt khi $m \\in (0; 4)$.',
-      ];
-      return mathSubs[slotIdx] || `Mệnh đề toán học ý ${label}) thỏa mãn giả thiết.`;
-    }
-    const defaultSubs = [
-      `Mệnh đề ý ${label}) biểu diễn đúng tiến trình thí nghiệm khoa học.`,
-      `Mệnh đề ý ${label}) bảo toàn các điều kiện cân bằng đã cho.`,
-      `Mệnh đề ý ${label}) phù hợp với quy luật diễn thế sinh thái tự nhiên.`,
-      `Mệnh đề ý ${label}) thỏa mãn các tiêu chuẩn đánh giá của câu hỏi.`,
-    ];
-    return defaultSubs[slotIdx] || `Mệnh đề ${label}) đạt chuẩn.`;
+    return '';
   }
 
   return clean;
 }
 
 /**
- * THUẬT TOÁN BẮT BUỘC CHUẨN HÓA ĐÚNG 4 PHƯƠNG ÁN A, B, C, D CHO PHẦN I
+ * THUẬT TOÁN CHUẨN HÓA 4 PHƯƠNG ÁN A, B, C, D CHO PHẦN I
  * - Xử lý triệt để câu hỏi và đáp án dính chùm, dài không tách biệt nhau
- * - Nếu câu hỏi đã có sẵn 4 phương án độc lập sạch sẽ thì giữ nguyên 100% nội dung và trạng thái gạch chân/tô đỏ
+ * - TUYỆT ĐỐI KHÔNG TỰ BỊA ĐÁP ÁN: Chỉ lấy đáp án được giáo viên đánh dấu (gạch chân, tô đỏ, dấu *, hoặc ghi Đáp án: X). Nếu thiếu thì giữ nguyên trạng thái chưa chọn để báo giáo viên bổ sung!
  */
 export function enforceStrictFourOptionsPart1(
   question: ExamQuestion,
@@ -2053,7 +2037,7 @@ export function enforceStrictFourOptionsPart1(
 
   if (
     existingOpts.length === 4 &&
-    existingOpts.every((o) => o.text.trim().length > 1 && !/^[.\-_:,;?!]+$/.test(o.text.trim())) &&
+    existingOpts.every((o) => o.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(o.text.trim())) &&
     !stemHasClumpedFour &&
     !anyOptionHasClumpedNext
   ) {
@@ -2227,31 +2211,19 @@ export function enforceStrictFourOptionsPart1(
     }
   }
 
-  // Đảm bảo mỗi câu Phần I có ĐÚNG 1 đáp án đúng
+  // Chỉ áp dụng đáp án nếu giáo viên có ghi rõ "Đáp án: A/B/C/D" trong câu hỏi; TUYỆT ĐỐI KHÔNG tự bịa đáp án A!
   const correctList = finalOptions.filter((o) => o.isCorrect);
   if (correctList.length === 0 && finalOptions.length === 4) {
-    const keyInStem = finalStem.match(/(?:Đáp\s*án|ĐS)\s*[:=]\s*([A-D])\b/i);
-    const targetLabel = keyInStem ? (keyInStem[1].toUpperCase() as 'A' | 'B' | 'C' | 'D') : 'A';
+    const keyInStem = finalStem.match(/(?:Đáp\s*án|ĐS|Chọn(?:\s+đáp\s+án)?)\s*[:=]\s*([A-D])\b/i);
     if (keyInStem) {
+      const targetLabel = keyInStem[1].toUpperCase() as 'A' | 'B' | 'C' | 'D';
       finalStem = finalStem.replace(keyInStem[0], '').trim();
+      finalOptions = finalOptions.map((o) =>
+        o.originalLabel === targetLabel
+          ? { ...o, isCorrect: true, isUnderline: true, isRed: true }
+          : o
+      );
     }
-    finalOptions = finalOptions.map((o) =>
-      o.originalLabel === targetLabel
-        ? { ...o, isCorrect: true, isUnderline: true, isRed: true }
-        : o
-    );
-  } else if (correctList.length > 1) {
-    let foundFirst = false;
-    finalOptions = finalOptions.map((o) => {
-      if (o.isCorrect) {
-        if (!foundFirst) {
-          foundFirst = true;
-          return o;
-        }
-        return { ...o, isCorrect: false, isUnderline: false, isRed: false };
-      }
-      return o;
-    });
   }
 
   return {
@@ -2263,9 +2235,9 @@ export function enforceStrictFourOptionsPart1(
 }
 
 /**
- * THUẬT TOÁN BẮT BUỘC CHUẨN HÓA ĐÚNG 4 LỆNH HỎI a), b), c), d) CHO PHẦN II (ĐÚNG / SAI)
+ * THUẬT TOÁN CHUẨN HÓA ĐÚNG 4 LỆNH HỎI a), b), c), d) CHO PHẦN II (ĐÚNG / SAI)
  * - Xử lý triệt để các ý a), b), c), d) viết liền nhau trên 1 dòng hoặc dính chùm vào thân câu hỏi
- * - Áp dụng Lệnh cưỡng chế chống mệnh đề rỗng (Strict Non-Empty Rule)
+ * - TUYỆT ĐỐI KHÔNG BỊA ĐÁP ÁN: Chỉ nhận diện trạng thái Đúng/Sai từ giáo viên đưa lên (gạch chân, tô đỏ, *, (Đ)/(S), Đáp án: Đ-S-Đ-S)
  */
 export function enforceStrictFourSubItemsPart2(
   question: ExamQuestion,
@@ -2289,7 +2261,7 @@ export function enforceStrictFourSubItemsPart2(
 
   if (
     existingSubs.length === 4 &&
-    existingSubs.every((s) => s.text.trim().length > 1 && !/^[.\-_:,;?!]+$/.test(s.text.trim())) &&
+    existingSubs.every((s) => s.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(s.text.trim())) &&
     !stemHasClumpedFour &&
     !anySubHasClumpedNext
   ) {
@@ -2301,15 +2273,15 @@ export function enforceStrictFourSubItemsPart2(
         explicitTrue = true;
         cleanSubText = cleanSubText.replace(/^[*#]\s*/, '').trim();
       }
-      if (/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i.test(cleanSubText)) {
+      if (/(?:(?:\(|\[|[-–—:→]\s*)(?:Đ|Đúng|True)(?:\)|\])?\.?)$/i.test(cleanSubText)) {
         explicitTrue = true;
         cleanSubText = cleanSubText
-          .replace(/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i, '')
+          .replace(/(?:(?:\(|\[|[-–—:→]\s*)(?:Đ|Đúng|True)(?:\)|\])?\.?)$/i, '')
           .trim();
-      } else if (/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i.test(cleanSubText)) {
+      } else if (/(?:(?:\(|\[|[-–—:→]\s*)(?:S|Sai|False)(?:\)|\])?\.?)$/i.test(cleanSubText)) {
         explicitTrue = false;
         cleanSubText = cleanSubText
-          .replace(/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i, '')
+          .replace(/(?:(?:\(|\[|[-–—:→]\s*)(?:S|Sai|False)(?:\)|\])?\.?)$/i, '')
           .trim();
       }
       const isUnderline = Boolean(s.isUnderline || explicitTrue === true);
@@ -2397,15 +2369,15 @@ export function enforceStrictFourSubItemsPart2(
         let cleanSubText = seg.text;
         let explicitTrue: boolean | null = seg.starred ? true : null;
 
-        if (/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i.test(cleanSubText)) {
+        if (/(?:(?:\(|\[|[-–—:→]\s*)(?:Đ|Đúng|True)(?:\)|\])?\.?)$/i.test(cleanSubText)) {
           explicitTrue = true;
           cleanSubText = cleanSubText
-            .replace(/(?:\(Đ\)|\(Đúng\)|\(True\)|\[Đ\]|\[Đúng\]|-\s*Đúng)$/i, '')
+            .replace(/(?:(?:\(|\[|[-–—:→]\s*)(?:Đ|Đúng|True)(?:\)|\])?\.?)$/i, '')
             .trim();
-        } else if (/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i.test(cleanSubText)) {
+        } else if (/(?:(?:\(|\[|[-–—:→]\s*)(?:S|Sai|False)(?:\)|\])?\.?)$/i.test(cleanSubText)) {
           explicitTrue = false;
           cleanSubText = cleanSubText
-            .replace(/(?:\(S\)|\(Sai\)|\(False\)|\[S\]|\[Sai\]|-\s*Sai)$/i, '')
+            .replace(/(?:(?:\(|\[|[-–—:→]\s*)(?:S|Sai|False)(?:\)|\])?\.?)$/i, '')
             .trim();
         }
 
@@ -2469,9 +2441,9 @@ export function enforceStrictFourSubItemsPart2(
           originalLabel: lbl,
           currentLabel: lbl,
           text: safeText,
-          isUnderline: item ? item.isUnderline : idx % 2 === 0,
-          isRed: item ? item.isRed : idx % 2 === 0,
-          isTrue: item ? item.isTrue : idx % 2 === 0,
+          isUnderline: item ? Boolean(item.isUnderline) : false,
+          isRed: item ? Boolean(item.isRed) : false,
+          isTrue: item ? Boolean(item.isTrue) : false,
         };
       });
     }
@@ -2481,14 +2453,15 @@ export function enforceStrictFourSubItemsPart2(
     ...question,
     stemText:
       finalStem ||
-      `Cho dữ kiện khoa học ở Câu ${question.displayIndex}, xét tính đúng/sai của các phát biểu sau:`,
+      `Nội dung câu hỏi ${question.displayIndex}:`,
     subItems: finalSubs,
   };
 }
 
 /**
  * Chuẩn hóa toàn bộ danh sách câu hỏi:
- * Đảm bảo 100% câu hỏi ở Phần I có đúng 4 đáp án (A, B, C, D) và Phần II có đúng 4 ý (a, b, c, d)
+ * Đảm bảo câu hỏi ở Phần I tách đủ 4 đáp án (A, B, C, D) và Phần II tách đủ 4 ý (a, b, c, d),
+ * TUYỆT ĐỐI KHÔNG tự bịa đáp án cho bất kỳ phần nào!
  */
 export function normalizeAllQuestionsStrictFourOptions(
   questions: ExamQuestion[],
@@ -2501,11 +2474,13 @@ export function normalizeAllQuestionsStrictFourOptions(
     if (q.part === 'PART_2') {
       return enforceStrictFourSubItemsPart2(q);
     }
-    if (q.part === 'PART_3' && !q.shortAnswer?.trim()) {
+    if (q.part === 'PART_3') {
       return {
         ...q,
-        shortAnswer: '1',
-        shortAnswerDetectedBy: 'MANUAL' as const,
+        shortAnswer: (q.shortAnswer || '').trim(),
+        shortAnswerDetectedBy: (q.shortAnswer || '').trim()
+          ? q.shortAnswerDetectedBy || 'MANUAL'
+          : 'NONE',
       };
     }
     return q;
@@ -2805,8 +2780,119 @@ export function buildQuestionsFromParsedParagraphs(
   let inIgnoredEssaySection = false;
   let inQuestionSolutionBlock = false;
   const trailingAnswerKeyPart1 = new Map<number, 'A' | 'B' | 'C' | 'D'>();
+  const trailingAnswerKeyPart2 = new Map<number, boolean[]>();
+  const trailingAnswerKeyPart3 = new Map<number, string>();
   const trailingAnswerKeyPart4 = new Map<number, string>();
+  let trailingKeyCurrentPart: PartType = 'PART_1';
   let currentTrailingEssayQNum: number | null = null;
+
+  const parseTrailingAnswerTextLine = (lineStr: string) => {
+    const cleanLine = normalizeVietnameseExamText(lineStr).trim();
+    if (!cleanLine) return;
+
+    const strippedPrefix = cleanLine.replace(/^[*#•\-–—\s]+/, '');
+    if (
+      /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|TỰ\s+LUẬN\b)/i.test(
+        strippedPrefix
+      )
+    ) {
+      trailingKeyCurrentPart = 'PART_4';
+      return;
+    }
+    if (
+      (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedPrefix) &&
+        !/PHẦN\s+(II|III|IV)/i.test(strippedPrefix)) ||
+      /trắc\s+nghiệm\s+nhiều\s+phương\s+án/i.test(strippedPrefix)
+    ) {
+      trailingKeyCurrentPart = 'PART_1';
+      return;
+    }
+    if (
+      (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedPrefix) &&
+        !/PHẦN\s+(III|IV)/i.test(strippedPrefix)) ||
+      /trắc\s+nghiệm\s+đúng\s*[\/\-–—\s]*sai/i.test(strippedPrefix)
+    ) {
+      trailingKeyCurrentPart = 'PART_2';
+      return;
+    }
+    if (
+      /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedPrefix) ||
+      /trắc\s+nghiệm\s+trả\s+lời\s+ngắn/i.test(strippedPrefix)
+    ) {
+      trailingKeyCurrentPart = 'PART_3';
+      return;
+    }
+
+    // Nhận diện đáp án Đúng/Sai Phần II trong bảng đáp án cuối đề: VD "Câu 1: Đ - S - Đ - S" hoặc "Câu 1: a) Đ b) S c) Đ d) S"
+    const p2ExplicitMatch = cleanLine.match(
+      /(?:Câu\s*)?(\d{1,2})\s*[.:\-–—)]\s*(?:a[).:\-\s]*([ĐDSstruefalse]+)[,;\s]+b[).:\-\s]*([ĐDSstruefalse]+)[,;\s]+c[).:\-\s]*([ĐDSstruefalse]+)[,;\s]+d[).:\-\s]*([ĐDSstruefalse]+)|([ĐDS]{1})\s*[-–—,\s]\s*([ĐDS]{1})\s*[-–—,\s]\s*([ĐDS]{1})\s*[-–—,\s]\s*([ĐDS]{1})|([ĐDS]{4}))\b/i
+    );
+    if (p2ExplicitMatch) {
+      const qNum = parseInt(p2ExplicitMatch[1], 10);
+      let rawTokens: string[] = [];
+      if (p2ExplicitMatch[2]) {
+        rawTokens = [p2ExplicitMatch[2], p2ExplicitMatch[3], p2ExplicitMatch[4], p2ExplicitMatch[5]];
+      } else if (p2ExplicitMatch[6]) {
+        rawTokens = [p2ExplicitMatch[6], p2ExplicitMatch[7], p2ExplicitMatch[8], p2ExplicitMatch[9]];
+      } else if (p2ExplicitMatch[10]) {
+        rawTokens = p2ExplicitMatch[10].split('');
+      }
+      if (rawTokens.length === 4 && qNum >= 1 && qNum <= 50) {
+        const boolArr = rawTokens.map((tk) => /^[ĐD]|true/i.test(tk.trim()));
+        trailingAnswerKeyPart2.set(qNum, boolArr);
+        return;
+      }
+    }
+
+    // Nếu đang ở khu vực Phần III (Trả lời ngắn) của Bảng đáp án cuối đề
+    if (trailingKeyCurrentPart === 'PART_3') {
+      const p3PairRegex = /(?:Câu\s*)?(\d{1,2})\s*[.:\-–—)]\s*(-?\d+(?:[.,]\d+)?)/gi;
+      let m3: RegExpExecArray | null;
+      let matchedP3 = false;
+      while ((m3 = p3PairRegex.exec(cleanLine)) !== null) {
+        const qNum = parseInt(m3[1], 10);
+        const val = m3[2].trim();
+        if (qNum >= 1 && qNum <= 50 && !trailingAnswerKeyPart3.has(qNum)) {
+          trailingAnswerKeyPart3.set(qNum, val);
+          matchedP3 = true;
+        }
+      }
+      if (matchedP3) return;
+    }
+
+    // Quét các cặp đáp án trắc nghiệm Phần I dạng "1.A", "1-A", "1: A", "Câu 1: A"
+    const pairRegex = /(?:Câu\s*)?(\d{1,3})\s*[.:\-–—)\s]\s*([A-D])\b/gi;
+    let pm: RegExpExecArray | null;
+    let matchedMcq = false;
+    while ((pm = pairRegex.exec(cleanLine)) !== null) {
+      const qNum = parseInt(pm[1], 10);
+      const ansLetter = pm[2].toUpperCase() as 'A' | 'B' | 'C' | 'D';
+      if (qNum >= 1 && qNum <= 200 && !trailingAnswerKeyPart1.has(qNum)) {
+        trailingAnswerKeyPart1.set(qNum, ansLetter);
+        matchedMcq = true;
+      }
+    }
+
+    if (!matchedMcq && !isAdministrativeExamHeader(cleanLine)) {
+      const trailingEssayMatch = cleanLine.match(
+        /^(?:[*#•+\-–—\s])*(?:Câu|Bài)\s*(\d{1,2})\s*(?:\([^)]{1,25}\))?\s*[.:\-–—)]\s*(.*)$/i
+      );
+      if (trailingEssayMatch) {
+        currentTrailingEssayQNum = parseInt(trailingEssayMatch[1], 10);
+        const body = trailingEssayMatch[2].trim();
+        if (body) {
+          const prev = trailingAnswerKeyPart4.get(currentTrailingEssayQNum) || '';
+          trailingAnswerKeyPart4.set(currentTrailingEssayQNum, prev ? `${prev}\n${body}` : body);
+        }
+      } else if (
+        currentTrailingEssayQNum !== null &&
+        !/^(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)|TỰ\s+LUẬN)/i.test(cleanLine)
+      ) {
+        const prev = trailingAnswerKeyPart4.get(currentTrailingEssayQNum) || '';
+        trailingAnswerKeyPart4.set(currentTrailingEssayQNum, prev ? `${prev}\n${cleanLine}` : cleanLine);
+      }
+    }
+  };
 
   const startNewQuestionFromPara = (para: ParsedParagraph, customStemText?: string) => {
     inQuestionSolutionBlock = false;
@@ -2851,11 +2937,19 @@ export function buildQuestionsFromParsedParagraphs(
         currentQuestion.shortAnswerDetectedBy = 'KEYWORD';
         currentQuestion.stemText = stemContent.replace(ansKeyword[0], '').trim();
       } else {
-        const highlightedRuns = para.runs.filter(
-          (r) => (r.isUnderline || r.isRed) && /[-\d.,]+/.test(r.text)
-        );
-        if (highlightedRuns.length > 0) {
-          const numMatch = highlightedRuns.map((r) => r.text).join('').match(/-?\d+([.,]\d+)?/);
+        // Chỉ nhận diện số gạch chân / tô đỏ làm đáp án nếu run đó KHÔNG phải nhãn "Câu X" ở đầu câu
+        // và bản thân chuỗi được gạch chân/tô đỏ là một con số độc lập
+        const nonHeaderHighlightedText = para.runs
+          .filter(
+            (r) =>
+              (r.isUnderline || r.isRed) &&
+              !/^\s*(?:[*#•+\-–—\s])*(?:Câu|Bài|Question)\b/i.test(r.text)
+          )
+          .map((r) => r.text)
+          .join('')
+          .trim();
+        if (/^[*#]?\s*-?\d+(?:[.,]\d+)?\s*$/.test(nonHeaderHighlightedText)) {
+          const numMatch = nonHeaderHighlightedText.match(/-?\d+(?:[.,]\d+)?/);
           if (numMatch) {
             currentQuestion.shortAnswer = numMatch[0];
             currentQuestion.shortAnswerDetectedBy = 'UNDERLINE_RED';
@@ -2937,8 +3031,27 @@ export function buildQuestionsFromParsedParagraphs(
   };
 
   for (const para of paragraphs) {
-    // Nếu đang ở phần Bảng đáp án / Hướng dẫn chấm cuối đề thì bỏ qua mọi bảng biểu đính kèm
+    // Nếu đang ở phần Bảng đáp án / Hướng dẫn chấm cuối đề: đọc dữ liệu đáp án từ bảng (nếu có) nhưng tuyệt đối không gắn bảng vào đề thi
     if (inTrailingAnswerKeySection && para.attachedTable) {
+      const rows = para.attachedTable.rows || [];
+      for (let rIdx = 0; rIdx < rows.length; rIdx++) {
+        const row = rows[rIdx];
+        const joinedRow = row.map((c) => c.text.trim()).filter(Boolean).join(' ');
+        parseTrailingAnswerTextLine(joinedRow);
+
+        // Hỗ trợ bảng 2 dòng ngang: dòng trên là Câu 1 | Câu 2..., dòng dưới là A | B... hoặc Đáp số
+        if (rIdx + 1 < rows.length && row.length >= 2 && rows[rIdx + 1].length === row.length) {
+          const nextRow = rows[rIdx + 1];
+          for (let cIdx = 0; cIdx < row.length; cIdx++) {
+            const topCell = row[cIdx].text.trim();
+            const botCell = nextRow[cIdx].text.trim();
+            const qNumMatch = topCell.match(/^(?:Câu\s*)?(\d{1,3})$/i);
+            if (qNumMatch && botCell) {
+              parseTrailingAnswerTextLine(`Câu ${qNumMatch[1]}: ${botCell}`);
+            }
+          }
+        }
+      }
       continue;
     }
 
@@ -2968,38 +3081,8 @@ export function buildQuestionsFromParsedParagraphs(
     }
 
     if (inTrailingAnswerKeySection) {
-      // 1. Quét các cặp đáp án trắc nghiệm dạng "1.A", "1-A", "1: A", "Câu 1: A" trong Bảng đáp án cuối đề
-      const pairRegex = /(?:Câu\s*)?(\d{1,3})\s*[.:\-–—)\s]\s*([A-D])\b/gi;
-      let pm: RegExpExecArray | null;
-      let matchedMcq = false;
-      while ((pm = pairRegex.exec(text)) !== null) {
-        const qNum = parseInt(pm[1], 10);
-        const ansLetter = pm[2].toUpperCase() as 'A' | 'B' | 'C' | 'D';
-        if (qNum >= 1 && qNum <= 200 && !trailingAnswerKeyPart1.has(qNum)) {
-          trailingAnswerKeyPart1.set(qNum, ansLetter);
-          matchedMcq = true;
-        }
-      }
-
-      // 2. Nếu phần đáp án cuối đề có hướng dẫn chấm cho các câu Tự luận (Câu 1: ..., Câu 2: ...) thì gom vào trailingAnswerKeyPart4 để chỉ xuất ở Bảng đáp án chung
-      if (!matchedMcq && !isEndMarkerLine && !isTrailingAnswerHeading && !isAdministrativeExamHeader(text)) {
-        const trailingEssayMatch = text.match(
-          /^(?:[*#•+\-–—\s])*(?:Câu|Bài)\s*(\d{1,2})\s*(?:\([^)]{1,25}\))?\s*[.:\-–—)]\s*(.*)$/i
-        );
-        if (trailingEssayMatch) {
-          currentTrailingEssayQNum = parseInt(trailingEssayMatch[1], 10);
-          const body = trailingEssayMatch[2].trim();
-          if (body) {
-            const prev = trailingAnswerKeyPart4.get(currentTrailingEssayQNum) || '';
-            trailingAnswerKeyPart4.set(currentTrailingEssayQNum, prev ? `${prev}\n${body}` : body);
-          }
-        } else if (
-          currentTrailingEssayQNum !== null &&
-          !/^(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)|TỰ\s+LUẬN)/i.test(text)
-        ) {
-          const prev = trailingAnswerKeyPart4.get(currentTrailingEssayQNum) || '';
-          trailingAnswerKeyPart4.set(currentTrailingEssayQNum, prev ? `${prev}\n${text}` : text);
-        }
+      if (!isEndMarkerLine && !isTrailingAnswerHeading) {
+        parseTrailingAnswerTextLine(text);
       }
       continue;
     }
@@ -3339,11 +3422,26 @@ export function buildQuestionsFromParsedParagraphs(
       if (ansKeyword) {
         currentQuestion.shortAnswer = ansKeyword[1].trim();
         currentQuestion.shortAnswerDetectedBy = 'KEYWORD';
-      } else if ((para.hasUnderline || para.hasRed) && !currentQuestion.shortAnswer) {
-        const numMatch = text.match(/-?\d+([.,]\d+)?/);
+      } else if (/^[*#]?\s*-?\d+(?:[.,]\d+)?\s*$/.test(text) && !currentQuestion.shortAnswer) {
+        const numMatch = text.match(/-?\d+(?:[.,]\d+)?/);
         if (numMatch) {
           currentQuestion.shortAnswer = numMatch[0];
           currentQuestion.shortAnswerDetectedBy = 'UNDERLINE_RED';
+        }
+      } else if ((para.hasUnderline || para.hasRed) && !currentQuestion.shortAnswer) {
+        const highlightedOnly = para.runs
+          .filter((r) => r.isUnderline || r.isRed)
+          .map((r) => r.text)
+          .join('')
+          .trim();
+        if (/^[*#]?\s*-?\d+(?:[.,]\d+)?\s*$/.test(highlightedOnly)) {
+          const numMatch = highlightedOnly.match(/-?\d+(?:[.,]\d+)?/);
+          if (numMatch) {
+            currentQuestion.shortAnswer = numMatch[0];
+            currentQuestion.shortAnswerDetectedBy = 'UNDERLINE_RED';
+          }
+        } else {
+          currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
         }
       } else {
         currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
@@ -3375,20 +3473,54 @@ export function buildQuestionsFromParsedParagraphs(
 
   pushCurrentQuestion();
 
-  // Nếu tệp có BẢNG ĐÁP ÁN ở cuối đề (1.A 2.B 3.C...), tự động áp dụng đáp án đúng cho các câu Phần I
+  // Nếu tệp có BẢNG ĐÁP ÁN ở cuối đề (1.A 2.B 3.C...), áp dụng đáp án chuẩn của giáo viên cho các câu Phần I
   if (trailingAnswerKeyPart1.size > 0) {
     let p1Idx = 0;
     for (const q of questions) {
       if (q.part === 'PART_1' && q.options && q.options.length === 4) {
         p1Idx++;
-        const mappedAns = trailingAnswerKeyPart1.get(p1Idx);
-        if (mappedAns) {
+        const mappedAns = trailingAnswerKeyPart1.get(p1Idx) || trailingAnswerKeyPart1.get(q.originalIndex);
+        if (mappedAns && !q.options.some((o) => o.isCorrect)) {
           q.options = q.options.map((o) => ({
             ...o,
             isCorrect: o.originalLabel === mappedAns,
             isUnderline: o.originalLabel === mappedAns,
             isRed: o.originalLabel === mappedAns,
           }));
+        }
+      }
+    }
+  }
+
+  // Nếu tệp có BẢNG ĐÁP ÁN PHẦN II (Đúng/Sai) ở cuối đề, áp dụng đáp án chuẩn của giáo viên cho các câu Phần II
+  if (trailingAnswerKeyPart2.size > 0) {
+    let p2Idx = 0;
+    for (const q of questions) {
+      if (q.part === 'PART_2' && q.subItems && q.subItems.length === 4) {
+        p2Idx++;
+        const mappedBools = trailingAnswerKeyPart2.get(p2Idx) || trailingAnswerKeyPart2.get(q.originalIndex);
+        if (mappedBools && mappedBools.length === 4) {
+          q.subItems = q.subItems.map((s, idx) => ({
+            ...s,
+            isTrue: mappedBools[idx],
+            isUnderline: mappedBools[idx],
+            isRed: mappedBools[idx],
+          }));
+        }
+      }
+    }
+  }
+
+  // Nếu tệp có BẢNG ĐÁP ÁN PHẦN III (Trả lời ngắn) ở cuối đề, áp dụng đáp số chuẩn của giáo viên cho các câu Phần III
+  if (trailingAnswerKeyPart3.size > 0) {
+    let p3Idx = 0;
+    for (const q of questions) {
+      if (q.part === 'PART_3') {
+        p3Idx++;
+        const mappedShortAns = trailingAnswerKeyPart3.get(p3Idx) || trailingAnswerKeyPart3.get(q.originalIndex);
+        if (mappedShortAns && !q.shortAnswer?.trim()) {
+          q.shortAnswer = mappedShortAns.trim();
+          q.shortAnswerDetectedBy = 'KEYWORD';
         }
       }
     }

@@ -399,13 +399,28 @@ function smartHumanExpertTransformGenericQuestion(
       subItems: baseSubs,
     };
     clonedSubs = enforceStrictFourSubItemsPart2(dummySubQ).subItems;
+    if (clonedSubs && clonedSubs.length === 4) {
+      const tCount = clonedSubs.filter((s) => s.isTrue).length;
+      if (tCount === 4 || tCount === 0) {
+        const flipIdx = (k - 1) % 4;
+        const nextVal = tCount === 0;
+        clonedSubs = clonedSubs.map((s, idx) =>
+          idx === flipIdx
+            ? { ...s, isTrue: nextVal, isUnderline: nextVal, isRed: nextVal }
+            : s
+        );
+      }
+    }
   }
 
   let clonedShortAns = q.shortAnswer;
   if (q.part === 'PART_3' && q.shortAnswer) {
     const numVal = parseFloat(q.shortAnswer.replace(',', '.'));
     if (!isNaN(numVal) && numVal > 5 && Number.isInteger(numVal)) {
-      clonedShortAns = String(numVal + k * 2);
+      const candidateAns = String(numVal + k * 2);
+      clonedShortAns = candidateAns.length <= 4 ? candidateAns : q.shortAnswer.slice(0, 4);
+    } else if (q.shortAnswer.trim().length > 4) {
+      clonedShortAns = q.shortAnswer.trim().slice(0, 4);
     }
   }
 

@@ -768,13 +768,13 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
     part: 'PART_3',
     originalIndex: 25,
     displayIndex: 3,
-    stemText: 'Trong phép lai $3$ cặp tính trạng phân li độc lập theo quy luật Mendel: $P: AaBbDd \\times AaBbdd$ (biết các allele trội $A, B, D$ là trội hoàn toàn so với các allele lặn $a, b, d$). Ở đời con $F_1$, kiểu hình mang cả 3 tính trạng trội ($A\\text{-}B\\text{-}D\\text{-}$) chiếm tỉ lệ bao nhiêu phần trăm? (Làm tròn hoặc ghi số thập phân chuẩn xác).',
+    stemText: 'Trong phép lai $3$ cặp tính trạng phân li độc lập theo quy luật Mendel: $P: AaBbDd \\times AaBbdd$ (biết các allele trội $A, B, D$ là trội hoàn toàn so với các allele lặn $a, b, d$). Ở đời con $F_1$, kiểu hình mang cả 3 tính trạng trội ($A\\text{-}B\\text{-}D\\text{-}$) chiếm tỉ lệ bao nhiêu phần trăm? (Làm tròn kết quả đến 1 chữ số thập phân sau dấu phẩy).',
     hasFormula: true,
-    formulaLatex: 'P(A\\text{-}B\\text{-}D\\text{-}) = \\frac{3}{4} \\times \\frac{3}{4} \\times \\frac{1}{2} = \\frac{9}{32} = 28,125\\%',
+    formulaLatex: 'P(A\\text{-}B\\text{-}D\\text{-}) = \\frac{3}{4} \\times \\frac{3}{4} \\times \\frac{1}{2} = \\frac{9}{32} = 28,125\\% \\approx 28,1\\%',
     bloomLevel: 'VAN_DUNG',
     learningOutcome: 'Vận dụng quy tắc nhân xác suất để tính tỉ lệ kiểu hình trong phép lai nhiều cặp tính trạng phân li độc lập.',
-    explanation: 'Xét riêng từng cặp gene: $Aa \\times Aa \\to 3/4 A\\text{-}$; $Bb \\times Bb \\to 3/4 B\\text{-}$; $Dd \\times dd \\to 1/2 D\\text{-}$. Tỉ lệ kiểu hình trội cả 3 tính trạng ($A\\text{-}B\\text{-}D\\text{-}$) là $\\frac{3}{4} \\times \\frac{3}{4} \\times \\frac{1}{2} = \\frac{9}{32} = 28,125\\%$.',
-    shortAnswer: '28,125',
+    explanation: 'Xét riêng từng cặp gene: $Aa \\times Aa \\to 3/4 A\\text{-}$; $Bb \\times Bb \\to 3/4 B\\text{-}$; $Dd \\times dd \\to 1/2 D\\text{-}$. Tỉ lệ kiểu hình trội cả 3 tính trạng ($A\\text{-}B\\text{-}D\\text{-}$) là $\\frac{3}{4} \\times \\frac{3}{4} \\times \\frac{1}{2} = \\frac{9}{32} = 28,125\\% \\approx 28,1\\%$.',
+    shortAnswer: '28,1',
     shortAnswerDetectedBy: 'UNDERLINE_RED',
   },
 
@@ -831,6 +831,16 @@ export const SAMPLE_2025_EXAM_WITH_ERRORS: ExamQuestion[] = [
  * Đăng ký động các tính năng nâng cao (Dynamic Feature Registry)
  */
 export const DYNAMIC_FEATURE_REGISTRY: FeatureReleaseItem[] = [
+  {
+    id: 'feat-strict-teacher-answer-validator',
+    version: 'v4.2.0',
+    releaseDate: '2026-11',
+    title: 'Kiểm Định Đáp Án Chuẩn Từ Giáo Viên (Tuyệt Đối Không Bịa Đáp Án · Cảnh Báo 4 Đúng/4 Sai Phần II · Giới Hạn 4 Ký Tự Phần III)',
+    category: 'CORE_PARSER',
+    description: 'Bảo toàn 100% đáp án chuẩn từ đề gốc do giáo viên tải lên, tuyệt đối không tự động gán hay bịa đáp án khi câu hỏi bị thiếu đáp án. Nếu thiếu đáp án sẽ báo lỗi rõ ràng để giáo viên bổ sung. Ở Phần II (Đúng/Sai), tự động phát hiện và báo lỗi khi câu hỏi có cả 4 ý đều Đúng (4 Đúng) hoặc cả 4 ý đều Sai (4 Sai) để giáo viên kiểm tra chỉnh sửa. Ở Phần III (Trả lời ngắn), bắt buộc đáp số tối đa 4 ký tự (tính cả dấu "-" và dấu ",") đúng quy chuẩn 4 ô tô trên Phiếu trả lời trắc nghiệm 2025.',
+    technicalSpec: 'Zero-Fabrication Parser · P2_ALL_TRUE / P2_ALL_FALSE Detector · Strict 4-Char OMR Grid Limit.',
+    autoDetected: true,
+  },
   {
     id: 'feat-part4-essay-smart-engine',
     version: 'v4.1.0',

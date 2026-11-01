@@ -459,6 +459,7 @@ export default function App() {
         );
         const formulaCount = parsed.filter((q) => q.hasFormula).length;
 
+        const issuesAfterParse = validateExamQuestions(parsed);
         setFileName(file.name);
         setQuestions(parsed);
         setWordRawDocumentText(serializeQuestionsToWordRawText(parsed));
@@ -469,14 +470,23 @@ export default function App() {
         setActiveRightTab('LIVE_EDITOR');
         setFilterPart('ALL');
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
-        setStatusBanner({
-          type: 'SUCCESS',
-          text: `Đã phân tích & chuẩn hóa tự động tệp "${file.name}" (${parsed.length} câu hỏi chuẩn 4 đáp án${
-            totalImages > 0 ? `, ${totalImages} sơ đồ/đồ thị 300 DPI` : ''
-          }${totalTables > 0 ? `, ${totalTables} bảng dữ liệu` : ''}${
-            formulaCount > 0 ? `, ${formulaCount} câu có công thức OMML/LaTeX` : ''
-          }).`,
-        });
+
+        if (issuesAfterParse.length > 0) {
+          setHighlightedQuestionId(issuesAfterParse[0].questionId);
+          setStatusBanner({
+            type: 'ERROR',
+            text: `Đã phân tích tệp "${file.name}" (${parsed.length} câu hỏi). Phát hiện ${issuesAfterParse.length} cảnh báo/thiếu sót đáp án (Hệ thống TUYỆT ĐỐI KHÔNG tự bịa đáp án). Vui lòng kiểm tra và bổ sung/chỉnh sửa các câu được đánh dấu đỏ bên dưới!`,
+          });
+        } else {
+          setStatusBanner({
+            type: 'SUCCESS',
+            text: `Đã phân tích tệp "${file.name}" (${parsed.length} câu hỏi chuẩn đáp án từ giáo viên${
+              totalImages > 0 ? `, ${totalImages} sơ đồ/đồ thị 300 DPI` : ''
+            }${totalTables > 0 ? `, ${totalTables} bảng dữ liệu` : ''}${
+              formulaCount > 0 ? `, ${formulaCount} câu có công thức OMML/LaTeX` : ''
+            }).`,
+          });
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Lỗi xử lý file';
@@ -544,14 +554,23 @@ export default function App() {
       });
       return;
     }
+    const issuesAfterWordSync = validateExamQuestions(parsedFromWord);
     setQuestions(parsedFromWord);
     setWordRawDocumentText(serializeQuestionsToWordRawText(parsedFromWord));
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
-    setStatusBanner({
-      type: 'SUCCESS',
-      text: `Đã đồng bộ thành công ${parsedFromWord.length} câu hỏi từ Môi trường Word A4 (Gồm Trắc nghiệm & Tự luận)!`,
-    });
+    if (issuesAfterWordSync.length > 0) {
+      setHighlightedQuestionId(issuesAfterWordSync[0].questionId);
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Đã đồng bộ ${parsedFromWord.length} câu hỏi từ Word A4 nhưng còn ${issuesAfterWordSync.length} câu thiếu/chưa chuẩn đáp án (Hệ thống TUYỆT ĐỐI KHÔNG tự bịa đáp án). Vui lòng bổ sung và chỉnh sửa!`,
+      });
+    } else {
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã đồng bộ thành công ${parsedFromWord.length} câu hỏi từ Môi trường Word A4 (Chuẩn 100% đáp án từ giáo viên)!`,
+      });
+    }
   };
 
   // Xử lý sự kiện Paste trực tiếp từ Microsoft Word (HTML Clipboard) để nhận diện chính xác cả GẠCH CHÂN (<u> / text-decoration:underline) và TÔ ĐỎ ở Phần I & Phần II (a, b, c, d)
@@ -579,6 +598,7 @@ export default function App() {
       if (parsedFromHtml.length > 0) {
         e.preventDefault();
         const serialized = serializeQuestionsToWordRawText(parsedFromHtml);
+        const issuesFromPaste = validateExamQuestions(parsedFromHtml);
         setQuestions(parsedFromHtml);
         setWordRawDocumentText(serialized);
         setHasUnsavedChanges(false);
@@ -590,12 +610,20 @@ export default function App() {
               sum + (q.subItems?.filter((s) => s.isTrue).length || 0),
             0
           );
-        setStatusBanner({
-          type: 'SUCCESS',
-          text: `Đã nhận diện định dạng Word (Gạch chân <u> & Tô đỏ) khi dán: Tách thành công ${parsedFromHtml.length} câu hỏi${
-            p2TrueCount > 0 ? `, nhận diện ${p2TrueCount} ý ĐÚNG ở Phần II` : ''
-          }!`,
-        });
+        if (issuesFromPaste.length > 0) {
+          setHighlightedQuestionId(issuesFromPaste[0].questionId);
+          setStatusBanner({
+            type: 'ERROR',
+            text: `Đã nhận diện định dạng Word khi dán (${parsedFromHtml.length} câu hỏi), nhưng có ${issuesFromPaste.length} câu thiếu/chưa chuẩn đáp án. Hệ thống tuyệt đối không tự bịa đáp án — vui lòng kiểm tra và chỉnh sửa!`,
+          });
+        } else {
+          setStatusBanner({
+            type: 'SUCCESS',
+            text: `Đã nhận diện định dạng Word (Gạch chân <u> & Tô đỏ) khi dán: Tách thành công ${parsedFromHtml.length} câu hỏi${
+              p2TrueCount > 0 ? `, nhận diện ${p2TrueCount} ý ĐÚNG ở Phần II` : ''
+            }!`,
+          });
+        }
       }
     }
   };
@@ -976,43 +1004,31 @@ export default function App() {
   };
 
   const handleQuickFixAllErrors = () => {
-    const fixed = questions.map((q) => {
-      if (q.part === 'PART_1' && q.options) {
-        const corrects = q.options.filter((o) => o.isCorrect);
-        if (corrects.length === 0 || corrects.length > 1) {
-          const targetIdx = corrects.length > 1 ? q.options.findIndex((o) => o.isCorrect) : 1;
-          return {
-            ...q,
-            options: q.options.map((o, idx) => ({
-              ...o,
-              isUnderline: idx === targetIdx,
-              isRed: idx === targetIdx,
-              isCorrect: idx === targetIdx,
-            })),
-          };
-        }
-      }
-      if (q.part === 'PART_3' && !(q.shortAnswer || '').trim()) {
-        return {
-          ...q,
-          shortAnswer: '150',
-          shortAnswerDetectedBy: 'MANUAL' as const,
-        };
-      }
-      return q;
-    });
-
-    const recalculated = recalculateQuestionNumbering(
-      fixed,
+    // TUYỆT ĐỐI KHÔNG BỊA ĐÁP ÁN: Chỉ chuẩn hóa đánh số thứ tự & khoảng trắng, sau đó cuộn tới câu đầu tiên đang thiếu/lỗi đáp án để giáo viên trực tiếp bổ sung/chỉnh sửa
+    const normalized = normalizeAllQuestionsStrictFourOptions(
+      questions,
       config.resetNumberingPerPart
     );
-    setQuestions(recalculated);
+    setQuestions(normalized);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
-    setStatusBanner({
-      type: 'SUCCESS',
-      text: 'Đã tự động chuẩn hóa toàn bộ câu lỗi & Lưu chỉnh sửa! Nút [Trộn đề] đã sẵn sàng.',
-    });
+
+    const remainingIssues = validateExamQuestions(normalized);
+    if (remainingIssues.length > 0) {
+      setActiveRightTab('LIVE_EDITOR');
+      setEditorViewMode('CARD_LIST');
+      handleScrollToQuestion(remainingIssues[0].questionId);
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Hệ thống TUYỆT ĐỐI KHÔNG TỰ BỊA ĐÁP ÁN. Hiện có ${remainingIssues.length} lỗi đáp án cần giáo viên trực tiếp bổ sung/chỉnh sửa (Đã cuộn tới Câu ${remainingIssues[0].questionIndex}: ${remainingIssues[0].message}).`,
+      });
+    } else {
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: 'Tất cả câu hỏi đã có đáp án chuẩn từ giáo viên! Nút [Trộn đề] đã sẵn sàng.',
+      });
+    }
   };
 
   const handleToggleResetNumbering = (resetPerPart: boolean) => {
@@ -2598,22 +2614,23 @@ export default function App() {
                 {validationIssues.length === 0 ? (
                   <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-950 text-xs font-black flex items-center gap-1.5 shadow-2xs">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Đề hợp lệ 100% (0 câu lỗi · Đủ 4 đáp án)</span>
+                    <span>Đề hợp lệ 100% (Đáp án chuẩn từ giáo viên · 0 lỗi)</span>
                   </div>
                 ) : (
                   <div className="p-2.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-950 space-y-1.5 shadow-xs text-xs">
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1 font-black text-rose-700">
                         <AlertTriangle className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
-                        <span>Cảnh báo ({validationIssues.length} câu lỗi):</span>
+                        <span>Cần giáo viên bổ sung/sửa ({validationIssues.length} lỗi — Không tự bịa đáp án):</span>
                       </div>
                       <button
                         type="button"
                         onClick={handleQuickFixAllErrors}
                         className="px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-2xs whitespace-nowrap"
+                        title="Nhảy tới câu đang thiếu hoặc sai quy chuẩn đáp án để giáo viên trực tiếp bổ sung"
                       >
                         <Wand2 className="w-3 h-3" />
-                        <span>Sửa tất cả</span>
+                        <span>Tới câu cần sửa</span>
                       </button>
                     </div>
 
@@ -2624,6 +2641,7 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setActiveRightTab('LIVE_EDITOR');
+                            setEditorViewMode('CARD_LIST');
                             handleScrollToQuestion(iss.questionId);
                           }}
                           className="px-2 py-0.5 rounded-lg bg-white hover:bg-rose-600 hover:text-white text-rose-800 border border-rose-300 font-black transition-colors cursor-pointer whitespace-nowrap"
@@ -3073,6 +3091,26 @@ export default function App() {
                         {/* ================= NỘI DUNG PHẦN I: 4 PHƯƠNG ÁN A, B, C, D ================= */}
                         {q.part === 'PART_1' && q.options && (
                           <div className="space-y-2.5">
+                            {q.options.filter((o) => o.isCorrect).length === 0 && (
+                              <div className="px-3 py-2 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-black flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                  <span>
+                                    CHƯA CÓ ĐÁP ÁN ĐÚNG (Hệ thống tuyệt đối không tự bịa đáp án): Giáo viên vui lòng bấm vào nút A, B, C hoặc D bên dưới để chọn đáp án chuẩn!
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            {q.options.filter((o) => o.isCorrect).length > 1 && (
+                              <div className="px-3 py-2 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-black flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                  <span>
+                                    ĐANG ĐÁNH DẤU NHIỀU HƠN 1 ĐÁP ÁN ĐÚNG: Giáo viên vui lòng bấm chọn 1 phương án duy nhất (A, B, C hoặc D)!
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                             <div
                               className={`grid gap-3 ${
                                 effectiveLayout === '1_ROW_4_COL'
@@ -3187,124 +3225,260 @@ export default function App() {
                         )}
 
                         {/* ================= NỘI DUNG PHẦN II: 4 Ý CON a), b), c), d) ĐÚNG / SAI ================= */}
-                        {q.part === 'PART_2' && q.subItems && (
-                          <div className="space-y-2.5">
+                        {q.part === 'PART_2' && q.subItems && (() => {
+                          const p2TrueCount = q.subItems.filter((s) => s.isTrue).length;
+                          const p2FalseCount = q.subItems.length - p2TrueCount;
+                          const isAllTrueOrAllFalse = p2TrueCount === 4 || p2TrueCount === 0;
+                          return (
                             <div className="space-y-2.5">
-                              {q.subItems.map((sub) => (
-                                <div
-                                  key={sub.id}
-                                  className={`p-2.5 rounded-xl border-2 flex items-center gap-3 ${
-                                    sub.isTrue
-                                      ? 'bg-emerald-50/90 border-emerald-300 shadow-xs'
-                                      : 'bg-sky-50/60 border-sky-200'
-                                  }`}
-                                >
-                                  <span className="text-sm font-black text-sky-950 w-6 shrink-0">
-                                    {sub.currentLabel})
+                              {/* Thanh trạng thái kiểm tra 4 Đúng / 4 Sai Phần II */}
+                              <div
+                                className={`px-3 py-2 rounded-xl border-2 flex flex-wrap items-center justify-between gap-2 text-xs font-black ${
+                                  isAllTrueOrAllFalse
+                                    ? 'bg-rose-100 border-rose-500 text-rose-900'
+                                    : 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2">
+                                  {isAllTrueOrAllFalse ? (
+                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 animate-bounce" />
+                                  ) : (
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  )}
+                                  <span>
+                                    {p2TrueCount === 4
+                                      ? 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là ĐÚNG (4 Đúng — 0 Sai). Giáo viên vui lòng kiểm tra và chỉnh sửa lại!'
+                                      : p2TrueCount === 0
+                                      ? 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là SAI (4 Sai — 0 Đúng / Hoặc chưa đánh dấu đáp án). Giáo viên vui lòng kiểm tra và chỉnh sửa lại!'
+                                      : `Phân bố Đúng/Sai hợp lệ: ${p2TrueCount} ý Đúng (Đ) — ${p2FalseCount} ý Sai (S)`}
                                   </span>
-
-                                  <div className="flex-1 min-w-0">
-                                    <input
-                                      type="text"
-                                      value={sub.text}
-                                      onChange={(e) =>
-                                        handleUpdateSubItemTextPart2(
-                                          q.id,
-                                          sub.id,
-                                          e.target.value
-                                        )
-                                      }
-                                      style={{
-                                        fontFamily: "'Times New Roman', Times, serif",
-                                        fontSize: '12pt',
-                                      }}
-                                      className={`w-full px-3 py-1.5 text-left bg-white border border-sky-200 rounded-lg focus:outline-none focus:border-blue-600 ${
-                                        sub.isTrue
-                                          ? 'underline decoration-emerald-600 text-slate-900 font-bold'
-                                          : 'text-slate-700 font-medium'
-                                      }`}
-                                    />
-                                    {(sub.text.includes('$') ||
-                                      sub.text.includes('\\') ||
-                                      /[A-Z][a-z]?\d/.test(sub.text)) && (
-                                      <div className="text-[11px] px-2 py-0.5 mt-1 text-slate-800 bg-white/80 rounded border border-slate-200">
-                                        <ScientificContentRenderer text={sub.text} inline />
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleToggleSubItemPart2(q.id, sub.id, true)
-                                      }
-                                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
-                                        sub.isTrue
-                                          ? 'btn-3d-emerald text-white'
-                                          : 'btn-3d-neutral text-slate-600'
-                                      }`}
-                                    >
-                                      Đúng (Đ)
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleToggleSubItemPart2(q.id, sub.id, false)
-                                      }
-                                      className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
-                                        !sub.isTrue
-                                          ? 'btn-3d-rose text-white'
-                                          : 'btn-3d-neutral text-slate-600'
-                                      }`}
-                                    >
-                                      Sai (S)
-                                    </button>
-                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                                <div className="flex items-center gap-1.5">
+                                  {q.subItems.map((s) => (
+                                    <span
+                                      key={`badge-${s.id}`}
+                                      className={`px-2 py-0.5 rounded font-mono text-[11px] font-black border ${
+                                        s.isTrue
+                                          ? 'bg-emerald-600 text-white border-emerald-700'
+                                          : 'bg-rose-600 text-white border-rose-700'
+                                      }`}
+                                    >
+                                      {s.currentLabel}:{s.isTrue ? 'Đ' : 'S'}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
 
-                        {/* ================= NỘI DUNG PHẦN III: TRẢ LỜI NGẮN (ĐÁP SỐ) ================= */}
-                        {q.part === 'PART_3' && (
-                          <div className="pt-2 flex flex-wrap items-center justify-between gap-4 bg-amber-50/90 p-3.5 rounded-xl border-2 border-amber-300">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xs font-black text-amber-950 uppercase">
-                                Đáp số chuẩn (Phần III):
-                              </span>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  value={q.shortAnswer || ''}
-                                  onChange={(e) =>
-                                    handleUpdateShortAnswerPart3(q.id, e.target.value)
-                                  }
-                                  placeholder="Nhập số (VD: 375 hoặc 0.12)"
-                                  className="w-44 px-3 py-1.5 text-sm font-mono font-extrabold text-rose-600 underline bg-white border-2 border-amber-400 rounded-xl focus:outline-none focus:border-blue-600"
-                                />
-                                {(q.shortAnswer?.includes('$') ||
-                                  q.shortAnswer?.includes('\\') ||
-                                  /[A-Z][a-z]?\d/.test(q.shortAnswer || '')) && (
-                                  <div className="text-[11px] px-2 py-0.5 text-slate-800 bg-white rounded border border-amber-300">
-                                    <ScientificContentRenderer text={q.shortAnswer || ''} inline />
+                              <div className="space-y-2.5">
+                                {q.subItems.map((sub) => (
+                                  <div
+                                    key={sub.id}
+                                    className={`p-2.5 rounded-xl border-2 flex items-center gap-3 ${
+                                      sub.isTrue
+                                        ? 'bg-emerald-50/90 border-emerald-300 shadow-xs'
+                                        : 'bg-sky-50/60 border-sky-200'
+                                    }`}
+                                  >
+                                    <span className="text-sm font-black text-sky-950 w-6 shrink-0">
+                                      {sub.currentLabel})
+                                    </span>
+
+                                    <div className="flex-1 min-w-0">
+                                      <input
+                                        type="text"
+                                        value={sub.text}
+                                        onChange={(e) =>
+                                          handleUpdateSubItemTextPart2(
+                                            q.id,
+                                            sub.id,
+                                            e.target.value
+                                          )
+                                        }
+                                        style={{
+                                          fontFamily: "'Times New Roman', Times, serif",
+                                          fontSize: '12pt',
+                                        }}
+                                        className={`w-full px-3 py-1.5 text-left bg-white border border-sky-200 rounded-lg focus:outline-none focus:border-blue-600 ${
+                                          sub.isTrue
+                                            ? 'underline decoration-emerald-600 text-slate-900 font-bold'
+                                            : 'text-slate-700 font-medium'
+                                        }`}
+                                      />
+                                      {(sub.text.includes('$') ||
+                                        sub.text.includes('\\') ||
+                                        /[A-Z][a-z]?\d/.test(sub.text)) && (
+                                        <div className="text-[11px] px-2 py-0.5 mt-1 text-slate-800 bg-white/80 rounded border border-slate-200">
+                                          <ScientificContentRenderer text={sub.text} inline />
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleToggleSubItemPart2(q.id, sub.id, true)
+                                        }
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
+                                          sub.isTrue
+                                            ? 'btn-3d-emerald text-white'
+                                            : 'btn-3d-neutral text-slate-600'
+                                        }`}
+                                      >
+                                        Đúng (Đ)
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleToggleSubItemPart2(q.id, sub.id, false)
+                                        }
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
+                                          !sub.isTrue
+                                            ? 'btn-3d-rose text-white'
+                                            : 'btn-3d-neutral text-slate-600'
+                                        }`}
+                                      >
+                                        Sai (S)
+                                      </button>
+                                    </div>
                                   </div>
-                                )}
+                                ))}
                               </div>
                             </div>
-                            <span className="text-xs text-amber-900 font-mono font-bold">
-                              Nguồn nhận diện:{' '}
-                              {q.shortAnswerDetectedBy === 'KEYWORD'
-                                ? 'Từ khóa "Đáp án:"'
-                                : q.shortAnswerDetectedBy === 'UNDERLINE_RED'
-                                ? 'Gạch chân / Tô đỏ cuối câu'
-                                : q.shortAnswerDetectedBy === 'MANUAL'
-                                ? 'Giáo viên nhập trực tiếp'
-                                : 'Chưa có đáp số'}
-                            </span>
-                          </div>
-                        )}
+                          );
+                        })()}
+
+                        {/* ================= NỘI DUNG PHẦN III: TRẢ LỜI NGẮN (TỐI ĐA 4 KÝ TỰ KỂ CẢ "-" VÀ ",") ================= */}
+                        {q.part === 'PART_3' && (() => {
+                          const rawShortAns = (q.shortAnswer || '').trim();
+                          const charLen = rawShortAns.length;
+                          const isMissingAns = charLen === 0;
+                          const isExceedsMax4 = charLen > 4;
+                          const isInvalidFormat =
+                            !isMissingAns && !/^-?\d+([.,]\d+)?$/.test(rawShortAns);
+                          const hasP3Error = isMissingAns || isExceedsMax4 || isInvalidFormat;
+                          const omrBoxes = [0, 1, 2, 3].map((idx) => rawShortAns[idx] || '');
+
+                          // Gợi ý làm tròn chuẩn 4 ký tự nếu số thập phân dài hơn 4 ký tự
+                          let suggested4Char = '';
+                          if (isExceedsMax4 && /^-?\d+([.,]\d+)?$/.test(rawShortAns)) {
+                            const useComma = rawShortAns.includes(',');
+                            const numVal = parseFloat(rawShortAns.replace(',', '.'));
+                            if (!Number.isNaN(numVal)) {
+                              for (let dec = 2; dec >= 0; dec--) {
+                                const roundedStr = Number(numVal.toFixed(dec)).toString();
+                                const formatted = useComma
+                                  ? roundedStr.replace('.', ',')
+                                  : roundedStr;
+                                if (formatted.length <= 4) {
+                                  suggested4Char = formatted;
+                                  break;
+                                }
+                              }
+                            }
+                          }
+
+                          return (
+                            <div
+                              className={`pt-2 p-3.5 rounded-xl border-2 space-y-2.5 ${
+                                hasP3Error
+                                  ? 'bg-rose-50/95 border-rose-500'
+                                  : 'bg-amber-50/90 border-amber-300'
+                              }`}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-4">
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <span className="text-xs font-black text-amber-950 uppercase">
+                                    Đáp số chuẩn (Phần III — Tối đa 4 ký tự):
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={q.shortAnswer || ''}
+                                      onChange={(e) =>
+                                        handleUpdateShortAnswerPart3(q.id, e.target.value)
+                                      }
+                                      placeholder="Nhập đáp số (VD: -2,5 hoặc 375)"
+                                      className={`w-48 px-3 py-1.5 text-sm font-mono font-extrabold underline bg-white border-2 rounded-xl focus:outline-none focus:border-blue-600 ${
+                                        hasP3Error
+                                          ? 'text-rose-700 border-rose-500 ring-2 ring-rose-200'
+                                          : 'text-rose-600 border-amber-400'
+                                      }`}
+                                    />
+                                    <span
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black border ${
+                                        hasP3Error
+                                          ? 'bg-rose-600 text-white border-rose-700'
+                                          : 'bg-emerald-600 text-white border-emerald-700'
+                                      }`}
+                                    >
+                                      {charLen}/4 ký tự
+                                    </span>
+                                  </div>
+
+                                  {/* Mô phỏng 4 ô tô phiếu trả lời trắc nghiệm OMR 2025 */}
+                                  <div
+                                    className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs"
+                                    title="4 ô phiếu trả lời trắc nghiệm chuẩn Bộ GD&ĐT (Mỗi dấu '-' hoặc ',' chiếm 1 ô)"
+                                  >
+                                    <span className="text-[11px] font-black text-slate-600 mr-1">
+                                      4 ô OMR:
+                                    </span>
+                                    {omrBoxes.map((ch, idx) => (
+                                      <span
+                                        key={`omr-box-${q.id}-${idx}`}
+                                        className={`w-6 h-6 rounded border text-xs font-mono font-black flex items-center justify-center ${
+                                          ch
+                                            ? 'bg-amber-100 border-amber-500 text-slate-950'
+                                            : 'bg-slate-50 border-slate-300 text-slate-400'
+                                        }`}
+                                      >
+                                        {ch || '·'}
+                                      </span>
+                                    ))}
+                                  </div>
+
+                                  {suggested4Char && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleUpdateShortAnswerPart3(q.id, suggested4Char)
+                                      }
+                                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer shadow-2xs"
+                                      title={`Làm tròn đáp số "${rawShortAns}" thành "${suggested4Char}" (đúng 4 ký tự)`}
+                                    >
+                                      Làm tròn thành &quot;{suggested4Char}&quot; (4 ký tự)
+                                    </button>
+                                  )}
+                                </div>
+
+                                <span className="text-xs text-amber-900 font-mono font-bold">
+                                  Nguồn nhận diện:{' '}
+                                  {q.shortAnswerDetectedBy === 'KEYWORD'
+                                    ? 'Từ khóa "Đáp án:" / Bảng đáp án'
+                                    : q.shortAnswerDetectedBy === 'UNDERLINE_RED'
+                                    ? 'Gạch chân / Tô đỏ cuối câu'
+                                    : q.shortAnswerDetectedBy === 'MANUAL'
+                                    ? 'Giáo viên nhập trực tiếp'
+                                    : 'Chưa có đáp số (Cần giáo viên bổ sung)'}
+                                </span>
+                              </div>
+
+                              {hasP3Error && (
+                                <div className="px-3 py-1.5 rounded-lg bg-rose-100 border border-rose-400 text-rose-900 text-xs font-black flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                                  <span>
+                                    {isMissingAns
+                                      ? 'CHƯA CÓ ĐÁP SỐ PHẦN III (Hệ thống tuyệt đối không tự bịa đáp án): Giáo viên vui lòng nhập đáp số (tối đa 4 ký tự kể cả dấu "-" và dấu ",")!'
+                                      : isExceedsMax4
+                                      ? `VƯỢT QUÁ 4 KÝ TỰ: Đáp số "${rawShortAns}" đang có ${charLen} ký tự. Bắt buộc tối đa 4 ký tự kể cả dấu "-" và dấu "," (VD: -2,5 hoặc 28,1). Vui lòng làm tròn hoặc chỉnh sửa!`
+                                      : `SAI ĐỊNH DẠNG ĐÁP SỐ TRẢ LỜI NGẮN: "${rawShortAns}" chứa ký tự không hợp lệ. Chỉ được phép dùng chữ số 0–9, dấu trừ "-" và dấu phẩy "," (tối đa 4 ký tự)!`}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* ================= NỘI DUNG PHẦN IV (HOẶC PHẦN III): TỰ LUẬN (KHÔNG TRỘN) ================= */}
                         {q.part === 'PART_4' && (
