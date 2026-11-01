@@ -2038,8 +2038,7 @@ export function enforceStrictFourOptionsPart1(
   if (
     existingOpts.length === 4 &&
     existingOpts.every((o) => o.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(o.text.trim())) &&
-    !stemHasClumpedFour &&
-    !anyOptionHasClumpedNext
+    (questionRuns.length === 0 || (!stemHasClumpedFour && !anyOptionHasClumpedNext))
   ) {
     finalOptions = existingOpts.map((o, idx) => {
       const lbl = labels[idx];
@@ -2053,9 +2052,12 @@ export function enforceStrictFourOptionsPart1(
         explicitCorrect = true;
         cleanText = cleanText.replace(/(?:\[Đúng\]|\(Đúng\)|\(Đ\)|\[Đ\])$/i, '').trim();
       }
-      const isUnderline = Boolean(o.isUnderline || explicitCorrect);
-      const isRed = Boolean(o.isRed || explicitCorrect);
-      const isCorrect = Boolean(o.isCorrect || isUnderline || isRed || explicitCorrect);
+      const isCorrect =
+        questionRuns.length === 0 && !explicitCorrect
+          ? Boolean(o.isCorrect)
+          : Boolean(o.isCorrect || o.isUnderline || o.isRed || explicitCorrect);
+      const isUnderline = isCorrect ? Boolean(o.isUnderline || explicitCorrect || isCorrect) : false;
+      const isRed = isCorrect ? Boolean(o.isRed || explicitCorrect || isCorrect) : false;
       const safeText = sanitizeAndEnforceNonEmptyOptionText(cleanText, lbl, idx, finalStem, questionRuns);
       return {
         ...o,
@@ -2262,8 +2264,7 @@ export function enforceStrictFourSubItemsPart2(
   if (
     existingSubs.length === 4 &&
     existingSubs.every((s) => s.text.trim().length > 0 && !/^[.\-_:,;?!]+$/.test(s.text.trim())) &&
-    !stemHasClumpedFour &&
-    !anySubHasClumpedNext
+    (questionRuns.length === 0 || (!stemHasClumpedFour && !anySubHasClumpedNext))
   ) {
     finalSubs = existingSubs.map((s, idx) => {
       const lbl = labels[idx];
@@ -2284,10 +2285,14 @@ export function enforceStrictFourSubItemsPart2(
           .replace(/(?:(?:\(|\[|[-–—:→]\s*)(?:S|Sai|False)(?:\)|\])?\.?)$/i, '')
           .trim();
       }
-      const isUnderline = Boolean(s.isUnderline || explicitTrue === true);
-      const isRed = Boolean(s.isRed || explicitTrue === true);
       const isTrue =
-        explicitTrue !== null ? explicitTrue : Boolean(s.isTrue || isUnderline || isRed);
+        explicitTrue !== null
+          ? explicitTrue
+          : questionRuns.length === 0
+          ? Boolean(s.isTrue)
+          : Boolean(s.isTrue || s.isUnderline || s.isRed);
+      const isUnderline = isTrue ? Boolean(s.isUnderline || explicitTrue === true || isTrue) : false;
+      const isRed = isTrue ? Boolean(s.isRed || explicitTrue === true || isTrue) : false;
       const safeText = sanitizeAndEnforceNonEmptySubItemText(cleanSubText, lbl, idx, finalStem, questionRuns);
 
       return {
@@ -2381,12 +2386,16 @@ export function enforceStrictFourSubItemsPart2(
             .trim();
         }
 
-        const isUnderline = Boolean(prevSub?.isUnderline || hl.isUnderline || explicitTrue === true);
-        const isRed = Boolean(prevSub?.isRed || hl.isRed || explicitTrue === true);
         const isTrue =
           explicitTrue !== null
             ? explicitTrue
-            : Boolean(prevSub?.isTrue || isUnderline || isRed);
+            : Boolean(prevSub?.isTrue || prevSub?.isUnderline || prevSub?.isRed || hl.isUnderline || hl.isRed);
+        const isUnderline = isTrue
+          ? Boolean(prevSub?.isUnderline || hl.isUnderline || explicitTrue === true || isTrue)
+          : false;
+        const isRed = isTrue
+          ? Boolean(prevSub?.isRed || hl.isRed || explicitTrue === true || isTrue)
+          : false;
         const safeText = sanitizeAndEnforceNonEmptySubItemText(cleanSubText, seg.label, idx, finalStem, questionRuns);
 
         return {

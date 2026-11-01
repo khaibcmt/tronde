@@ -121,6 +121,8 @@ export default function App() {
   );
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
   const [lastSavedAt, setLastSavedAt] = useState<string>('Vừa khởi tạo');
+  const [editedQuestionIds, setEditedQuestionIds] = useState<string[]>([]);
+  const [isSavedAndReadyState, setIsSavedAndReadyState] = useState<boolean>(false);
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null);
   const [activeRightTab, setActiveRightTab] = useState<
     'LIVE_EDITOR' | 'AI_CLONE_STUDIO' | 'BLOOM_MATRIX' | 'SHUFFLED_PREVIEW'
@@ -491,6 +493,8 @@ export default function App() {
         setQuestions(parsed);
         setWordRawDocumentText(serializeQuestionsToWordRawText(parsed));
         setHasUnsavedChanges(false);
+        setEditedQuestionIds([]);
+        setIsSavedAndReadyState(issuesAfterParse.length === 0);
         setShuffledVariants([]);
         setClonedQuestions([]);
         setAiClonedVariants([]);
@@ -557,6 +561,8 @@ export default function App() {
     }));
     setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
     setHasUnsavedChanges(false);
+    setEditedQuestionIds([]);
+    setIsSavedAndReadyState(true);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
     setStatusBanner({
       type: 'SUCCESS',
@@ -564,14 +570,49 @@ export default function App() {
     });
   };
 
+  // Bảo toàn hình ảnh, bảng biểu, công thức OMML và mức độ nhận thức khi đồng bộ từ trình soạn thảo Word A4
+  const mergeRichMetadataFromExistingQuestions = (
+    parsedList: ExamQuestion[],
+    existingList: ExamQuestion[]
+  ): ExamQuestion[] => {
+    return parsedList.map((pq, idx) => {
+      const matched =
+        existingList.find(
+          (eq) => eq.part === pq.part && eq.displayIndex === pq.displayIndex
+        ) || existingList[idx];
+      if (!matched) return pq;
+      return {
+        ...pq,
+        id: matched.id || pq.id,
+        bloomLevel: matched.bloomLevel || pq.bloomLevel,
+        hasImage: Boolean(
+          (pq.images && pq.images.length > 0) ||
+            (matched.images && matched.images.length > 0)
+        ),
+        images:
+          pq.images && pq.images.length > 0 ? pq.images : matched.images,
+        stemTables:
+          pq.stemTables && pq.stemTables.length > 0
+            ? pq.stemTables
+            : matched.stemTables,
+        rawFormulaOmmlXml: pq.rawFormulaOmmlXml || matched.rawFormulaOmmlXml,
+        formulaLatex: pq.formulaLatex || matched.formulaLatex,
+      };
+    });
+  };
+
   // Đồng bộ từ trình soạn thảo trang giấy Word A4 sang danh sách câu hỏi chuẩn 4 đáp án & Tự luận
-  const handleSyncFromWordA4Editor = () => {
+  const handleSyncFromWordA4Editor = async () => {
     const rawFromWord = parseRawTextToExamQuestions(
       wordRawDocumentText,
       config.resetNumberingPerPart
     );
-    const parsedFromWord = normalizeAllQuestionsStrictFourOptions(
+    const mergedWithRichMedia = mergeRichMetadataFromExistingQuestions(
       rawFromWord,
+      questions
+    );
+    const parsedFromWord = normalizeAllQuestionsStrictFourOptions(
+      mergedWithRichMedia,
       config.resetNumberingPerPart
     );
     if (parsedFromWord.length === 0) {
@@ -581,22 +622,30 @@ export default function App() {
       });
       return;
     }
+    const savedTime = new Date().toLocaleTimeString('vi-VN');
     const issuesAfterWordSync = validateExamQuestions(parsedFromWord);
     setQuestions(parsedFromWord);
     setWordRawDocumentText(serializeQuestionsToWordRawText(parsedFromWord));
     setHasUnsavedChanges(false);
-    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
-    if (issuesAfterWordSync.length > 0) {
-      setHighlightedQuestionId(issuesAfterWordSync[0].questionId);
+    setLastSavedAt(savedTime);
+
+    const remainingErrors = issuesAfterWordSync.filter(
+      (i) => i.severity === 'ERROR'
+    );
+    if (remainingErrors.length > 0) {
+      setIsSavedAndReadyState(false);
+      setEditorViewMode('CARDS_3D');
+      handleScrollToQuestion(remainingErrors[0].questionId);
       setStatusBanner({
         type: 'ERROR',
-        text: `Đã đồng bộ ${parsedFromWord.length} câu hỏi từ Word A4 nhưng còn ${issuesAfterWordSync.length} câu thiếu/chưa chuẩn đáp án (Hệ thống TUYỆT ĐỐI KHÔNG tự bịa đáp án). Vui lòng bổ sung và chỉnh sửa!`,
+        text: `Đã cập nhật chỉnh sửa (${parsedFromWord.length} câu hỏi từ Word A4 lúc ${savedTime}) nhưng còn ${remainingErrors.length} câu thiếu/chưa chuẩn đáp án (Đã cuộn tới Câu ${remainingErrors[0].questionIndex}). Vui lòng bổ sung và bấm [Lưu & Trộn Đề]!`,
       });
     } else {
-      setStatusBanner({
-        type: 'SUCCESS',
-        text: `Đã đồng bộ thành công ${parsedFromWord.length} câu hỏi từ Môi trường Word A4 (Chuẩn 100% đáp án từ giáo viên)!`,
-      });
+      setIsSavedAndReadyState(true);
+      await executeShuffleWithQuestions(
+        parsedFromWord,
+        `Đã lưu chỉnh sửa từ Trang Word A4 (${parsedFromWord.length} câu hợp lệ lúc ${savedTime}) và trộn thành công ${config.numVariants} mã đề kèm Bảng Đáp Án Chung!`
+      );
     }
   };
 
@@ -815,18 +864,26 @@ export default function App() {
     }, 3500);
   };
 
+  const markQuestionEdited = (questionId: string) => {
+    setHasUnsavedChanges(true);
+    setIsSavedAndReadyState(false);
+    setEditedQuestionIds((prev) =>
+      prev.includes(questionId) ? prev : [...prev, questionId]
+    );
+  };
+
   const handleUpdateStemText = (questionId: string, newStem: string) => {
     setQuestions((prev) =>
       prev.map((q) => (q.id === questionId ? { ...q, stemText: newStem } : q))
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleUpdateBloomLevel = (questionId: string, level: BloomLevel) => {
     setQuestions((prev) =>
       prev.map((q) => (q.id === questionId ? { ...q, bloomLevel: level } : q))
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleSelectSingleCorrectPart1 = (
@@ -851,7 +908,7 @@ export default function App() {
         };
       })
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleToggleOptionPropertyPart1 = (
@@ -877,7 +934,7 @@ export default function App() {
         return { ...q, options: updatedOpts };
       })
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleUpdateOptionTextPart1 = (
@@ -898,7 +955,7 @@ export default function App() {
         };
       })
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleToggleSubItemPart2 = (
@@ -923,7 +980,7 @@ export default function App() {
         return { ...q, subItems: updatedSubs };
       })
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleUpdateSubItemTextPart2 = (
@@ -942,7 +999,7 @@ export default function App() {
         };
       })
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleUpdateShortAnswerPart3 = (questionId: string, val: string) => {
@@ -957,7 +1014,7 @@ export default function App() {
           : q
       )
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleUpdateEssayAnswerPart4 = (questionId: string, val: string) => {
@@ -972,7 +1029,7 @@ export default function App() {
           : q
       )
     );
-    setHasUnsavedChanges(true);
+    markQuestionEdited(questionId);
   };
 
   const handleAddEssayQuestionPart4 = () => {
@@ -993,7 +1050,7 @@ export default function App() {
     );
     setQuestions(updated);
     setWordRawDocumentText(serializeQuestionsToWordRawText(updated));
-    setHasUnsavedChanges(true);
+    markQuestionEdited(newId);
     setActiveRightTab('LIVE_EDITOR');
     setFilterPart('PART_4');
     setTimeout(() => {
@@ -1004,28 +1061,88 @@ export default function App() {
     }, 80);
   };
 
-  const handleSaveEdits = () => {
+  // Hàm thực thi trộn đề trực tiếp từ danh sách câu hỏi đã chuẩn hóa (Tránh lỗi state bất đồng bộ khi vừa bấm Lưu)
+  const executeShuffleWithQuestions = async (
+    sourceQuestions: ExamQuestion[],
+    customSuccessText?: string
+  ) => {
+    setIsProcessing(true);
+    try {
+      const variants = await generateShuffledVariants(sourceQuestions, config);
+      setShuffledVariants(variants);
+      try {
+        const multiQr = await generateMasterMultiQrCode(variants, config);
+        setMasterMultiQr(multiQr);
+      } catch (err) {
+        console.warn('Lỗi tạo Master Multi QR:', err);
+      }
+      if (variants.length > 0) {
+        setSelectedVariantCode(variants[0].examCode);
+      }
+      setActiveRightTab('SHUFFLED_PREVIEW');
+      setStatusBanner({
+        type: 'SUCCESS',
+        text:
+          customSuccessText ||
+          `Đã cập nhật trạng thái chỉnh sửa và trộn thành công ${variants.length} mã đề (Times New Roman 12pt) kèm Bảng Đáp Án Chung & Mã QR Tổng Hợp!`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Lỗi trộn đề';
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Có lỗi xảy ra khi trộn đề: ${msg}`,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSaveEdits = async () => {
+    let baseQuestions = questions;
+    if (editorViewMode === 'WORD_A4_PAGE' && hasUnsavedChanges) {
+      const rawFromWord = parseRawTextToExamQuestions(
+        wordRawDocumentText,
+        config.resetNumberingPerPart
+      );
+      if (rawFromWord.length > 0) {
+        baseQuestions = mergeRichMetadataFromExistingQuestions(
+          rawFromWord,
+          questions
+        );
+      }
+    }
+
     const recalculated = normalizeAllQuestionsStrictFourOptions(
-      questions,
+      baseQuestions,
       config.resetNumberingPerPart
     );
+    const savedTime = new Date().toLocaleTimeString('vi-VN');
     setQuestions(recalculated);
     setWordRawDocumentText(serializeQuestionsToWordRawText(recalculated));
     setHasUnsavedChanges(false);
-    setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
+    setLastSavedAt(savedTime);
 
     const remainingErrors = validateExamQuestions(recalculated).filter(
       (i) => i.severity === 'ERROR'
     );
     if (remainingErrors.length === 0) {
-      setStatusBanner({
-        type: 'SUCCESS',
-        text: 'Đã lưu chỉnh sửa & cập nhật cây dữ liệu AST! Tất cả lỗi đã được xử lý, nút [Trộn đề] đã mở khóa.',
-      });
+      setIsSavedAndReadyState(true);
+      await executeShuffleWithQuestions(
+        recalculated,
+        `Đã lưu chỉnh sửa (${
+          editedQuestionIds.length > 0
+            ? `Cập nhật ${editedQuestionIds.length} câu hỏi · `
+            : ''
+        }lúc ${savedTime}) và tự động trộn thành công ${config.numVariants} mã đề kèm Bảng Đáp Án Chung!`
+      );
     } else {
+      setIsSavedAndReadyState(false);
+      setActiveRightTab('LIVE_EDITOR');
+      setEditorViewMode('CARDS_3D');
+      handleScrollToQuestion(remainingErrors[0].questionId);
       setStatusBanner({
         type: 'INFO',
-        text: `Đã lưu chỉnh sửa! Hiện còn ${remainingErrors.length} lỗi cần hoàn thiện trước khi trộn đề.`,
+        text: `Đã lưu chỉnh sửa lúc ${savedTime}! Hiện còn ${remainingErrors.length} câu cần hoàn thiện đáp án (Đã cuộn tới Câu ${remainingErrors[0].questionIndex}: ${remainingErrors[0].message}) để tự động trộn đề.`,
       });
     }
   };
@@ -1043,18 +1160,20 @@ export default function App() {
 
     const remainingIssues = validateExamQuestions(normalized);
     if (remainingIssues.length > 0) {
+      setIsSavedAndReadyState(false);
       setActiveRightTab('LIVE_EDITOR');
-      setEditorViewMode('CARD_LIST');
+      setEditorViewMode('CARDS_3D');
       handleScrollToQuestion(remainingIssues[0].questionId);
       setStatusBanner({
         type: 'ERROR',
         text: `Hệ thống TUYỆT ĐỐI KHÔNG TỰ BỊA ĐÁP ÁN. Hiện có ${remainingIssues.length} lỗi đáp án cần giáo viên trực tiếp bổ sung/chỉnh sửa (Đã cuộn tới Câu ${remainingIssues[0].questionIndex}: ${remainingIssues[0].message}).`,
       });
     } else {
-      setStatusBanner({
-        type: 'SUCCESS',
-        text: 'Tất cả câu hỏi đã có đáp án chuẩn từ giáo viên! Nút [Trộn đề] đã sẵn sàng.',
-      });
+      setIsSavedAndReadyState(true);
+      void executeShuffleWithQuestions(
+        normalized,
+        'Tất cả câu hỏi đã có đáp án chuẩn từ giáo viên! Hệ thống đã tự động trộn đề ngay.'
+      );
     }
   };
 
@@ -1065,44 +1184,50 @@ export default function App() {
 
   // ================= HANDLERS: TRỘN ĐỀ & XUẤT FILE WORD / BẢNG ĐÁP ÁN CHUNG / QR =================
   const handleRunShuffle = async () => {
-    if (errorIssues.length > 0) {
+    let baseQuestions = questions;
+    if (editorViewMode === 'WORD_A4_PAGE' && hasUnsavedChanges) {
+      const rawFromWord = parseRawTextToExamQuestions(
+        wordRawDocumentText,
+        config.resetNumberingPerPart
+      );
+      if (rawFromWord.length > 0) {
+        baseQuestions = mergeRichMetadataFromExistingQuestions(
+          rawFromWord,
+          questions
+        );
+      }
+    }
+
+    const normalized = normalizeAllQuestionsStrictFourOptions(
+      baseQuestions,
+      config.resetNumberingPerPart
+    );
+    const savedTime = new Date().toLocaleTimeString('vi-VN');
+    setQuestions(normalized);
+    setWordRawDocumentText(serializeQuestionsToWordRawText(normalized));
+    setHasUnsavedChanges(false);
+    setLastSavedAt(savedTime);
+
+    const currentErrors = validateExamQuestions(normalized).filter(
+      (i) => i.severity === 'ERROR'
+    );
+    if (currentErrors.length > 0) {
+      setIsSavedAndReadyState(false);
+      setActiveRightTab('LIVE_EDITOR');
+      setEditorViewMode('CARDS_3D');
+      handleScrollToQuestion(currentErrors[0].questionId);
       setStatusBanner({
         type: 'ERROR',
-        text: `Vui lòng sửa ${errorIssues.length} lỗi định dạng bên cột trái trước khi trộn đề.`,
+        text: `Vui lòng sửa ${currentErrors.length} lỗi đáp án trước khi trộn đề (Đã cuộn tới Câu ${currentErrors[0].questionIndex}: ${currentErrors[0].message}).`,
       });
       return;
     }
-    if (hasUnsavedChanges) {
-      handleSaveEdits();
-    }
 
-    setIsProcessing(true);
-    try {
-      const variants = await generateShuffledVariants(questions, config);
-      setShuffledVariants(variants);
-      try {
-        const multiQr = await generateMasterMultiQrCode(variants, config);
-        setMasterMultiQr(multiQr);
-      } catch (err) {
-        console.warn('Lỗi tạo Master Multi QR:', err);
-      }
-      if (variants.length > 0) {
-        setSelectedVariantCode(variants[0].examCode);
-      }
-      setActiveRightTab('SHUFFLED_PREVIEW');
-      setStatusBanner({
-        type: 'SUCCESS',
-        text: `Đã trộn thành công ${variants.length} mã đề (Times New Roman 12pt, có đánh số trang & mã đề) kèm Bảng Ma Trận Đáp Án & Mã QR Tổng Hợp!`,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Lỗi trộn đề';
-      setStatusBanner({
-        type: 'ERROR',
-        text: `Có lỗi xảy ra khi trộn đề: ${msg}`,
-      });
-    } finally {
-      setIsProcessing(false);
-    }
+    setIsSavedAndReadyState(true);
+    await executeShuffleWithQuestions(
+      normalized,
+      `Đã cập nhật trạng thái chỉnh sửa (${savedTime}) và trộn thành công ${config.numVariants} mã đề (Times New Roman 12pt) kèm Bảng Đáp Án Chung & Mã QR Tổng Hợp!`
+    );
   };
 
   const handleUpdateCustomCode = (index: number, newCode: string) => {
@@ -2451,13 +2576,14 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleSaveEdits}
-                    title="Lưu mọi chỉnh sửa nội dung câu hỏi và đáp án hiện tại"
+                    disabled={isProcessing}
+                    title="Lưu mọi chỉnh sửa nội dung câu hỏi & đáp án hiện tại và tự động bắt đầu trộn đề"
                     className={`px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                      hasUnsavedChanges ? 'btn-3d-amber' : 'btn-3d-emerald'
+                      hasUnsavedChanges ? 'btn-3d-amber ring-2 ring-amber-300' : 'btn-3d-emerald'
                     }`}
                   >
                     <Save className="w-3.5 h-3.5 shrink-0" />
-                    <span>{hasUnsavedChanges ? 'Lưu Chỉnh Sửa*' : 'Lưu Chỉnh Sửa'}</span>
+                    <span>{hasUnsavedChanges ? 'Lưu & Trộn Đề*' : 'Lưu & Trộn Đề'}</span>
                   </button>
                 </div>
 
@@ -2650,12 +2776,55 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Nhóm 3: Khung cảnh báo câu hỏi chưa hợp lệ */}
-              <div>
+              {/* Nhóm 3: Khung cảnh báo câu hỏi chưa hợp lệ & trạng thái chỉnh sửa */}
+              <div className="space-y-1.5">
+                {hasUnsavedChanges ? (
+                  <div className="px-3 py-2 rounded-xl bg-amber-50 border-2 border-amber-500 text-amber-950 text-xs font-black flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-1.5">
+                      <Edit3 className="w-4 h-4 text-amber-600 shrink-0 animate-pulse" />
+                      <span>
+                        Đang chỉnh sửa ({editedQuestionIds.length || 1} câu) ·{' '}
+                        {validationIssues.length === 0
+                          ? 'Đã hết lỗi! Bấm Lưu để trộn đề ngay'
+                          : `Còn ${validationIssues.length} lỗi cần sửa`}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSaveEdits}
+                      disabled={isProcessing}
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
+                      title="Lưu trạng thái đã chỉnh sửa và tự động bắt đầu trộn đề"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Lưu &amp; Trộn Đề</span>
+                    </button>
+                  </div>
+                ) : (
+                  editedQuestionIds.length > 0 &&
+                  isSavedAndReadyState && (
+                    <div className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-400 text-blue-950 text-xs font-black flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span>
+                          Đã lưu chỉnh sửa ({editedQuestionIds.length} câu · lúc {lastSavedAt}) &amp; Đã cập nhật bộ đề trộn
+                        </span>
+                      </div>
+                    </div>
+                  )
+                )}
+
                 {validationIssues.length === 0 ? (
-                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-950 text-xs font-black flex items-center gap-1.5 shadow-2xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Đề hợp lệ 100% (Đáp án chuẩn từ giáo viên · 0 lỗi)</span>
+                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-950 text-xs font-black flex items-center justify-between gap-1.5 shadow-2xs">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Đề hợp lệ 100% (Đáp án chuẩn từ giáo viên · 0 lỗi)</span>
+                    </div>
+                    {hasUnsavedChanges && (
+                      <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300">
+                        Chờ Lưu &amp; Trộn
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div className="p-2.5 rounded-xl bg-rose-50 border-2 border-rose-500 text-rose-950 space-y-1.5 shadow-xs text-xs">
@@ -2682,7 +2851,7 @@ export default function App() {
                           type="button"
                           onClick={() => {
                             setActiveRightTab('LIVE_EDITOR');
-                            setEditorViewMode('CARD_LIST');
+                            setEditorViewMode('CARDS_3D');
                             handleScrollToQuestion(iss.questionId);
                           }}
                           className="px-2 py-0.5 rounded-lg bg-white hover:bg-rose-600 hover:text-white text-rose-800 border border-rose-300 font-black transition-colors cursor-pointer whitespace-nowrap"
@@ -2875,6 +3044,22 @@ export default function App() {
                             <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-black font-mono shadow-xs">
                               Câu {q.displayIndex}
                             </span>
+                            {editedQuestionIds.includes(q.id) && (
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[11px] font-black border flex items-center gap-1 ${
+                                  hasUnsavedChanges
+                                    ? 'bg-amber-100 border-amber-400 text-amber-900'
+                                    : 'bg-emerald-100 border-emerald-400 text-emerald-900'
+                                }`}
+                              >
+                                <CheckCircle2 className="w-3 h-3 shrink-0" />
+                                <span>
+                                  {hasUnsavedChanges
+                                    ? 'Đã chỉnh sửa (Chờ lưu)'
+                                    : `Đã lưu chỉnh sửa (${lastSavedAt})`}
+                                </span>
+                              </span>
+                            )}
                             {q.isAiCloned && (
                               <span className="px-2 py-0.5 rounded-md bg-purple-100 border border-purple-300 text-purple-900 text-[11px] font-extrabold">
                                 AI Nhân Bản Tương Đương
@@ -2914,11 +3099,27 @@ export default function App() {
                               <span>{questionIssues[0].message}</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1">
                                 <CheckCircle2 className="w-4 h-4" />
-                                <span>Đạt chuẩn 2025</span>
+                                <span>
+                                  {editedQuestionIds.includes(q.id)
+                                    ? 'Đã chỉnh sửa hợp lệ'
+                                    : 'Đạt chuẩn 2025'}
+                                </span>
                               </span>
+                              {(hasUnsavedChanges || editedQuestionIds.includes(q.id)) && (
+                                <button
+                                  type="button"
+                                  onClick={handleSaveEdits}
+                                  disabled={isProcessing}
+                                  className="px-3 py-1 rounded-lg text-xs font-black text-white btn-3d-emerald flex items-center gap-1 cursor-pointer shadow-xs"
+                                  title="Lưu chỉnh sửa và bắt đầu trộn đề ngay"
+                                >
+                                  <Save className="w-3.5 h-3.5" />
+                                  <span>Lưu &amp; Trộn Đề Ngay</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
