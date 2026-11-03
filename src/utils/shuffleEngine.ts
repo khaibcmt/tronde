@@ -39,6 +39,75 @@ export function generateExamCodes(count: number, digits: 3 | 4): string[] {
 }
 
 /**
+ * Tự động sinh toàn bộ danh sách mã đề theo đúng quy cách của ô mã đề gốc (ô đầu tiên).
+ * Hỗ trợ đầy đủ các quy cách:
+ * - Số nguyên chuẩn hoặc có số 0 ở đầu: "101" -> "101, 102, 103...", "001" -> "001, 002, 003...", "2001" -> "2001, 2002..."
+ * - Tiền tố + Số: "MĐ101" -> "MĐ101, MĐ102...", "Đề 01" -> "Đề 01, Đề 02..."
+ * - Số + Hậu tố: "101-A" -> "102-A, 103-A..."
+ * - Chữ cái đơn ở cuối (không chứa số): "A" -> "A, B, C, D...", "Mã A" -> "Mã A, Mã B, Mã C..."
+ */
+export function generateSequentialExamCodesFromRoot(
+  rootCode: string,
+  count: number,
+  fallbackDigits: 3 | 4 = 3
+): string[] {
+  const trimmed = (rootCode || '').trim();
+  if (!trimmed) {
+    return generateExamCodes(count, fallbackDigits);
+  }
+
+  // Trường hợp 1: Kết thúc bằng cụm chữ số (VD: "101", "001", "1201", "MĐ-101", "Đề 01")
+  const matchTrailingNumber = trimmed.match(/^(.*?)(\d+)$/);
+  if (matchTrailingNumber) {
+    const prefix = matchTrailingNumber[1] || '';
+    const numStr = matchTrailingNumber[2];
+    const padLen = numStr.length;
+    const startNum = parseInt(numStr, 10);
+    if (!isNaN(startNum)) {
+      return Array.from({ length: count }, (_, i) => {
+        const nextNumStr = String(startNum + i).padStart(padLen, '0');
+        return `${prefix}${nextNumStr}`;
+      });
+    }
+  }
+
+  // Trường hợp 2: Có cụm chữ số ở giữa và hậu tố chữ phía sau (VD: "101-SH", "101A")
+  const matchMiddleNumber = trimmed.match(/^(.*?)(\d+)([^\d]+)$/);
+  if (matchMiddleNumber) {
+    const prefix = matchMiddleNumber[1] || '';
+    const numStr = matchMiddleNumber[2];
+    const suffix = matchMiddleNumber[3] || '';
+    const padLen = numStr.length;
+    const startNum = parseInt(numStr, 10);
+    if (!isNaN(startNum)) {
+      return Array.from({ length: count }, (_, i) => {
+        const nextNumStr = String(startNum + i).padStart(padLen, '0');
+        return `${prefix}${nextNumStr}${suffix}`;
+      });
+    }
+  }
+
+  // Trường hợp 3: Không có số nhưng kết thúc bằng chữ cái A-Z (VD: "A", "Mã A", "Đề A")
+  const matchTrailingLetter = trimmed.match(/^(.*?)([A-Za-z])$/);
+  if (matchTrailingLetter) {
+    const prefix = matchTrailingLetter[1] || '';
+    const firstChar = matchTrailingLetter[2];
+    const isUpper = firstChar === firstChar.toUpperCase();
+    const baseAlphabetCode = isUpper ? 65 : 97;
+    const offset = firstChar.charCodeAt(0) - baseAlphabetCode;
+    return Array.from({ length: count }, (_, i) => {
+      const nextChar = String.fromCharCode(baseAlphabetCode + ((offset + i) % 26));
+      return `${prefix}${nextChar}`;
+    });
+  }
+
+  // Trường hợp 4: Chuỗi tự do khác
+  return Array.from({ length: count }, (_, i) =>
+    i === 0 ? trimmed : `${trimmed}-${i + 1}`
+  );
+}
+
+/**
  * 1. CHUẨN PAYLOAD CHÍNH THỨC CỦA APP CHẤM THI QM 2025 (qrcode2025.youngmix.vn)
  * - Cấu trúc mảng 2 chiều JSON: [[MaDe, ...Phan1(A/B/C/D), ...Phan2(D/S), ...Phan3(Number)], ...]
  * - Đúng chuẩn 100% thuật toán processExcelData() & generateQRCode() của QM 2025
@@ -320,14 +389,18 @@ export async function generateShuffledVariants(
   sourceQuestions: ExamQuestion[],
   config: ShuffleConfig
 ): Promise<ShuffledVariant[]> {
-  const defaultCodes = generateExamCodes(config.numVariants, config.examCodeDigits);
+  const rootPatternCodes = generateSequentialExamCodesFromRoot(
+    config.customCodes?.[0] || '',
+    config.numVariants,
+    config.examCodeDigits
+  );
   const codes =
     config.customCodes && config.customCodes.length > 0
       ? Array.from({ length: config.numVariants }, (_, i) => {
           const custom = config.customCodes?.[i]?.trim();
-          return custom || defaultCodes[i];
+          return custom || rootPatternCodes[i];
         })
-      : defaultCodes;
+      : rootPatternCodes;
   const variants: ShuffledVariant[] = [];
 
   const part1Source = sourceQuestions.filter((q) => q.part === 'PART_1');

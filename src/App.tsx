@@ -76,6 +76,7 @@ import { enhanceAndCropExamImage } from './utils/scientificExamProcessor';
 import {
   exportGradingExcelXlsx,
   generateMasterMultiQrCode,
+  generateSequentialExamCodesFromRoot,
   generateShuffledVariants,
 } from './utils/shuffleEngine';
 import {
@@ -1562,25 +1563,100 @@ export default function App() {
     );
   };
 
+  const syncShuffledVariantsWithCodes = async (updatedCodes: string[]) => {
+    if (shuffledVariants.length === 0) return;
+    const trimmedCodes = updatedCodes.map((c) => c.trim());
+    if (trimmedCodes.some((c) => !c)) return;
+
+    const updatedVariants = shuffledVariants.map((v, idx) => ({
+      ...v,
+      examCode: trimmedCodes[idx] || v.examCode,
+    }));
+    setShuffledVariants(updatedVariants);
+    setSelectedVariantCode((prevSelected) => {
+      const oldIdx = shuffledVariants.findIndex((v) => v.examCode === prevSelected);
+      if (oldIdx >= 0 && updatedVariants[oldIdx]) {
+        return updatedVariants[oldIdx].examCode;
+      }
+      return updatedVariants[0]?.examCode || prevSelected;
+    });
+    try {
+      const multiQr = await generateMasterMultiQrCode(updatedVariants, {
+        ...config,
+        customCodes: updatedCodes,
+      });
+      setMasterMultiQr(multiQr);
+    } catch (err) {
+      console.warn('Lỗi cập nhật QR khi đổi mã đề:', err);
+    }
+  };
+
   const handleUpdateCustomCode = (index: number, newCode: string) => {
+    let nextCodesForSync: string[] | null = null;
     setConfig((prev) => {
       const base = prev.examCodeDigits === 3 ? 101 : 1001;
+      const rootFallback = prev.customCodes?.[0]?.trim() || String(base);
+      const defaultSeq = generateSequentialExamCodesFromRoot(
+        rootFallback,
+        prev.numVariants,
+        prev.examCodeDigits
+      );
       const codes =
         prev.customCodes && prev.customCodes.length >= prev.numVariants
           ? [...prev.customCodes]
-          : Array.from({ length: prev.numVariants }, (_, i) => String(base + i));
-      codes[index] = newCode;
-      return { ...prev, customCodes: codes };
+          : defaultSeq;
+
+      if (index === 0) {
+        // Khi giáo viên sửa trên ô gốc (ô đầu tiên), các mã đề tiếp theo tự động nhảy theo đúng quy cách của ô gốc
+        const trimmed = newCode.trim();
+        if (!trimmed) {
+          codes[0] = newCode;
+          return { ...prev, customCodes: codes };
+        }
+        const autoSeq = generateSequentialExamCodesFromRoot(
+          trimmed,
+          prev.numVariants,
+          prev.examCodeDigits
+        );
+        autoSeq[0] = newCode;
+        nextCodesForSync = autoSeq;
+        const onlyDigits = trimmed.match(/^\d+$/)?.[0];
+        const nextDigits: 3 | 4 =
+          onlyDigits && onlyDigits.length === 4
+            ? 4
+            : onlyDigits && onlyDigits.length === 3
+            ? 3
+            : prev.examCodeDigits;
+        return {
+          ...prev,
+          examCodeDigits: nextDigits,
+          customCodes: autoSeq,
+        };
+      } else {
+        codes[index] = newCode;
+        nextCodesForSync = codes;
+        return { ...prev, customCodes: codes };
+      }
     });
+    if (nextCodesForSync) {
+      void syncShuffledVariantsWithCodes(nextCodesForSync);
+    }
   };
 
   const handleResetDefaultCodes = () => {
-    setConfig((prev) => ({
-      ...prev,
-      customCodes: Array.from({ length: prev.numVariants }, (_, i) =>
+    let resetCodes: string[] = [];
+    setConfig((prev) => {
+      resetCodes = Array.from({ length: prev.numVariants }, (_, i) =>
         String(prev.examCodeDigits === 3 ? 101 + i : 1001 + i)
-      ),
-    }));
+      );
+      return {
+        ...prev,
+        customCodes: resetCodes,
+      };
+    });
+    if (resetCodes.length > 0) {
+      void syncShuffledVariantsWithCodes(resetCodes);
+    }
   };
 
   const handleDownloadCleanedMaster = async () => {
@@ -2816,10 +2892,14 @@ export default function App() {
                         const newCount = Number(e.target.value);
                         setConfig((prev) => {
                           const base = prev.examCodeDigits === 3 ? 101 : 1001;
-                          const existing = prev.customCodes || [];
-                          const updatedCodes = Array.from({ length: newCount }, (_, i) =>
-                            existing[i]?.trim() ? existing[i] : String(base + i)
-                          );
+                          const rootCode =
+                            prev.customCodes?.[0]?.trim() || String(base);
+                          const updatedCodes =
+                            generateSequentialExamCodesFromRoot(
+                              rootCode,
+                              newCount,
+                              prev.examCodeDigits
+                            );
                           return {
                             ...prev,
                             numVariants: newCount,
@@ -2837,20 +2917,36 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* 8. Sửa mã */}
+                  {/* 8. Mã đề gốc (Sửa ô gốc này các mã đề khác tự động nhảy theo đúng quy cách) */}
                   <div>
-                    <label className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5">
-                      8. Mã đề:
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowCustomCodeEditor((prev) => !prev)}
-                      className="w-full px-2 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-violet flex items-center justify-center gap-1 cursor-pointer"
-                      title="Điều chỉnh mã đề (101, 102...) và tùy chọn dàn trang, mã QR"
+                    <label
+                      className="block text-[11px] font-extrabold text-sky-950 uppercase truncate mb-0.5"
+                      title="Chỉ cần sửa mã đề gốc ở ô này (VD: 101, 201, 001, 1001, MĐ01...), các mã đề khác tự động nhảy theo đúng quy cách"
                     >
-                      <Edit3 className="w-3.5 h-3.5 shrink-0" />
-                      <span>Sửa mã</span>
-                    </button>
+                      8. Mã gốc:
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={
+                          config.customCodes?.[0] ??
+                          String(config.examCodeDigits === 3 ? 101 : 1001)
+                        }
+                        onFocus={() => setShowCustomCodeEditor(true)}
+                        onChange={(e) => handleUpdateCustomCode(0, e.target.value)}
+                        className="w-full min-w-0 px-1.5 py-1.5 text-xs font-mono font-black text-center text-violet-950 bg-violet-50/90 border-2 border-violet-400 rounded-xl focus:outline-none focus:border-violet-700 focus:bg-white"
+                        title="Nhập mã đề gốc (VD: 101, 201, 001, 1201, MĐ01...). Các mã đề còn lại sẽ tự động cập nhật theo đúng quy cách của ô này"
+                        maxLength={10}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCustomCodeEditor((prev) => !prev)}
+                        className="px-2 py-1.5 rounded-xl font-black text-white btn-auto-scale btn-3d-violet flex items-center justify-center shrink-0 cursor-pointer"
+                        title="Mở/đóng danh sách toàn bộ các mã đề tự động sinh từ ô gốc"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -2946,20 +3042,43 @@ export default function App() {
                           </button>
                         </div>
                       </div>
+                      <div className="text-[11px] font-semibold text-violet-900 bg-violet-100/80 border border-violet-200 rounded-lg px-2 py-1">
+                        💡 Chỉ cần sửa <strong>Ô gốc (Mã 1)</strong> ở trên, các mã đề còn lại sẽ <strong>tự động nhảy theo đúng quy cách</strong> (VD: <code>101</code> → <code>102, 103...</code>; <code>001</code> → <code>002, 003...</code>; <code>1201</code> → <code>1202, 1203...</code>; <code>MĐ01</code> → <code>MĐ02, MĐ03...</code>).
+                      </div>
                       <div className="grid grid-cols-4 gap-1.5">
                         {Array.from({ length: config.numVariants }, (_, idx) => {
+                          const fallbackList = generateSequentialExamCodesFromRoot(
+                            config.customCodes?.[0] || '',
+                            config.numVariants,
+                            config.examCodeDigits
+                          );
                           const val =
-                            config.customCodes?.[idx] ??
-                            String(config.examCodeDigits === 3 ? 101 + idx : 1001 + idx);
+                            config.customCodes?.[idx] ?? fallbackList[idx];
+                          const isRoot = idx === 0;
                           return (
-                            <input
-                              key={`code-input-${idx}`}
-                              type="text"
-                              value={val}
-                              onChange={(e) => handleUpdateCustomCode(idx, e.target.value)}
-                              className="px-2 py-1 font-black font-mono text-center text-blue-950 bg-white border border-sky-300 rounded-md focus:outline-none focus:border-blue-600"
-                              maxLength={10}
-                            />
+                            <div key={`code-input-${idx}`} className="relative">
+                              <input
+                                type="text"
+                                value={val}
+                                onChange={(e) => handleUpdateCustomCode(idx, e.target.value)}
+                                title={
+                                  isRoot
+                                    ? 'Ô mã đề gốc: Sửa ô này các mã khác tự động nhảy theo đúng quy cách'
+                                    : `Mã đề thứ ${idx + 1} (Tự động sinh từ ô gốc, hoặc có thể sửa riêng)`
+                                }
+                                className={`w-full px-2 py-1 font-black font-mono text-center rounded-md focus:outline-none ${
+                                  isRoot
+                                    ? 'text-violet-950 bg-amber-50 border-2 border-violet-500 ring-1 ring-violet-300 focus:bg-white'
+                                    : 'text-blue-950 bg-white border border-sky-300 focus:border-blue-600'
+                                }`}
+                                maxLength={10}
+                              />
+                              {isRoot && (
+                                <span className="block text-[9px] font-extrabold text-violet-800 text-center leading-tight mt-0.5">
+                                  Ô gốc
+                                </span>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
