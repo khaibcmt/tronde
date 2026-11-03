@@ -746,3 +746,48 @@
   transform: translateY(-3px) scale(1.01);
 }
 
+/* ================= ENGINE 4: BỘ CSS CHUẨN CHỐNG VỠ GIAO DIỆN ĐỀ THI (EXAM-CONTENT) ================= */
+/* Khóa ảnh - không tràn khung, giữ tỉ lệ */
+.exam-content img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: inline-block !important;
+  vertical-align: middle !important;
+  margin: 4px auto !important;
+}
+
+/* Chuẩn hóa bảng - tự co giãn, không vỡ layout */
+.exam-content table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  table-layout: auto !important;
+  margin: 8px 0 !important;
+}
+.exam-content td,
+.exam-content th {
+  border: 1px solid #aaa !important;
+  padding: 6px 8px !important;
+  vertical-align: middle !important;
+  word-break: break-word !important;
+}
+
+/* Căn chỉnh công thức thẳng hàng chữ */
+.katex,
+.MathJax {
+  font-size: 1.05em !important;
+  vertical-align: -0.12em !important;
+}
+
+/* Bảo vệ sơ đồ phả hệ & cụm hình vẽ gộp dưới dạng một khối Image Block duy nhất */
+.exam-pedigree-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  overflow: hidden;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+

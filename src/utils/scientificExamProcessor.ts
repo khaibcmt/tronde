@@ -902,15 +902,376 @@ export function buildStructuredStemTableXml(table: ExamStemTable): string {
 }
 
 /**
- * Xử lý tự động hình ảnh sơ đồ, phả hệ, đồ thị hàm số/dao động, hình vẽ thí nghiệm:
- * 1. Tự động cắt (crop) vùng viền trắng thừa xung quanh sơ đồ nhưng giữ nguyên 100% tỷ lệ khung hình nội dung (aspect ratio)
- * 2. Khử nhiễu nền xám (scan/ảnh chụp) thành nền trắng tinh khiết (#FFFFFF) và tăng độ sắc nét cho đường viền/chữ số bên trong ảnh (chuẩn >= 300 DPI)
- * 3. Tính toán kích thước chuẩn Twips/EMU và gắn thẻ định danh [HINH_ANH_CAU_X]
+ * ENGINE 1.2 + ENGINE 2 + ENGINE 3:
+ * BỘ TỰ ĐỘNG HÀN GẮN CÔNG THỨC GÃY & CHUẨN HÓA KÝ HIỆU TOÁN - LÝ - HÓA - SINH (AUTO-HEAL STEM PIPELINE)
+ * 1. Hàn gắn công thức bị gãy (Equation Stitcher): nối các thẻ $...$ đứt đoạn và mũi tên vectơ kết hợp Unicode (\u20D7)
+ * 2. Nhận diện & tự nâng/hạ chỉ số Hóa học gõ thô: H2SO4 -> $\text{H}_2\text{SO}_4$, Ca(OH)2 -> $\text{Ca(OH)}_2$, Cu2+ -> $\text{Cu}^{2+}$, SO42- -> $\text{SO}_4^{2-}$
+ * 3. Sửa ký hiệu Sinh học gõ sai: kiểu gen liên kết gạch chéo thô AB/ab, Ab/aB -> $\frac{AB}{ab}$, $\frac{Ab}{aB}$; NST giới tính XAXa, XAY -> $X^A X^a$, $X^A Y$; phép lai chữ x thường -> ×
+ * 4. Thay thế ký tự thô: * / x trong phép toán -> × (\times); -> / => -> → (\rightarrow); <=> -> ⇌ (\rightleftharpoons)
+ * 5. Bảo toàn trạng thái Hóa học (dd), (k), (r), (l), mũi tên nhiệt độ \xrightarrow{t^\circ}, kết tủa ↓, bay hơi ↑, giới tính ♂, ♀, ký hiệu Vật lý \vec{v}, \Omega, \mu, \lambda, \perp, \parallel
+ */
+export function autoHealScientificAndStemText(rawInput: string): string {
+  if (!rawInput) return '';
+  let text = rawInput;
+
+  // 0. Giải mã HTML entities giới tính và toán học phổ biến nếu có
+  text = text
+    .replace(/&#9794;|&male;|\\male\b/gi, '♂')
+    .replace(/&#9792;|&female;|\\female\b/gi, '♀')
+    .replace(/&times;/gi, '×')
+    .replace(/&divide;/gi, '÷')
+    .replace(/&rarr;/gi, '→')
+    .replace(/&harr;/gi, '↔')
+    .replace(/&perp;/gi, '⊥')
+    .replace(/&parallel;/gi, '∥');
+
+  // 1. Hàn gắn dấu mũi tên vectơ kết hợp Unicode (combining right arrow above U+20D7 / U+20D6)
+  // Ví dụ: AB⃗ -> $\overrightarrow{AB}$, F⃗ -> $\vec{F}$, v⃗ -> $\vec{v}$
+  text = text.replace(/([A-Za-z]{2,3})\u20d7/g, '$\\overrightarrow{$1}$');
+  text = text.replace(/([A-Za-z])\u20d7/g, '$\\vec{$1}$');
+
+  // Nâng cấp \vec{AB} (2 chữ cái in hoa điểm đầu-cuối) thành \overrightarrow{AB} để mũi tên phủ trọn 2 điểm
+  text = text.replace(/\\vec\{([A-Z]{2})\}/g, '\\overrightarrow{$1}');
+
+  // 2. EQUATION STITCHER (Hàn gắn công thức bị Word cắt đôi thành nhiều cụm $...$ đứt đoạn)
+  // 2a. Nối công thức có chỉ số trên/dưới bị tách rời: "$A$ $_{2}$" hoặc "$\vec{F}$ $_{1}$" -> "$A_{2}$", "$\vec{F}_{1}$"
+  text = text.replace(/\$\s*\$\s*([_^]\s*\{[^{}]+\})/g, ' $1$');
+  text = text.replace(/([A-Za-z0-9)\]}])\$\s*([_^]\{?[0-9a-zA-Z+-]+\}?)/g, '$1$2$');
+
+  // 2b. Nối 2 khối $...$ liền kề bị cắt ngang bởi toán tử =, +, -, \pm, \times, \cdot, /, \rightarrow, \rightleftharpoons
+  for (let pass = 0; pass < 3; pass++) {
+    text = text.replace(
+      /\$([^$\n]{1,80}?)\s*\$\s*([=+\-±×÷]|\\(?:pm|times|cdot|div|rightarrow|rightleftharpoons|to))\s*\$\s*([^$\n]{1,80}?)\$/g,
+      '$$$1 $2 $3$$'
+    );
+    // Nối 2 khối $...$ mà khối trước kết thúc bằng toán tử (=, +, -, /, ^, _) và khối sau bắt đầu ngay
+    text = text.replace(
+      /\$([^$\n]{1,80}?[=+\-*/^_])\s*\$\s*\$\s*([^$\n]{1,80}?)\$/g,
+      '$$$1 $2$$'
+    );
+  }
+
+  // 3. Tách chuỗi thành các phân đoạn [Trong $...$] và [Ngoài $...$] để tự động chữa lỗi văn bản thô ngoài công thức mà không làm hỏng LaTeX có sẵn
+  const mathProtectedRegex = /(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g;
+  const segments = text.split(mathProtectedRegex);
+
+  const healedSegments = segments.map((seg) => {
+    if (seg.startsWith('$') && seg.endsWith('$')) {
+      // Bên trong $...$: Chuẩn hóa các ký hiệu gõ thô trong công thức toán/lý/hóa/sinh
+      let inner = seg;
+      inner = inner
+        .replace(/<==>|\\leftrightharpoons/g, '\\rightleftharpoons ')
+        .replace(/<=>/g, '\\rightleftharpoons ')
+        .replace(/-->/g, '\\rightarrow ')
+        .replace(/(?<![<=-])->(?![>])/g, '\\rightarrow ')
+        .replace(/\\vec\{([A-Z]{2})\}/g, '\\overrightarrow{$1}');
+      return inner;
+    }
+
+    let plain = seg;
+
+    // 3.1. Chuẩn hóa mũi tên điều kiện nhiệt độ, xúc tác gõ thô:
+    // VD: "--t°-->", "--(t°, xt)-->", "-> (t°)", "--> (t°, p, xt)" -> $\xrightarrow{t^\circ}$
+    plain = plain.replace(
+      /--\(?([^-\n>{}]{1,25})\)?-->/g,
+      (_, cond) => {
+        const cleanCond = cond
+          .trim()
+          .replace(/t\s*[°0o]\b/gi, 't^\\circ')
+          .replace(/\bxt\b/gi, '\\text{xt}');
+        return ` $\\xrightarrow{${cleanCond}}$ `;
+      }
+    );
+    plain = plain.replace(
+      /(?:-->|->|→)\s*\(\s*(t\s*[°0o](?:\s*,\s*[^)]{1,20})?)\s*\)/gi,
+      (_, cond) => {
+        const cleanCond = cond
+          .trim()
+          .replace(/t\s*[°0o]\b/gi, 't^\\circ')
+          .replace(/\bxt\b/gi, '\\text{xt}');
+        return ` $\\xrightarrow{${cleanCond}}$ `;
+      }
+    );
+
+    // 3.2. Sửa ký hiệu Sinh học gõ sai:
+    // a) Kiểu gen liên kết gõ bằng gạch chéo thô: AB/ab, Ab/aB, AB/aB, Ab/ab, aB/ab, AB/AB, ab/ab, DE/de, De/dE, ABD/abd, AbD/aBd
+    // (Tránh nhầm với đơn vị m/s, km/h, mol/l, g/mol, V/m, N/m)
+    plain = plain.replace(
+      /(?<![A-Za-z0-9_\\])((?:AB|Ab|aB|ab)\/(?:AB|Ab|aB|ab)|(?:DE|De|dE|de)\/(?:DE|De|dE|de)|(?:ABD|ABd|AbD|Abd|aBD|aBd|abD|abd)\/(?:ABD|ABd|AbD|Abd|aBD|aBd|abD|abd))(?![A-Za-z0-9_])/g,
+      (match) => {
+        const [num, den] = match.split('/');
+        return `$\\frac{${num}}{${den}}$`;
+      }
+    );
+
+    // b) Kiểu gen nhiễm sắc thể giới tính gõ thô: XAXa, XAY, XaY, XAXA, XaXa, XBXb, XBY, XbY, XABXab, XAbXaB
+    plain = plain.replace(
+      /\bX([ABDEabde]{1,2})X([ABDEabde]{1,2})\b/g,
+      '$X^{$1}X^{$2}$'
+    );
+    plain = plain.replace(
+      /\bX([ABDEabde]{1,2})Y\b/g,
+      '$X^{$1}Y$'
+    );
+
+    // c) Dấu nhân phép lai Sinh học chữ 'x' thường giữa 2 kiểu gen (VD: "AaBb x Aabb", "Aa x aa", "X^A X^a x X^A Y")
+    plain = plain.replace(
+      /(\b(?:[A-Ha-h]{2,6}|\$[^$]+\$))\s+[xX]\s+(\b(?:[A-Ha-h]{2,6}|\$[^$]+\$))/g,
+      '$1 × $2'
+    );
+
+    // 3.3. Nhận diện & Tự nâng/hạ chỉ số Hóa học gõ bằng text thường:
+    // a) Các ion đa nguyên tử và đơn nguyên tử gõ thô không có dấu ^ (VD: SO42-, CO32-, SO32-, PO43-, Cr2O72-, CrO42-, NO3-, HCO3-, HSO4-, NH4+, H3O+, Cu2+, Fe2+, Fe3+, Al3+, Zn2+, Mg2+, Ca2+, Ba2+, Ag+)
+    plain = plain.replace(
+      /\b(SO4|CO3|SO3|CrO4|HPO4)\s*2\s*-\b/g,
+      (_, grp) => `$\\text{${grp.slice(0, -1)}}_${grp.slice(-1)}^{2-}$`
+    );
+    plain = plain.replace(
+      /\bCr2O7\s*2\s*-\b/g,
+      '$\\text{Cr}_2\\text{O}_7^{2-}$'
+    );
+    plain = plain.replace(
+      /\bPO4\s*3\s*-\b/g,
+      '$\\text{PO}_4^{3-}$'
+    );
+    plain = plain.replace(
+      /\b(NO3|HCO3|HSO4|HSO3|MnO4|ClO3|ClO4|AlO2|ZnO2)\s*-(?=\s|[,.;:)\]}]|$)/g,
+      (_, grp) => {
+        const formatted = grp.replace(/([A-Za-z]+)(\d+)/g, '\\text{$1}_{$2}');
+        return `$${formatted}^{-}$`;
+      }
+    );
+    plain = plain.replace(
+      /\b(NH4|H3O)\s*\+(?=\s|[,.;:)\]}]|$)/g,
+      (_, grp) => {
+        const formatted = grp.replace(/([A-Za-z]+)(\d+)/g, '\\text{$1}_{$2}');
+        return `$${formatted}^{+}$`;
+      }
+    );
+    plain = plain.replace(
+      /\b(Cu|Fe|Zn|Mg|Ca|Ba|Pb|Sn|Ni|Mn|Cr|Hg|Be|Sr)\s*2\s*\+(?=\s|[,.;:)\]}]|$)/g,
+      '$\\text{$1}^{2+}$'
+    );
+    plain = plain.replace(
+      /\b(Fe|Al|Cr|Au|Bi)\s*3\s*\+(?=\s|[,.;:)\]}]|$)/g,
+      '$\\text{$1}^{3+}$'
+    );
+    plain = plain.replace(
+      /\b(Na|K|Ag|Li|Cu|H)\s*\+(?=\s|[,.;:)\]}]|$)/g,
+      '$\\text{$1}^{+}$'
+    );
+    plain = plain.replace(
+      /\b(OH|Cl|Br|I|F|HS|CN)\s*-(?=\s|[,.;:)\]}]|$)/g,
+      '$\\text{$1}^{-}$'
+    );
+
+    // b) Các công thức Hóa học có dấu ngoặc đơn kèm chỉ số: Ca(OH)2, Ba(OH)2, Cu(OH)2, Fe(OH)2, Fe(OH)3, Al(OH)3, Mg(OH)2, Zn(OH)2, Al2(SO4)3, Fe2(SO4)3, Cr2(SO4)3, Fe(NO3)2, Fe(NO3)3, Cu(NO3)2, AgNO3, (NH4)2SO4, (NH4)2CO3, Ca(HCO3)2, Ba(HCO3)2, Mg(HCO3)2, Ca3(PO4)2
+    plain = plain.replace(
+      /\b((?:\([A-Za-z0-9]+\)\d*|[A-Z][a-z]?\d*)*\([A-Za-z0-9]+\)\d+(?:[A-Z][a-z]?\d*)*)\b/g,
+      (formula) => {
+        const latexChem = formula
+          .replace(/\(([A-Za-z0-9]+)\)(\d+)/g, (_, inner, sub) => {
+            const innerFormatted = inner.replace(
+              /([A-Z][a-z]?)(\d*)/g,
+              (__: string, el: string, d: string) =>
+                d ? `\\text{${el}}_{${d}}` : `\\text{${el}}`
+            );
+            return `(${innerFormatted})_{${sub}}`;
+          })
+          .replace(/([A-Z][a-z]?)(\d+)/g, '\\text{$1}_{$2}')
+          .replace(/(?<!\\text\{)\b([A-Z][a-z]?)(?=[(_\\]|$)/g, '\\text{$1}');
+        return `$${latexChem}$`;
+      }
+    );
+
+    // c) Các công thức phân tử Hóa học phổ biến không có ngoặc: H2SO4, HNO3, H3PO4, H2CO3, H2SO3, H2S, HClO4, Fe3O4, Fe2O3, Al2O3, Cr2O3, P2O5, N2O5, N2O4, N2O, NO2, SO2, SO3, CO2, SiO2, MnO2, H2O, H2O2, NH3, PH3, CH4, C2H2, C2H4, C2H6, C3H6, C3H8, C4H8, C4H10, C6H6, C6H12O6, C12H22O11, CH3COOH, C2H5OH, CH3OH, CH3CHO, HCHO, HCOOH, CH3COOC2H5, KMnO4, K2Cr2O7, K2CrO4, Na2CO3, NaHCO3, K2CO3, CaCO3, BaCO3, MgCO3, BaSO4, CaSO4, CuSO4, FeSO4, ZnSO4, MgSO4, Na2SO4, K2SO4, Na2SO3, Na2S, KClO3, NH4Cl, NH4NO3, AgCl, AgBr, AgI, O2, O3, N2, H2, Cl2, Br2, I2
+    const commonMoleculesRegex =
+      /\b(H2SO4|H2SO3|H2CO3|H3PO4|HNO3|HNO2|HClO4|HClO3|HClO|H2S|H2O2|H2O|Fe3O4|Fe2O3|Al2O3|Cr2O3|CrO3|Mn2O7|MnO2|P2O5|N2O5|N2O4|N2O3|N2O|NO2|SO2|SO3|CO2|CS2|SiO2|Ag2O|Cu2O|Na2O|K2O|Li2O|NH3|PH3|CH4|C2H2|C2H4|C2H6|C3H4|C3H6|C3H8|C4H6|C4H8|C4H10|C6H6|C7H8|C8H8|C8H10|C6H12O6|C12H22O11|C6H10O5|CH3COOH|C2H5OH|CH3OH|C3H5\(OH\)3|CH3CHO|HCHO|HCOOH|CH3COOCH3|CH3COOC2H5|HCOOCH3|HCOOC2H5|CH3NH2|C2H5NH2|C6H5NH2|C6H5OH|KMnO4|K2MnO4|K2Cr2O7|K2CrO4|Na2CrO4|Na2CO3|NaHCO3|K2CO3|KHCO3|CaCO3|BaCO3|MgCO3|FeCO3|BaSO4|CaSO4|CuSO4|FeSO4|ZnSO4|MgSO4|Na2SO4|K2SO4|NaHSO4|KHSO4|Na2SO3|NaHSO3|Na2S|K2S|Na2SiO3|KClO3|NaClO|CaOCl2|NH4Cl|NH4NO3|NaNO3|KNO3|AgNO3|CuCl2|FeCl2|FeCl3|AlCl3|MgCl2|CaCl2|BaCl2|ZnCl2|CrCl3|PCl3|PCl5|O2|O3|N2|H2|Cl2|Br2|I2|F2|P4|S8)\b/g;
+
+    plain = plain.replace(commonMoleculesRegex, (mol) => {
+      const converted = mol.replace(
+        /([A-Z][a-z]?)(\d*)/g,
+        (_, el: string, digits: string) =>
+          digits ? `\\text{${el}}_{${digits}}` : `\\text{${el}}`
+      );
+      return `$${converted}$`;
+    });
+
+    // 3.4. Thay thế ký tự thô trong phép toán & phương trình:
+    // Đổi dấu * giữa 2 số (VD: 2 * 10, 3,5 * 2) thành ×
+    plain = plain.replace(/(\d)\s*\*\s*(\d)/g, '$1 × $2');
+    // Đổi chữ x giữa 2 số khoa học (VD: 2 x 10^-3, 3 x 4) thành ×
+    plain = plain.replace(/(\d)\s+[xX]\s+(?=\d|10\b)/g, '$1 × ');
+    // Đổi mũi tên thô <==>, <=>, <-> thành ⇌ và -->, ->, => (khi đi giữa các chất/biểu thức) thành →
+    plain = plain
+      .replace(/<==>|\\rightleftharpoons|\\leftrightharpoons/g, ' ⇌ ')
+      .replace(/<=>|<->/g, ' ⇌ ')
+      .replace(/-->|\\rightarrow|\\to\b/g, ' → ')
+      .replace(/(?<![<=-])->(?![>])/g, ' → ')
+      .replace(/(?<=\$\s*|[A-Za-z0-9)\]}]\s+)=>(?=\s*\$|\s+[A-Za-z0-9(])/g, ' → ');
+
+    // Chuẩn hóa ký hiệu kết tủa / bay hơi viết dạng (kết tủa) / (bay hơi) hoặc v / ^ sát công thức
+    plain = plain
+      .replace(/\\downarrow\b/g, '↓')
+      .replace(/\\uparrow\b/g, '↑')
+      .replace(/\\perp\b/g, '⊥')
+      .replace(/\\parallel\b/g, '∥');
+
+    return plain;
+  });
+
+  return healedSegments.join('');
+}
+
+/**
+ * ENGINE 1.1b: TỰ ĐỘNG GOM MẢNH SƠ ĐỒ RỜI RẠC (AUTO-GROUPING WORD SHAPES TO FLAT PNG)
+ * Quét các shape vẽ rời rạc trong Word (v:group, wpg:wgp, v:rect, v:roundrect, v:oval, v:line, wps:wsp, v:textbox)
+ * có tọa độ nằm đè/gần nhau -> tự động gộp (merge) lại thành một khung Canvas 2D duy nhất và xuất ra 1 file ảnh PNG phẳng!
+ */
+export interface ExtractedShapePrimitive {
+  kind: 'rect' | 'roundrect' | 'oval' | 'line' | 'arrow' | 'text';
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+  strokeColor?: string;
+  fillColor?: string;
+}
+
+export function renderGroupedShapesToFlatPngDataUrl(
+  primitives: ExtractedShapePrimitive[],
+  groupTitle?: string
+): string | null {
+  if (
+    typeof window === 'undefined' ||
+    typeof document === 'undefined' ||
+    !primitives ||
+    primitives.length === 0
+  ) {
+    return null;
+  }
+
+  try {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const p of primitives) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x + p.w > maxX) maxX = p.x + p.w;
+      if (p.y + p.h > maxY) maxY = p.y + p.h;
+    }
+
+    if (!isFinite(minX) || !isFinite(minY) || maxX <= minX || maxY <= minY) {
+      minX = 0;
+      minY = 0;
+      maxX = 520;
+      maxY = Math.max(160, primitives.length * 55);
+    }
+
+    const pad = 24;
+    const contentW = Math.max(260, Math.min(960, maxX - minX));
+    const contentH = Math.max(90, Math.min(720, maxY - minY));
+    const dpr = 2; // Chuẩn sắc nét 300 DPI
+
+    const canvas = document.createElement('canvas');
+    canvas.width = (contentW + pad * 2) * dpr;
+    canvas.height = (contentH + pad * 2) * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, contentW + pad * 2, contentH + pad * 2);
+
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = '#0F172A';
+    ctx.font = '14px "Times New Roman", Times, serif';
+    ctx.textBaseline = 'middle';
+
+    for (const item of primitives) {
+      const rx = item.x - minX + pad;
+      const ry = item.y - minY + pad;
+      const rw = Math.max(24, item.w);
+      const rh = Math.max(22, item.h);
+
+      ctx.strokeStyle = item.strokeColor || '#1E293B';
+      ctx.fillStyle = item.fillColor || '#F8FAFC';
+
+      if (item.kind === 'rect' || item.kind === 'roundrect') {
+        ctx.beginPath();
+        if (item.kind === 'roundrect' && typeof ctx.roundRect === 'function') {
+          ctx.roundRect(rx, ry, rw, rh, 6);
+        } else {
+          ctx.rect(rx, ry, rw, rh);
+        }
+        ctx.fill();
+        ctx.stroke();
+      } else if (item.kind === 'oval') {
+        ctx.beginPath();
+        ctx.ellipse(rx + rw / 2, ry + rh / 2, rw / 2, rh / 2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (item.kind === 'line' || item.kind === 'arrow') {
+        ctx.beginPath();
+        const x1 = rx;
+        const y1 = ry + rh / 2;
+        const x2 = rx + rw;
+        const y2 = ry + rh / 2;
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+
+        if (item.kind === 'arrow') {
+          const headLen = 8;
+          ctx.beginPath();
+          ctx.moveTo(x2, y2);
+          ctx.lineTo(x2 - headLen, y2 - 4);
+          ctx.lineTo(x2 - headLen, y2 + 4);
+          ctx.closePath();
+          ctx.fillStyle = '#1E293B';
+          ctx.fill();
+        }
+      }
+
+      if (item.text && item.text.trim()) {
+        ctx.fillStyle = '#0F172A';
+        ctx.textAlign = 'center';
+        const lines = item.text.trim().split(/\r?\n/);
+        const lineH = 16;
+        const startY = ry + rh / 2 - ((lines.length - 1) * lineH) / 2;
+        lines.forEach((ln, idx) => {
+          ctx.fillText(ln.trim(), rx + rw / 2, startY + idx * lineH, rw - 8);
+        });
+      }
+    }
+
+    if (groupTitle) {
+      ctx.fillStyle = '#475569';
+      ctx.font = 'italic 12px "Times New Roman", Times, serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(groupTitle, contentW + pad, contentH + pad + 14);
+    }
+
+    return canvas.toDataURL('image/png', 1.0);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ENGINE 1.1c: CHỐNG BIẾN DẠNG TỈ LỆ & XỬ LÝ ẢNH THÔNG MINH (ASPECT RATIO PRESERVER)
+ * 1. Tự động phát hiện ảnh bị người dùng kéo dãn méo mó -> reset về tỉ lệ khung hình gốc (Original Aspect Ratio = naturalWidth / naturalHeight)
+ * 2. Ép giới hạn: chiều rộng tối đa 100% khung câu hỏi, không tràn viền
+ * 3. Không phóng to vỡ hạt đối với các icon / công thức nhỏ (ảnh nhỏ giữ nguyên độ phân giải gốc 1:1)
  */
 export async function enhanceAndCropExamImage(
   rawDataUrl: string,
   questionNumber: number,
-  originalFileName?: string
+  _originalFileName?: string
 ): Promise<{
   dataUrl: string;
   widthTwips: number;
@@ -945,7 +1306,7 @@ export async function enhanceAndCropExamImage(
       try {
         const srcW = img.naturalWidth || img.width;
         const srcH = img.naturalHeight || img.height;
-        if (srcW < 16 || srcH < 16) {
+        if (srcW < 8 || srcH < 8) {
           resolve(defaultResult);
           return;
         }
@@ -1022,17 +1383,24 @@ export async function enhanceAndCropExamImage(
           maxY = srcH - 1;
         }
 
-        // Chừa lề an toàn 10px xung quanh sơ đồ/đồ thị để không phạm vào nét chữ ngoài cùng
-        const pad = 10;
+        // Chừa lề an toàn xung quanh sơ đồ/đồ thị để không phạm vào nét chữ ngoài cùng
+        const isSmallIconOrInlineFormula = srcW <= 240 && srcH <= 120;
+        const pad = isSmallIconOrInlineFormula ? 4 : 10;
         const cropX = Math.max(0, minX - pad);
         const cropY = Math.max(0, minY - pad);
         const cropW = Math.min(srcW - cropX, maxX - minX + 1 + pad * 2);
         const cropH = Math.min(srcH - cropY, maxY - minY + 1 + pad * 2);
 
+        // BẢO TOÀN 100% TỈ LỆ KHUNG HÌNH GỐC (Original Aspect Ratio) - Chống méo ảnh do người dùng kéo dãn trong Word
         const aspectRatio = cropW / Math.max(1, cropH);
 
-        // Đảm bảo độ phân giải xuất >= 300 DPI (tối thiểu 1200px chiều ngang đối với đồ thị/sơ đồ nhỏ)
-        const scaleFactor = cropW < 900 ? Math.min(2.0, 1200 / cropW) : 1.0;
+        // CHỐNG PHÓNG TO VỠ HẠT ĐỐI VỚI CÁC ICON NHỎ / CÔNG THỨC NHỎ:
+        // Nếu là icon nhỏ hoặc ảnh công thức inline (cropW <= 240 && cropH <= 120), giữ nguyên tỷ lệ 1.0!
+        const scaleFactor = isSmallIconOrInlineFormula
+          ? 1.0
+          : cropW < 900
+          ? Math.min(1.75, 1080 / cropW)
+          : 1.0;
         const outW = Math.round(cropW * scaleFactor);
         const outH = Math.round(cropH * scaleFactor);
 
@@ -1047,15 +1415,21 @@ export async function enhanceAndCropExamImage(
 
         outCtx.fillStyle = '#FFFFFF';
         outCtx.fillRect(0, 0, outW, outH);
-        outCtx.imageSmoothingEnabled = true;
+        outCtx.imageSmoothingEnabled = !isSmallIconOrInlineFormula;
         outCtx.imageSmoothingQuality = 'high';
         outCtx.drawImage(tempCanvas, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
 
-        // Tính kích thước chuẩn Twips trong trang A4 Word (1 inch = 1440 Twips, vùng in A4 ~ 9350 Twips)
-        // Giới hạn chiều rộng sơ đồ tối đa 5200 Twips (~3.61 inch) và chiều cao tối đa 3800 Twips (~2.64 inch) nhưng GIỮ NGUYÊN 100% TỶ LỆ GỐC
+        // Tính kích thước chuẩn Twips (1 inch = 1440 Twips):
+        // - Với icon nhỏ / công thức nhúng: giữ kích thước thực tế theo pixel (không ép phóng to 2200 Twips)
+        // - Với sơ đồ / đồ thị lớn: giới hạn tối đa 5200 Twips (~100% khung câu hỏi chuẩn) và khóa chặt aspectRatio gốc
         const maxWidthTwips = 5200;
         const maxHeightTwips = 3800;
-        let widthTwips = Math.min(maxWidthTwips, Math.max(2200, Math.round(cropW * 9)));
+        let widthTwips: number;
+        if (isSmallIconOrInlineFormula) {
+          widthTwips = Math.min(maxWidthTwips, Math.max(360, Math.round(cropW * 11)));
+        } else {
+          widthTwips = Math.min(maxWidthTwips, Math.max(2000, Math.round(cropW * 9)));
+        }
         let heightTwips = Math.round(widthTwips / aspectRatio);
 
         if (heightTwips > maxHeightTwips) {
@@ -1082,8 +1456,8 @@ export async function enhanceAndCropExamImage(
 }
 
 /**
- * Gắn thẻ định danh [HINH_ANH_CAU_X] đồng bộ cho toàn bộ hình ảnh của danh sách câu hỏi
- * để khi trộn đề hoặc xuất Word, hình ảnh luôn đi liền với câu hỏi tương ứng trên dòng riêng biệt (In Line with Text)
+ * Gắn thẻ định danh [HINH_ANH_CAU_X] đồng bộ và khóa lại tỉ lệ gốc (Original Aspect Ratio)
+ * cho toàn bộ hình ảnh của danh sách câu hỏi
  */
 export function assignDeterministicImageTagsToQuestions(
   questions: ExamQuestion[]
@@ -1093,20 +1467,22 @@ export function assignDeterministicImageTagsToQuestions(
     const taggedImages: ExamImageAttachment[] = q.images.map((img, idx) => {
       const suffix = q.images && q.images.length > 1 ? `_${idx + 1}` : '';
       const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
-      const w = img.widthTwips && img.widthTwips > 400 ? img.widthTwips : 4500;
-      const h =
-        img.heightTwips && img.heightTwips > 300
-          ? img.heightTwips
-          : img.aspectRatio
-          ? Math.round(w / img.aspectRatio)
-          : 2800;
+      const w = img.widthTwips && img.widthTwips > 240 ? img.widthTwips : 4500;
+      const preservedAspect =
+        img.aspectRatio && img.aspectRatio > 0.05
+          ? img.aspectRatio
+          : img.heightTwips && img.heightTwips > 120
+          ? w / img.heightTwips
+          : 4500 / 2800;
+      // Luôn tính lại chiều cao dựa trên Original Aspect Ratio để chống ảnh bị kéo dãn méo mó
+      const h = Math.max(160, Math.round(w / preservedAspect));
       return {
         ...img,
         tagId,
         caption: img.caption || `Hình minh họa Câu ${q.displayIndex} ${tagId}`,
         widthTwips: w,
         heightTwips: h,
-        aspectRatio: img.aspectRatio || w / Math.max(1, h),
+        aspectRatio: preservedAspect,
         dpi: img.dpi || 300,
       };
     });
@@ -1118,3 +1494,4 @@ export function assignDeterministicImageTagsToQuestions(
     };
   });
 }
+

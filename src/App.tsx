@@ -3334,7 +3334,7 @@ export default function App() {
                         ref={(el) => {
                           questionRefs.current[q.id] = el;
                         }}
-                        className={`p-5 rounded-2xl transition-all ${
+                        className={`exam-content p-5 rounded-2xl transition-all ${
                           isHighlighted
                             ? 'bg-amber-50 border-2 border-amber-500 ring-4 ring-amber-300 shadow-xl'
                             : questionIssues.length > 0
@@ -3474,13 +3474,17 @@ export default function App() {
                             q.stemText.includes('\\') ||
                             q.hasFormula ||
                             /[A-Z][a-z]?\d/.test(q.stemText) ||
+                            /\b([A-DF-Z][a-df-z]{1,3})\s*\/\s*([A-DF-Z][a-df-z]{1,3})\b/.test(q.stemText) ||
+                            /\bX([A-Za-z])X([A-Za-z])\b|\bX([A-Za-z])Y\b/.test(q.stemText) ||
                             q.stemText.includes('→') ||
-                            q.stemText.includes('⇌')) && (
+                            q.stemText.includes('⇌') ||
+                            q.stemText.includes('->') ||
+                            q.stemText.includes('<=>')) && (
                             <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-sky-50/90 border border-blue-200/90 text-slate-900 shadow-2xs">
                               <div className="flex items-center justify-between mb-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-800">
                                 <span className="flex items-center gap-1.5">
                                   <Sigma className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Định dạng công thức trực quan (KaTeX Toán / Lý / Hóa / Sinh):</span>
+                                  <span>Định dạng công thức trực quan (Auto-Heal KaTeX / MathJax 3 — Toán · Lý · Hóa · Sinh):</span>
                                 </span>
                                 <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                                   Xuất Word Equation &lt;m:oMath&gt;
@@ -3566,7 +3570,7 @@ export default function App() {
                             <label className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
                               <ImageIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                               <span>
-                                Sơ đồ, Phả hệ, Đồ thị câu hỏi ({q.images?.length || 0} — Chuẩn In Line with Text căn giữa):
+                                Sơ đồ, Phả hệ, Đồ thị câu hỏi ({q.images?.length || 0} — Auto-Heal Spatial Ownership &amp; In Line căn giữa):
                               </span>
                             </label>
 
@@ -3600,7 +3604,7 @@ export default function App() {
                                 return (
                                   <div
                                     key={img.id}
-                                    className="relative group p-2 rounded-xl bg-white border-2 border-sky-200 shadow-xs flex flex-col items-center"
+                                    className="exam-pedigree-block relative group p-2 rounded-xl bg-white border-2 border-sky-200 shadow-xs flex flex-col items-center"
                                   >
                                     <div className="w-full flex items-center justify-between gap-1 mb-1 px-1">
                                       <span className="text-[10px] font-mono font-black text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
@@ -3737,7 +3741,9 @@ export default function App() {
                                     />
                                     {(opt.text.includes('$') ||
                                       opt.text.includes('\\') ||
-                                      /[A-Z][a-z]?\d/.test(opt.text)) && (
+                                      /[A-Z][a-z]?\d/.test(opt.text) ||
+                                      /\b([A-DF-Z][a-df-z]{1,3})\s*\/\s*([A-DF-Z][a-df-z]{1,3})\b/.test(opt.text) ||
+                                      /\bX([A-Za-z])X([A-Za-z])\b|\bX([A-Za-z])Y\b/.test(opt.text)) && (
                                       <div className="text-[11px] px-1.5 py-0.5 mt-0.5 text-slate-800 bg-white/70 rounded border border-slate-200/60">
                                         <ScientificContentRenderer
                                           text={opt.text}

@@ -12,7 +12,10 @@ import {
 } from '../types/exam';
 import {
   assignDeterministicImageTagsToQuestions,
+  autoHealScientificAndStemText,
   enhanceAndCropExamImage,
+  ExtractedShapePrimitive,
+  renderGroupedShapesToFlatPngDataUrl,
 } from './scientificExamProcessor';
 
 const RED_COLOR_HEXES = new Set([
@@ -48,6 +51,8 @@ interface ParsedParagraph {
   attachedTable?: ExamStemTable;
   rawFormulaXml?: string;
   formulaLatex?: string;
+  hasFloatingAnchorImage?: boolean;
+  floatingVerticalOffsetEmu?: number;
 }
 
 /**
@@ -583,7 +588,40 @@ function ommlToLatex(mathNode: Element): string {
         const eText = e ? walk(e).trim() : '';
         if (chrVal === '¯' || chrVal === '_') return `\\overline{${eText}}`;
         if (chrVal === 'ˆ' || chrVal === '^') return `\\hat{${eText}}`;
+        if (/^[A-Z]{2,}$/.test(eText)) return `\\overrightarrow{${eText}}`;
         return `\\vec{${eText}}`;
+      }
+      case 'bar': {
+        const barPr = getDirectChildByLocalName(el, 'barPr');
+        const posNode = barPr ? getDirectChildByLocalName(barPr, 'pos') : null;
+        const posVal = posNode ? (posNode.getAttribute('m:val') || posNode.getAttribute('val') || 'top') : 'top';
+        const e = getDirectChildByLocalName(el, 'e');
+        const eText = e ? walk(e).trim() : '';
+        return posVal === 'bot' ? `\\underline{${eText}}` : `\\overline{${eText}}`;
+      }
+      case 'spre': {
+        const sub = getDirectChildByLocalName(el, 'sub');
+        const sup = getDirectChildByLocalName(el, 'sup');
+        const e = getDirectChildByLocalName(el, 'e');
+        const subText = sub ? walk(sub).trim() : '';
+        const supText = sup ? walk(sup).trim() : '';
+        const eText = e ? walk(e).trim() : '';
+        return `{}_{${subText}}^{${supText}}{${eText}}`;
+      }
+      case 'func': {
+        const fName = getDirectChildByLocalName(el, 'fName');
+        const e = getDirectChildByLocalName(el, 'e');
+        const fnText = fName ? walk(fName).trim() : '';
+        const eText = e ? walk(e).trim() : '';
+        const cleanFn = /^(sin|cos|tan|cot|arcsin|arccos|arctan|ln|log|lim|max|min)$/i.test(fnText)
+          ? `\\${fnText.toLowerCase()}`
+          : fnText;
+        return `${cleanFn}{${eText}}`;
+      }
+      case 'groupchr': {
+        const e = getDirectChildByLocalName(el, 'e');
+        const eText = e ? walk(e).trim() : '';
+        return `\\underbrace{${eText}}`;
       }
       case 'd': {
         const dPr = getDirectChildByLocalName(el, 'dPr');
@@ -647,13 +685,17 @@ function ommlToLatex(mathNode: Element): string {
 }
 
 /**
- * Trích xuất ảnh từ node drawing hoặc pict trong Word
+ * ENGINE 1.1a & 1.1b:
+ * Trích xuất ảnh từ node drawing / pict / object trong Word, đồng thời:
+ * - Phát hiện ảnh đặt ở chế độ trôi nổi (wp:anchor / position:absolute) và đọc tọa độ lệch dọc (posOffset)
+ * - Tự động gom các mảnh sơ đồ vector rời rạc (Auto-Grouping Shapes) thành 1 file ảnh PNG phẳng duy nhất
  */
 function extractImagesFromElement(
   container: Element,
   mediaMap: Map<string, { dataUrl: string; fileName: string }>
 ): ExamImageAttachment[] {
   const images: ExamImageAttachment[] = [];
+  const seenRIds = new Set<string>();
 
   const blipNodes = container.getElementsByTagName('a:blip');
   for (let i = 0; i < blipNodes.length; i++) {
@@ -663,7 +705,8 @@ function extractImagesFromElement(
       blip.getAttribute('r:link') ||
       blip.getAttribute('embed') ||
       '';
-    if (rId && mediaMap.has(rId)) {
+    if (rId && mediaMap.has(rId) && !seenRIds.has(rId)) {
+      seenRIds.add(rId);
       const media = mediaMap.get(rId)!;
       let widthTwips: number | undefined;
       let heightTwips: number | undefined;
@@ -681,6 +724,10 @@ function extractImagesFromElement(
         fileName: media.fileName,
         widthTwips,
         heightTwips,
+        aspectRatio:
+          widthTwips && heightTwips && heightTwips > 0
+            ? widthTwips / heightTwips
+            : undefined,
       });
     }
   }
@@ -690,9 +737,11 @@ function extractImagesFromElement(
     const imgData = imgDataNodes[i];
     const rId =
       imgData.getAttribute('r:id') ||
+      imgData.getAttribute('o:relid') ||
       imgData.getAttribute('id') ||
       '';
-    if (rId && mediaMap.has(rId)) {
+    if (rId && mediaMap.has(rId) && !seenRIds.has(rId)) {
+      seenRIds.add(rId);
       const media = mediaMap.get(rId)!;
       images.push({
         id: `pict-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -703,6 +752,208 @@ function extractImagesFromElement(
   }
 
   return images;
+}
+
+/**
+ * Kiểm tra xem đoạn văn <w:p> có chứa ảnh trôi nổi (<wp:anchor> hoặc VML position:absolute) bị lệch tọa độ hay không
+ */
+function inspectFloatingAnchorInParagraph(pNode: Element): {
+  hasFloatingAnchor: boolean;
+  verticalOffsetEmu: number;
+} {
+  let hasFloatingAnchor = false;
+  let verticalOffsetEmu = 0;
+
+  const anchorNodes = pNode.getElementsByTagName('wp:anchor');
+  if (anchorNodes.length > 0) {
+    hasFloatingAnchor = true;
+    for (let i = 0; i < anchorNodes.length; i++) {
+      const posV = anchorNodes[i].getElementsByTagName('wp:positionV')[0];
+      if (posV) {
+        const offsetEl = posV.getElementsByTagName('wp:posOffset')[0];
+        if (offsetEl && offsetEl.textContent) {
+          const parsed = parseInt(offsetEl.textContent.trim(), 10);
+          if (!isNaN(parsed)) {
+            verticalOffsetEmu = parsed;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  const vShapes = pNode.getElementsByTagName('v:shape');
+  for (let i = 0; i < vShapes.length; i++) {
+    const styleAttr = vShapes[i].getAttribute('style') || '';
+    if (/position\s*:\s*absolute/i.test(styleAttr)) {
+      hasFloatingAnchor = true;
+      const topMatch = styleAttr.match(/(?:margin-top|top)\s*:\s*(-?\d+(?:\.\d+)?)pt/i);
+      if (topMatch) {
+        verticalOffsetEmu = Math.round(parseFloat(topMatch[1]) * 12700);
+        break;
+      }
+    }
+  }
+
+  return { hasFloatingAnchor, verticalOffsetEmu };
+}
+
+/**
+ * ENGINE 1.1b: Tự động gom mảnh sơ đồ (Auto-Grouping) trong đoạn văn Word
+ * Quét các shape vẽ rời rạc (v:group, wpg:wgp, v:rect, v:roundrect, v:oval, v:line, wps:wsp) không phải ảnh bitmap
+ * và gộp (merge) lại thành 1 khung Canvas duy nhất xuất ra ảnh PNG phẳng.
+ */
+function tryAutoGroupVectorShapesInParagraph(
+  pNode: Element
+): ExamImageAttachment | null {
+  const primitives: ExtractedShapePrimitive[] = [];
+  const allNodes = pNode.getElementsByTagName('*');
+
+  let hasGroupContainer = false;
+  let shapeIndex = 0;
+
+  for (let i = 0; i < allNodes.length; i++) {
+    const el = allNodes[i];
+    const tag = (el.localName || el.tagName.split(':').pop() || '').toLowerCase();
+
+    if (tag === 'group' || tag === 'wgp') {
+      hasGroupContainer = true;
+      continue;
+    }
+
+    if (
+      tag === 'rect' ||
+      tag === 'roundrect' ||
+      tag === 'oval' ||
+      tag === 'line' ||
+      tag === 'wsp' ||
+      (tag === 'shape' && el.getElementsByTagName('v:imagedata').length === 0)
+    ) {
+      // Bỏ qua nếu bên trong có ảnh bitmap a:blip
+      if (el.getElementsByTagName('a:blip').length > 0) continue;
+
+      const styleStr = el.getAttribute('style') || '';
+      const leftM = styleStr.match(/left\s*:\s*(-?\d+(?:\.\d+)?)/i);
+      const topM = styleStr.match(/top\s*:\s*(-?\d+(?:\.\d+)?)/i);
+      const widthM = styleStr.match(/width\s*:\s*(\d+(?:\.\d+)?)/i);
+      const heightM = styleStr.match(/height\s*:\s*(\d+(?:\.\d+)?)/i);
+
+      const x = leftM ? parseFloat(leftM[1]) : (shapeIndex % 3) * 155;
+      const y = topM ? parseFloat(topM[1]) : Math.floor(shapeIndex / 3) * 65;
+      const w = widthM ? Math.max(40, parseFloat(widthM[1])) : 130;
+      const h = heightM ? Math.max(28, parseFloat(heightM[1])) : 44;
+
+      // Trích xuất chữ nhãn bên trong shape (v:textbox hoặc w:txbxContent)
+      let labelText = '';
+      const tNodes = el.getElementsByTagName('w:t');
+      if (tNodes.length > 0) {
+        const parts: string[] = [];
+        for (let t = 0; t < tNodes.length; t++) {
+          parts.push(tNodes[t].textContent || '');
+        }
+        labelText = parts.join('').trim();
+      }
+
+      const kind: ExtractedShapePrimitive['kind'] =
+        tag === 'line'
+          ? 'arrow'
+          : tag === 'oval'
+          ? 'oval'
+          : tag === 'roundrect'
+          ? 'roundrect'
+          : 'rect';
+
+      if (labelText || tag === 'line' || hasGroupContainer) {
+        primitives.push({
+          kind,
+          x,
+          y,
+          w,
+          h,
+          text: labelText,
+        });
+        shapeIndex++;
+      }
+    }
+  }
+
+  // Chỉ gộp thành ảnh sơ đồ phẳng nếu có nhóm sơ đồ (v:group / wpg:wgp) hoặc có từ 2 mảnh shape rời rạc trở lên
+  if (primitives.length >= 2 || (hasGroupContainer && primitives.length >= 1)) {
+    const flatPngUrl = renderGroupedShapesToFlatPngDataUrl(primitives);
+    if (flatPngUrl) {
+      return {
+        id: `grouped-diagram-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        dataUrl: flatPngUrl,
+        fileName: 'so_do_gop_auto_healed.png',
+        widthTwips: 4200,
+        heightTwips: 2400,
+        aspectRatio: 4200 / 2400,
+        dpi: 300,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * ENGINE 1.2: Sửa ký hiệu Sinh học kiểu gen phân số bị gõ bằng gạch chân (Underline) trên tử số:
+ * Ví dụ: Run 1 có text="AB" (isUnderline=true) + Run 2 có text="/ab" hoặc "\nab" -> đóng gói thành $\frac{AB}{ab}$
+ * và xóa cờ isUnderline trên tử số để không bị nhận nhầm là gạch chân đáp án!
+ */
+function healUnderlinedBiologyGenotypeRuns(runs: ParsedRun[]): ParsedRun[] {
+  if (!runs || runs.length === 0) return runs;
+  const result = runs.map((r) => ({ ...r }));
+
+  const genotypeAllelePattern = /^(?:AB|Ab|aB|ab|DE|De|dE|de|ABD|ABd|AbD|Abd|aBD|aBd|abD|abd)$/;
+
+  for (let i = 0; i < result.length; i++) {
+    const curr = result[i];
+    const trimmedCurr = curr.text.trim();
+
+    // Trường hợp 1: Trong cùng 1 run gạch chân chứa kiểu gen dạng "AB/ab" hoặc "Ab/aB"
+    if (
+      curr.isUnderline &&
+      /^(?:AB|Ab|aB|ab)\/(?:AB|Ab|aB|ab)$/.test(trimmedCurr)
+    ) {
+      const [num, den] = trimmedCurr.split('/');
+      result[i] = {
+        ...curr,
+        text: ` $\\frac{${num}}{${den}}$ `,
+        isUnderline: false,
+        hasFormula: true,
+      };
+      continue;
+    }
+
+    // Trường hợp 2: Run hiện tại gạch chân tử số "<u>AB</u>" và run kế tiếp bắt đầu bằng "/ab" hoặc "ab"
+    if (
+      curr.isUnderline &&
+      genotypeAllelePattern.test(trimmedCurr) &&
+      i + 1 < result.length
+    ) {
+      const nextRun = result[i + 1];
+      const denomMatch = nextRun.text.match(
+        /^\s*(?:\/|\n)\s*(AB|Ab|aB|ab|DE|De|dE|de|ABD|ABd|AbD|Abd|aBD|aBd|abD|abd)\b(.*)$/
+      );
+      if (denomMatch && denomMatch[1].length === trimmedCurr.length) {
+        const denom = denomMatch[1];
+        const remainder = denomMatch[2] || '';
+        result[i] = {
+          ...curr,
+          text: ` $\\frac{${trimmedCurr}}{${denom}}$ `,
+          isUnderline: false,
+          hasFormula: true,
+        };
+        result[i + 1] = {
+          ...nextRun,
+          text: remainder,
+        };
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -1335,15 +1586,102 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
  * - Trích xuất Bảng dữ liệu & Bảng ghép đôi Cột A - Cột B (<w:tbl>)
  * - Công thức toán học chuẩn OMML (<m:oMath>)
  */
+/**
+ * ENGINE 1.1a: THUẬT TOÁN XÁC ĐỊNH CHỦ QUYỀN KHÔNG GIAN CHO ẢNH TRÔI NỔI (SPATIAL OWNERSHIP HEURISTIC)
+ * - Nếu ảnh đặt ở chế độ trôi nổi (wp:anchor, Floating) làm tọa độ bị lệch sang đầu câu hỏi tiếp theo,
+ *   hoặc đoạn văn câu trước có từ khóa tham chiếu ảnh ("Hình bên", "Sơ đồ", "Đồ thị", "Phả hệ", "Mạch điện")
+ *   mà ảnh lại nằm ở đoạn văn rỗng hoặc bị kéo lệch xuống dòng "Câu X" kế tiếp:
+ *   -> Tự động thu hồi và khóa ảnh vào đúng khối nội dung của câu hỏi sở hữu nó; tuyệt đối không để ảnh rơi xuống câu sau!
+ */
+function healFloatingImagesSpatialOwnership(
+  paragraphs: ParsedParagraph[]
+): ParsedParagraph[] {
+  if (paragraphs.length <= 1) return paragraphs;
+  const result = paragraphs.map((p) => ({
+    ...p,
+    images: [...p.images],
+  }));
+
+  const isQuestionStartPara = (txt: string): boolean =>
+    /^(?:[*#•+\-–—\s]|\[(?:NB|TH|VD|VDC|[^\]]{1,12})\]|\((?:NB|TH|VD|VDC|[^)]{1,12})\))*(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question)\s*\d+/i.test(
+      txt.trim()
+    );
+
+  const referencesImageInText = (txt: string): boolean =>
+    /(?:hình\s+bên|hình\s+vẽ|sơ\s+đồ|đồ\s+thị|phả\s+hệ|mạch\s+điện|như\s+hình|hình\s+\d)/i.test(
+      txt
+    );
+
+  for (let i = 1; i < result.length; i++) {
+    const curr = result[i];
+    if (curr.images.length === 0) continue;
+
+    // Tìm đoạn văn có nội dung gần nhất phía trước
+    let prevIdx = i - 1;
+    while (prevIdx >= 0 && !result[prevIdx].fullText.trim() && result[prevIdx].images.length === 0) {
+      prevIdx--;
+    }
+    if (prevIdx < 0) continue;
+    const prev = result[prevIdx];
+
+    // Điều kiện 1: Ảnh floating có tọa độ dịch ngược lên trên (verticalOffsetEmu < -90000 ~ lệch lên trên > 7pt)
+    const isDraggedUpward =
+      Boolean(curr.hasFloatingAnchorImage) &&
+      typeof curr.floatingVerticalOffsetEmu === 'number' &&
+      curr.floatingVerticalOffsetEmu < -90000;
+
+    // Điều kiện 2: Đoạn hiện tại bắt đầu một "Câu X" mới có mang ảnh floating, nhưng câu liền trước có cụm từ "hình bên / sơ đồ / đồ thị / phả hệ" mà chưa có ảnh, trong khi "Câu X" không nhắc tới hình
+    const isMisplacedAtNextQuestionBoundary =
+      isQuestionStartPara(curr.fullText) &&
+      referencesImageInText(prev.fullText) &&
+      prev.images.length === 0 &&
+      !referencesImageInText(curr.fullText);
+
+    if (isDraggedUpward || isMisplacedAtNextQuestionBoundary) {
+      prev.images.push(...curr.images);
+      curr.images = [];
+      curr.hasFloatingAnchorImage = false;
+    }
+  }
+
+  // Điều kiện 3: Nếu có đoạn văn chỉ chứa ảnh nằm lơ lửng ngay trước "Câu 1" (đầu đề hoặc ngay sau tiêu đề PHẦN I/II/III), gắn khóa vào ngay "Câu 1"
+  for (let i = 0; i + 1 < result.length; i++) {
+    const curr = result[i];
+    const next = result[i + 1];
+    if (
+      curr.images.length > 0 &&
+      !curr.fullText.trim() &&
+      isQuestionStartPara(next.fullText)
+    ) {
+      next.images = [...curr.images, ...next.images];
+      curr.images = [];
+    }
+  }
+
+  return result.filter(
+    (p) => p.fullText.trim().length > 0 || p.images.length > 0 || Boolean(p.attachedTable)
+  );
+}
+
+/**
+ * Bóc tách cây XML của file Word (.docx) thành danh sách các đoạn văn kèm:
+ * - ENGINE 1.1: Tự động sửa lỗi Hình ảnh trôi nổi (wp:anchor) & Tự động gom mảnh sơ đồ (Auto-Grouping)
+ * - ENGINE 1.2: Hàn gắn công thức bị gãy (Equation Stitcher) & Sửa kiểu gen gạch chân (<u>AB</u>/ab -> \frac{AB}{ab})
+ * - ENGINE 1.3: Gỡ bỏ chế độ bảng đè chữ (<w:tblpPr>) & Tái cân bằng bảng phương án
+ * - ENGINE 2: Chuyển đổi OMML (<m:oMath>) + MathType OLE Object (<w:object>) kèm Fallback ảnh nhúng
+ */
 function extractParagraphsFromDocxXml(
   xmlString: string,
   mediaMap: Map<string, { dataUrl: string; fileName: string }>,
-  numberingCtx?: DocxNumberingContext
+  numberingCtx?: DocxNumberingContext,
+  oleEmbeddingsMap?: Map<string, string>
 ): ParsedParagraph[] {
+  // ENGINE 1.3a: Gỡ bỏ hoàn toàn thuộc tính bảng trôi nổi đè chữ (<w:tblpPr .../>) ngay trên XML để mọi bảng trở về chế độ In-line/Block độc lập
   const cleanXml = xmlString
     .replace(/^\uFEFF/, '')
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-    .replace(/<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi, '');
+    .replace(/<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi, '')
+    .replace(/<(?:\w+:)?tblpPr\b[^>]*\/?>/gi, '');
 
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(cleanXml, 'application/xml');
@@ -1459,6 +1797,16 @@ function extractParagraphsFromDocxXml(
     }
 
     const paragraphImages = extractImagesFromElement(p, mediaMap);
+    const floatingInfo = inspectFloatingAnchorInParagraph(p);
+
+    // ENGINE 1.1b: Nếu đoạn văn không có ảnh bitmap nhưng có cụm các shape vẽ rời rạc (Auto-Grouping), gộp thành 1 ảnh PNG phẳng
+    if (paragraphImages.length === 0) {
+      const groupedDiagramImg = tryAutoGroupVectorShapesInParagraph(p);
+      if (groupedDiagramImg) {
+        paragraphImages.push(groupedDiagramImg);
+      }
+    }
+
     const paraLevelProps = inspectRunProperties(paraRPrNode);
 
     // Đệ quy duyệt qua mọi thẻ bao bên trong <w:p> (không đi xuyên vào <w:p>, <w:tbl> hoặc <w:txbxContent> con để tránh gộp trùng Textbox)
@@ -1521,7 +1869,7 @@ function extractParagraphsFromDocxXml(
                 text += ` $${latex}$ `;
               }
             } else if (rTag === 'object') {
-              // Bóc tách MathType OLE Object (<w:object>)
+              // ENGINE 2: Bóc tách MathType OLE Object (<w:object>) + Fallback ảnh nhúng của object nếu bị lỗi
               hasInlineMath = true;
               let extractedMath = '';
 
@@ -1540,7 +1888,7 @@ function extractParagraphsFromDocxXml(
                 }
               }
 
-              // 2. Kiểm tra thuộc tính o:title trong <o:OLEObject>
+              // 2. Kiểm tra thuộc tính o:title hoặc stream MTEF nhị phân trong <o:OLEObject>
               if (!extractedMath) {
                 const oles = rChild.getElementsByTagName('o:OLEObject');
                 for (let o = 0; o < oles.length; o++) {
@@ -1550,6 +1898,12 @@ function extractParagraphsFromDocxXml(
                   if (title.trim()) {
                     extractedMath = title.trim();
                     break;
+                  }
+                  const oleRId =
+                    ole.getAttribute('r:id') || ole.getAttribute('id') || '';
+                  if (oleRId && oleEmbeddingsMap?.has(oleRId)) {
+                    extractedMath = oleEmbeddingsMap.get(oleRId) || '';
+                    if (extractedMath) break;
                   }
                 }
               }
@@ -1566,6 +1920,15 @@ function extractParagraphsFromDocxXml(
 
               if (extractedMath) {
                 text += ` $${extractedMath}$ `;
+              } else {
+                // FALLBACK BẤT TỬ: Nếu đối tượng MathType bị lỗi (corrupted) hoặc không có chuỗi LaTeX,
+                // tự động trích xuất ảnh preview (v:imagedata) của chính object đó gắn vào paragraphImages
+                const fallbackObjImgs = extractImagesFromElement(rChild, mediaMap);
+                for (const fbImg of fallbackObjImgs) {
+                  if (!paragraphImages.some((existing) => existing.dataUrl === fbImg.dataUrl)) {
+                    paragraphImages.push(fbImg);
+                  }
+                }
               }
             } else if (rTag === 'drawing') {
               // Bóc tách chú thích công thức trong DrawingML (<wp:docPr descr="...">)
@@ -1610,13 +1973,25 @@ function extractParagraphsFromDocxXml(
           rawFormulaXml = new XMLSerializer().serializeToString(child);
           formulaLatex = latex;
           if (latex) {
-            runs.push({
-              text: ` $${latex}$ `,
-              isUnderline: false,
-              isRed: false,
-              isBold: false,
-              hasFormula: true,
-            });
+            // ENGINE 1.2a: Equation Stitcher ngay tại lúc thu thập <m:oMath> liên tiếp
+            const prevRun = runs.length > 0 ? runs[runs.length - 1] : null;
+            if (
+              prevRun &&
+              prevRun.hasFormula &&
+              /\$\s*$/.test(prevRun.text) &&
+              !prevRun.isUnderline &&
+              !prevRun.isRed
+            ) {
+              prevRun.text = prevRun.text.replace(/\$\s*$/, ` ${latex}$ `);
+            } else {
+              runs.push({
+                text: ` $${latex}$ `,
+                isUnderline: false,
+                isRed: false,
+                isBold: false,
+                hasFormula: true,
+              });
+            }
           }
         } else {
           if (localTag === 'fldsimple') {
@@ -1719,7 +2094,9 @@ function extractParagraphsFromDocxXml(
       }
     }
 
-    const finalRuns = injectFormattingMarkersIntoRuns(runs);
+    // ENGINE 1.2: Chữa lỗi kiểu gen Sinh học gạch chân tử số (<u>AB</u>/ab -> $\frac{AB}{ab}$) trước khi đánh dấu đáp án gạch chân
+    const bioHealedRuns = healUnderlinedBiologyGenotypeRuns(runs);
+    const finalRuns = injectFormattingMarkersIntoRuns(bioHealedRuns);
 
     const fullText = normalizeVietnameseExamText(finalRuns.map((r) => r.text).join('')).trim();
     if (fullText || paragraphImages.length > 0) {
@@ -1733,13 +2110,17 @@ function extractParagraphsFromDocxXml(
         images: paragraphImages,
         rawFormulaXml,
         formulaLatex,
+        hasFloatingAnchorImage: floatingInfo.hasFloatingAnchor,
+        floatingVerticalOffsetEmu: floatingInfo.verticalOffsetEmu,
       };
       const deClumped = splitClumpedParagraphIntoLogicalParagraphs(rawPara);
       rawExtractedParagraphs.push(...deClumped);
     }
   }
 
-  return mergeStandaloneTableHeadersAndOptions(rawExtractedParagraphs);
+  // Thực thi ENGINE 1.1a Spatial Ownership Heuristic trước khi ghép tiêu đề bảng
+  const spatiallyHealedParagraphs = healFloatingImagesSpatialOwnership(rawExtractedParagraphs);
+  return mergeStandaloneTableHeadersAndOptions(spatiallyHealedParagraphs);
 }
 
 /**
@@ -2478,35 +2859,129 @@ export function enforceStrictFourSubItemsPart2(
 }
 
 /**
- * Chuẩn hóa toàn bộ danh sách câu hỏi:
- * Đảm bảo câu hỏi ở Phần I tách đủ 4 đáp án (A, B, C, D) và Phần II tách đủ 4 ý (a, b, c, d),
- * TUYỆT ĐỐI KHÔNG tự bịa đáp án cho bất kỳ phần nào!
+ * Chuẩn hóa toàn bộ danh sách câu hỏi kèm Auto-Healing (Toán - Lý - Hóa - Sinh):
+ * - Đảm bảo câu hỏi ở Phần I tách đủ 4 đáp án (A, B, C, D) và Phần II tách đủ 4 ý (a, b, c, d)
+ * - Tự động hàn gắn công thức gãy, chuẩn hóa Hóa học (H2SO4, Ca(OH)2, Cu2+, SO42-), Sinh học (AB/ab -> \frac{AB}{ab}, XAXa -> X^A X^a), Vật lý (\vec{v}, \Omega, \mu)
+ * - TUYỆT ĐỐI KHÔNG tự bịa đáp án cho bất kỳ phần nào!
  */
 export function normalizeAllQuestionsStrictFourOptions(
   questions: ExamQuestion[],
   resetPerPart = true
 ): ExamQuestion[] {
   const cleaned = questions.map((q) => {
-    if (q.part === 'PART_1') {
-      return enforceStrictFourOptionsPart1(q);
-    }
-    if (q.part === 'PART_2') {
-      return enforceStrictFourSubItemsPart2(q);
-    }
-    if (q.part === 'PART_3') {
+    const healedStem = autoHealScientificAndStemText(q.stemText || '');
+    const healedQ: ExamQuestion = {
+      ...q,
+      stemText: healedStem,
+      hasFormula:
+        Boolean(q.hasFormula) ||
+        /\$[^$]+\$|\\(?:frac|sqrt|vec|overrightarrow|xrightarrow|xrightleftharpoons|int|sum|lim)/.test(
+          healedStem
+        ),
+    };
+
+    if (healedQ.part === 'PART_1') {
+      const normalizedP1 = enforceStrictFourOptionsPart1(healedQ);
       return {
-        ...q,
-        shortAnswer: (q.shortAnswer || '').trim(),
-        shortAnswerDetectedBy: (q.shortAnswer || '').trim()
-          ? q.shortAnswerDetectedBy || 'MANUAL'
+        ...normalizedP1,
+        options: (normalizedP1.options || []).map((opt) => ({
+          ...opt,
+          text: autoHealScientificAndStemText(opt.text || ''),
+        })),
+      };
+    }
+    if (healedQ.part === 'PART_2') {
+      const normalizedP2 = enforceStrictFourSubItemsPart2(healedQ);
+      return {
+        ...normalizedP2,
+        subItems: (normalizedP2.subItems || []).map((sub) => ({
+          ...sub,
+          text: autoHealScientificAndStemText(sub.text || ''),
+        })),
+      };
+    }
+    if (healedQ.part === 'PART_3') {
+      return {
+        ...healedQ,
+        shortAnswer: (healedQ.shortAnswer || '').trim(),
+        shortAnswerDetectedBy: (healedQ.shortAnswer || '').trim()
+          ? healedQ.shortAnswerDetectedBy || 'MANUAL'
           : 'NONE',
       };
     }
-    return q;
+    return healedQ;
   });
 
   const numbered = recalculateQuestionNumbering(cleaned, resetPerPart);
   return assignDeterministicImageTagsToQuestions(numbered);
+}
+
+/**
+ * ENGINE 2.1b: Giải mã stream nhị phân MathType OLE / MTEF trong word/embeddings/*.bin
+ * Trích xuất chuỗi LaTeX/MathType nhúng bên trong OLE2 container (nếu có)
+ */
+function extractLatexFromMathTypeOleBytes(bytes: Uint8Array): string {
+  if (!bytes || bytes.length < 32) return '';
+  try {
+    const asciiText = new TextDecoder('latin1').decode(bytes);
+    // Kiểm tra xem OLE object có chứa chuỗi LaTeX nhúng sẵn từ MathType translator hay không
+    const texMatch = asciiText.match(
+      /\\(?:frac|dfrac|sqrt|vec|overrightarrow|int|sum|lim|alpha|beta|gamma|Delta|Omega|lambda|mu|pi|sin|cos|tan|begin)\b[\x20-\x7E]{1,180}/
+    );
+    if (texMatch) {
+      return texMatch[0].replace(/[^\x20-\x7E]+/g, ' ').trim();
+    }
+  } catch {
+    // Bỏ qua nếu không giải mã được text từ OLE binary
+  }
+  return '';
+}
+
+async function loadOleEmbeddingsMap(zip: JSZip): Promise<Map<string, string>> {
+  const oleMap = new Map<string, string>();
+  const relsFile = zip.file('word/_rels/document.xml.rels');
+  if (!relsFile) return oleMap;
+
+  try {
+    const relsXml = await relsFile.async('string');
+    const parser = new DOMParser();
+    const relsDoc = parser.parseFromString(relsXml, 'application/xml');
+    const relNodes = relsDoc.getElementsByTagName('Relationship');
+
+    for (let i = 0; i < relNodes.length; i++) {
+      const rel = relNodes[i];
+      const id = rel.getAttribute('Id');
+      const target = rel.getAttribute('Target');
+      const type = rel.getAttribute('Type') || '';
+
+      if (
+        id &&
+        target &&
+        (type.includes('oleObject') ||
+          type.includes('package') ||
+          /embeddings\/.*\.bin$/i.test(target))
+      ) {
+        let zipPath = target;
+        if (target.startsWith('../')) {
+          zipPath = target.replace(/^\.\.\//, '');
+        } else if (!target.startsWith('word/')) {
+          zipPath = `word/${target}`;
+        }
+        const binFile = zip.file(zipPath);
+        if (binFile) {
+          const uint8 = await binFile.async('uint8array');
+          const extractedLatex = extractLatexFromMathTypeOleBytes(uint8);
+          if (extractedLatex) {
+            oleMap.set(id, extractedLatex);
+          }
+        }
+      }
+    }
+  } catch {
+    // Bỏ qua nếu không có embeddings
+  }
+
+  return oleMap;
 }
 
 /**
@@ -3929,16 +4404,23 @@ export async function parseDocxExamFile(
       zip.file(/^word[\\/]document.*\.xml$/i)[0];
 
     if (docXmlFile) {
-      const [mediaMap, numberingCtx, xmlString] = await Promise.all([
+      const [mediaMap, numberingCtx, oleEmbeddingsMap, xmlString] = await Promise.all([
         loadMediaRelationships(zip).catch(
           () => new Map<string, { dataUrl: string; fileName: string }>()
         ),
         loadDocxNumberingContext(zip).catch(() => undefined),
+        loadOleEmbeddingsMap(zip).catch(() => new Map<string, string>()),
         docXmlFile.async('string'),
       ]);
 
-      const paragraphs = extractParagraphsFromDocxXml(xmlString, mediaMap, numberingCtx);
-      const parsedQuestions = buildQuestionsFromParsedParagraphs(paragraphs, resetPerPart);
+      const paragraphs = extractParagraphsFromDocxXml(
+        xmlString,
+        mediaMap,
+        numberingCtx,
+        oleEmbeddingsMap
+      );
+      const rawQuestions = buildQuestionsFromParsedParagraphs(paragraphs, resetPerPart);
+      const parsedQuestions = normalizeAllQuestionsStrictFourOptions(rawQuestions, resetPerPart);
 
       const finalizeQuestionsWithEnhancedImages = async (
         qList: ExamQuestion[]
@@ -3956,11 +4438,18 @@ export async function parseDocxExamFile(
                 );
                 const suffix = q.images && q.images.length > 1 ? `_${idx + 1}` : '';
                 const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
+                // ENGINE 1.1c: Khóa chặt tỉ lệ khung hình gốc (Original Aspect Ratio = processed.aspectRatio)
+                // Nếu ảnh bị người dùng kéo dãn méo mó trong Word, tự động reset chiều cao theo đúng tỉ lệ gốc!
+                const finalWidthTwips = processed.widthTwips;
+                const finalHeightTwips = Math.max(
+                  160,
+                  Math.round(finalWidthTwips / Math.max(0.1, processed.aspectRatio))
+                );
                 return {
                   ...img,
                   dataUrl: processed.dataUrl,
-                  widthTwips: img.widthTwips || processed.widthTwips,
-                  heightTwips: img.heightTwips || processed.heightTwips,
+                  widthTwips: finalWidthTwips,
+                  heightTwips: finalHeightTwips,
                   aspectRatio: processed.aspectRatio,
                   tagId,
                   dpi: 300,
