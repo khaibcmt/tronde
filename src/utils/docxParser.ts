@@ -690,72 +690,190 @@ function ommlToLatex(mathNode: Element): string {
 }
 
 /**
+ * Tìm kích thước hiển thị (widthTwips, heightTwips) gần nhất của phần tử ảnh từ wp:extent hoặc v:shape style
+ */
+function resolveImageDimensionsTwips(
+  imgEl: Element,
+  fallbackContainer: Element
+): { widthTwips?: number; heightTwips?: number } {
+  let widthTwips: number | undefined;
+  let heightTwips: number | undefined;
+
+  let curr: Element | null = imgEl;
+  while (curr && curr !== fallbackContainer.parentElement) {
+    const tag = getLocalTagName(curr);
+    if (tag === 'inline' || tag === 'anchor' || tag === 'drawing' || tag === 'pict' || tag === 'shape') {
+      // 1. Kiểm tra thẻ extent (cx, cy tính bằng EMU: 1 twip = 635 EMU)
+      const allChildren = curr.getElementsByTagName('*');
+      for (let i = 0; i < allChildren.length; i++) {
+        const ch = allChildren[i];
+        if (getLocalTagName(ch) === 'extent') {
+          const cx = parseInt(ch.getAttribute('cx') || '0', 10);
+          const cy = parseInt(ch.getAttribute('cy') || '0', 10);
+          if (cx > 0) widthTwips = Math.round(cx / 635);
+          if (cy > 0) heightTwips = Math.round(cy / 635);
+          if (widthTwips && heightTwips) {
+            return { widthTwips, heightTwips };
+          }
+        }
+      }
+
+      // 2. Kiểm tra thuộc tính style="width:...pt/px/in/cm;height:...pt/px/in/cm" trên v:shape
+      const styleAttr = curr.getAttribute('style') || '';
+      if (styleAttr) {
+        const parseCssLenToTwips = (valStr: string, unit: string): number => {
+          const v = parseFloat(valStr);
+          if (isNaN(v) || v <= 0) return 0;
+          const u = unit.toLowerCase();
+          if (u === 'in') return Math.round(v * 1440);
+          if (u === 'cm') return Math.round((v / 2.54) * 1440);
+          if (u === 'mm') return Math.round((v / 25.4) * 1440);
+          if (u === 'px') return Math.round(v * 15);
+          return Math.round(v * 20); // pt mặc định (1pt = 20 twips)
+        };
+        const wMatch = styleAttr.match(/(?:^|;|\s)width\s*:\s*(\d+(?:\.\d+)?)\s*(pt|px|in|cm|mm)?/i);
+        const hMatch = styleAttr.match(/(?:^|;|\s)height\s*:\s*(\d+(?:\.\d+)?)\s*(pt|px|in|cm|mm)?/i);
+        if (wMatch) {
+          const wt = parseCssLenToTwips(wMatch[1], wMatch[2] || 'pt');
+          if (wt > 0) widthTwips = wt;
+        }
+        if (hMatch) {
+          const ht = parseCssLenToTwips(hMatch[1], hMatch[2] || 'pt');
+          if (ht > 0) heightTwips = ht;
+        }
+        if (widthTwips && heightTwips) {
+          return { widthTwips, heightTwips };
+        }
+      }
+    }
+    curr = curr.parentElement;
+  }
+
+  return { widthTwips, heightTwips };
+}
+
+/**
  * ENGINE 1.1a & 1.1b:
- * Trích xuất ảnh từ node drawing / pict / object trong Word, đồng thời:
- * - Phát hiện ảnh đặt ở chế độ trôi nổi (wp:anchor / position:absolute) và đọc tọa độ lệch dọc (posOffset)
- * - Tự động gom các mảnh sơ đồ vector rời rạc (Auto-Grouping Shapes) thành 1 file ảnh PNG phẳng duy nhất
+ * Trích xuất ảnh từ node drawing / pict / object / AlternateContent trong Word (không phụ thuộc tiền tố namespace), đồng thời:
+ * - Hỗ trợ <mc:AlternateContent>: Ưu tiên lấy ảnh trong <mc:Choice>; nếu <mc:Choice> là shape/canvas không có ảnh bitmap thì tự động lấy ảnh preview trong <mc:Fallback>
+ * - Bắt trọn mọi thẻ chứa liên kết ảnh: blip, svgBlip, imgLayer, imagedata, fill
+ * - Chống trích xuất trùng lặp bằng consumedNodes (WeakSet) và bộ lọc dataUrl/rId
  */
 function extractImagesFromElement(
   container: Element,
-  mediaMap: Map<string, { dataUrl: string; fileName: string }>
+  mediaMap: Map<string, { dataUrl: string; fileName: string }>,
+  consumedNodes?: WeakSet<Element>,
+  allowNestedParagraphs = false
 ): ExamImageAttachment[] {
   const images: ExamImageAttachment[] = [];
   const seenRIds = new Set<string>();
+  const seenDataUrls = new Set<string>();
 
-  const blipNodes = container.getElementsByTagName('a:blip');
-  for (let i = 0; i < blipNodes.length; i++) {
-    const blip = blipNodes[i];
+  const tryExtractFromImageNode = (el: Element) => {
+    if (consumedNodes?.has(el)) return;
+    const tag = getLocalTagName(el);
+    if (
+      tag !== 'blip' &&
+      tag !== 'svgblip' &&
+      tag !== 'imglayer' &&
+      tag !== 'imagedata' &&
+      tag !== 'fill'
+    ) {
+      return;
+    }
+
     const rId =
-      blip.getAttribute('r:embed') ||
-      blip.getAttribute('r:link') ||
-      blip.getAttribute('embed') ||
+      el.getAttribute('r:embed') ||
+      el.getAttribute('embed') ||
+      el.getAttribute('r:id') ||
+      el.getAttribute('o:relid') ||
+      el.getAttribute('r:link') ||
+      el.getAttribute('link') ||
+      (tag !== 'fill' ? el.getAttribute('id') : '') ||
       '';
-    if (rId && mediaMap.has(rId) && !seenRIds.has(rId)) {
-      seenRIds.add(rId);
-      const media = mediaMap.get(rId)!;
-      let widthTwips: number | undefined;
-      let heightTwips: number | undefined;
-      const extentNode = container.getElementsByTagName('wp:extent')[0];
-      if (extentNode) {
-        const cx = parseInt(extentNode.getAttribute('cx') || '0', 10);
-        const cy = parseInt(extentNode.getAttribute('cy') || '0', 10);
-        if (cx > 0) widthTwips = Math.round(cx / 635);
-        if (cy > 0) heightTwips = Math.round(cy / 635);
+
+    if (!rId || !mediaMap.has(rId)) return;
+    consumedNodes?.add(el);
+
+    const media = mediaMap.get(rId)!;
+    if (seenRIds.has(rId) || seenDataUrls.has(media.dataUrl)) {
+      return;
+    }
+    seenRIds.add(rId);
+    seenDataUrls.add(media.dataUrl);
+
+    const { widthTwips, heightTwips } = resolveImageDimensionsTwips(el, container);
+    images.push({
+      id: `img-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      dataUrl: media.dataUrl,
+      fileName: media.fileName,
+      widthTwips,
+      heightTwips,
+      aspectRatio:
+        widthTwips && heightTwips && heightTwips > 0
+          ? widthTwips / heightTwips
+          : undefined,
+    });
+  };
+
+  const walkNode = (node: Element) => {
+    const tag = getLocalTagName(node);
+
+    // Không đi xuyên vào <w:p> hoặc <w:tbl> con (trừ khi được yêu cầu) để mỗi đoạn văn tự quản lý ảnh của chính nó
+    if (
+      node !== container &&
+      !allowNestedParagraphs &&
+      (tag === 'p' || tag === 'tbl')
+    ) {
+      return;
+    }
+
+    // Xử lý thông minh <mc:AlternateContent>: thử <mc:Choice> trước, nếu không có ảnh mới dùng <mc:Fallback>
+    if (tag === 'alternatecontent') {
+      const choiceEls: Element[] = [];
+      const fallbackEls: Element[] = [];
+      for (let i = 0; i < node.childNodes.length; i++) {
+        const ch = node.childNodes[i] as Element;
+        if (!ch.tagName) continue;
+        const cTag = getLocalTagName(ch);
+        if (cTag === 'choice') choiceEls.push(ch);
+        else if (cTag === 'fallback') fallbackEls.push(ch);
       }
 
-      images.push({
-        id: `img-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        dataUrl: media.dataUrl,
-        fileName: media.fileName,
-        widthTwips,
-        heightTwips,
-        aspectRatio:
-          widthTwips && heightTwips && heightTwips > 0
-            ? widthTwips / heightTwips
-            : undefined,
-      });
+      const beforeCount = images.length;
+      for (const chEl of choiceEls) {
+        walkNode(chEl);
+      }
+      // Nếu <mc:Choice> đã trích xuất được ảnh hợp lệ, đánh dấu các node ảnh trong <mc:Fallback> là đã xử lý để không bị lặp
+      if (images.length > beforeCount) {
+        if (consumedNodes) {
+          for (const fbEl of fallbackEls) {
+            const fbAll = fbEl.getElementsByTagName('*');
+            for (let k = 0; k < fbAll.length; k++) {
+              consumedNodes.add(fbAll[k]);
+            }
+          }
+        }
+      } else {
+        // Nếu <mc:Choice> là shape/canvas không có ảnh trong mediaMap -> Lấy ảnh raster preview từ <mc:Fallback>!
+        for (const fbEl of fallbackEls) {
+          walkNode(fbEl);
+        }
+      }
+      return;
     }
-  }
 
-  const imgDataNodes = container.getElementsByTagName('v:imagedata');
-  for (let i = 0; i < imgDataNodes.length; i++) {
-    const imgData = imgDataNodes[i];
-    const rId =
-      imgData.getAttribute('r:id') ||
-      imgData.getAttribute('o:relid') ||
-      imgData.getAttribute('id') ||
-      '';
-    if (rId && mediaMap.has(rId) && !seenRIds.has(rId)) {
-      seenRIds.add(rId);
-      const media = mediaMap.get(rId)!;
-      images.push({
-        id: `pict-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        dataUrl: media.dataUrl,
-        fileName: media.fileName,
-      });
+    tryExtractFromImageNode(node);
+
+    for (let i = 0; i < node.childNodes.length; i++) {
+      const child = node.childNodes[i] as Element;
+      if (child.tagName) {
+        walkNode(child);
+      }
     }
-  }
+  };
 
+  walkNode(container);
   return images;
 }
 
@@ -769,33 +887,36 @@ function inspectFloatingAnchorInParagraph(pNode: Element): {
   let hasFloatingAnchor = false;
   let verticalOffsetEmu = 0;
 
-  const anchorNodes = pNode.getElementsByTagName('wp:anchor');
-  if (anchorNodes.length > 0) {
-    hasFloatingAnchor = true;
-    for (let i = 0; i < anchorNodes.length; i++) {
-      const posV = anchorNodes[i].getElementsByTagName('wp:positionV')[0];
-      if (posV) {
-        const offsetEl = posV.getElementsByTagName('wp:posOffset')[0];
-        if (offsetEl && offsetEl.textContent) {
-          const parsed = parseInt(offsetEl.textContent.trim(), 10);
-          if (!isNaN(parsed)) {
-            verticalOffsetEmu = parsed;
-            break;
+  const allNodes = pNode.getElementsByTagName('*');
+  for (let i = 0; i < allNodes.length; i++) {
+    const el = allNodes[i];
+    const tag = getLocalTagName(el);
+    if (tag === 'anchor') {
+      hasFloatingAnchor = true;
+      const children = el.getElementsByTagName('*');
+      for (let j = 0; j < children.length; j++) {
+        if (getLocalTagName(children[j]) === 'positionv') {
+          const posVChildren = children[j].getElementsByTagName('*');
+          for (let k = 0; k < posVChildren.length; k++) {
+            if (getLocalTagName(posVChildren[k]) === 'posoffset' && posVChildren[k].textContent) {
+              const parsed = parseInt(posVChildren[k].textContent!.trim(), 10);
+              if (!isNaN(parsed)) {
+                verticalOffsetEmu = parsed;
+                break;
+              }
+            }
           }
         }
       }
-    }
-  }
-
-  const vShapes = pNode.getElementsByTagName('v:shape');
-  for (let i = 0; i < vShapes.length; i++) {
-    const styleAttr = vShapes[i].getAttribute('style') || '';
-    if (/position\s*:\s*absolute/i.test(styleAttr)) {
-      hasFloatingAnchor = true;
-      const topMatch = styleAttr.match(/(?:margin-top|top)\s*:\s*(-?\d+(?:\.\d+)?)pt/i);
-      if (topMatch) {
-        verticalOffsetEmu = Math.round(parseFloat(topMatch[1]) * 12700);
-        break;
+    } else if (tag === 'shape') {
+      const styleAttr = el.getAttribute('style') || '';
+      if (/position\s*:\s*absolute/i.test(styleAttr)) {
+        hasFloatingAnchor = true;
+        const topMatch = styleAttr.match(/(?:margin-top|top)\s*:\s*(-?\d+(?:\.\d+)?)pt/i);
+        if (topMatch) {
+          verticalOffsetEmu = Math.round(parseFloat(topMatch[1]) * 12700);
+          break;
+        }
       }
     }
   }
@@ -819,24 +940,27 @@ function tryAutoGroupVectorShapesInParagraph(
 
   for (let i = 0; i < allNodes.length; i++) {
     const el = allNodes[i];
-    const tag = (el.localName || el.tagName.split(':').pop() || '').toLowerCase();
+    const tag = getLocalTagName(el);
 
     if (tag === 'group' || tag === 'wgp') {
       hasGroupContainer = true;
       continue;
     }
 
-    if (
-      tag === 'rect' ||
-      tag === 'roundrect' ||
-      tag === 'oval' ||
-      tag === 'line' ||
-      tag === 'wsp' ||
-      (tag === 'shape' && el.getElementsByTagName('v:imagedata').length === 0)
-    ) {
-      // Bỏ qua nếu bên trong có ảnh bitmap a:blip
-      if (el.getElementsByTagName('a:blip').length > 0) continue;
+    const hasInnerBitmap = Array.from(el.getElementsByTagName('*')).some((sub) => {
+      const sTag = getLocalTagName(sub);
+      return sTag === 'blip' || sTag === 'imagedata' || sTag === 'svgblip';
+    });
 
+    if (
+      !hasInnerBitmap &&
+      (tag === 'rect' ||
+        tag === 'roundrect' ||
+        tag === 'oval' ||
+        tag === 'line' ||
+        tag === 'wsp' ||
+        tag === 'shape')
+    ) {
       const styleStr = el.getAttribute('style') || '';
       const leftM = styleStr.match(/left\s*:\s*(-?\d+(?:\.\d+)?)/i);
       const topM = styleStr.match(/top\s*:\s*(-?\d+(?:\.\d+)?)/i);
@@ -850,14 +974,14 @@ function tryAutoGroupVectorShapesInParagraph(
 
       // Trích xuất chữ nhãn bên trong shape (v:textbox hoặc w:txbxContent)
       let labelText = '';
-      const tNodes = el.getElementsByTagName('w:t');
-      if (tNodes.length > 0) {
-        const parts: string[] = [];
-        for (let t = 0; t < tNodes.length; t++) {
-          parts.push(tNodes[t].textContent || '');
+      const subNodes = el.getElementsByTagName('*');
+      const parts: string[] = [];
+      for (let t = 0; t < subNodes.length; t++) {
+        if (getLocalTagName(subNodes[t]) === 't') {
+          parts.push(subNodes[t].textContent || '');
         }
-        labelText = parts.join('').trim();
       }
+      labelText = parts.join('').trim();
 
       const kind: ExtractedShapePrimitive['kind'] =
         tag === 'line'
@@ -963,7 +1087,7 @@ function healUnderlinedBiologyGenotypeRuns(runs: ParsedRun[]): ParsedRun[] {
 
 /**
  * Cắt một danh sách runs theo khoảng ký tự [sliceStart, sliceEnd)
- * Giúp giữ nguyên 100% thuộc tính gạch chân (isUnderline) và tô đỏ (isRed) khi tách đoạn văn dính chùm
+ * Giúp giữ nguyên 100% thuộc tính gạch chân (isUnderline), tô đỏ (isRed) và hình ảnh (images) khi tách đoạn văn dính chùm
  */
 function sliceRunsByCharRange(
   runs: ParsedRun[],
@@ -978,6 +1102,14 @@ function sliceRunsByCharRange(
     const rEnd = cursor + run.text.length;
     cursor = rEnd;
 
+    // Nếu run chỉ chứa hình ảnh (text rỗng), gán vào đoạn con có chứa vị trí con trỏ rStart
+    if (run.text.length === 0 && run.images && run.images.length > 0) {
+      if (rStart >= sliceStart && (rStart < sliceEnd || (rStart === sliceEnd && sliceStart === 0))) {
+        sliced.push({ ...run });
+      }
+      continue;
+    }
+
     if (rEnd <= sliceStart || rStart >= sliceEnd) {
       continue;
     }
@@ -986,10 +1118,11 @@ function sliceRunsByCharRange(
     const subEnd = Math.min(run.text.length, sliceEnd - rStart);
     const subText = run.text.slice(subStart, subEnd);
 
-    if (subText.length > 0) {
+    if (subText.length > 0 || (run.images && run.images.length > 0 && subStart === 0)) {
       sliced.push({
         ...run,
         text: subText,
+        images: subStart === 0 ? run.images : undefined,
       });
     }
   }
@@ -1186,7 +1319,7 @@ async function loadDocxNumberingContext(zip: JSZip): Promise<DocxNumberingContex
 
 /**
  * Tách một đoạn văn bị dính chùm nhiều câu hỏi (VD: dùng Shift+Enter <w:br/> hoặc viết liền "...D. Đáp án. Câu 2. ...")
- * thành các đoạn văn độc lập
+ * thành các đoạn văn độc lập mà KHÔNG làm mất hình ảnh đính kèm
  */
 function splitClumpedParagraphIntoLogicalParagraphs(
   para: ParsedParagraph
@@ -1217,13 +1350,21 @@ function splitClumpedParagraphIntoLogicalParagraphs(
   splitIndices.push(rawJoined.length);
   const subParagraphs: ParsedParagraph[] = [];
   let assignedAutoNumber = false;
+  const assignedImageUrls = new Set<string>();
 
   for (let i = 0; i < splitIndices.length - 1; i++) {
     const s = splitIndices[i];
     const e = splitIndices[i + 1];
     const subRuns = sliceRunsByCharRange(para.runs, s, e);
     const subText = normalizeVietnameseExamText(subRuns.map((r) => r.text).join('')).trim();
-    if (!subText && (subParagraphs.length > 0 || para.images.length === 0)) continue;
+    const runImgs = subRuns.flatMap((r) => r.images || []);
+    for (const ri of runImgs) {
+      assignedImageUrls.add(ri.dataUrl);
+    }
+
+    if (!subText && runImgs.length === 0 && (subParagraphs.length > 0 || para.images.length === 0)) {
+      continue;
+    }
 
     const isFirstValid = !assignedAutoNumber;
     assignedAutoNumber = true;
@@ -1235,10 +1376,27 @@ function splitClumpedParagraphIntoLogicalParagraphs(
       hasRed: subRuns.some((r) => r.isRed && r.text.trim().length > 0),
       hasFormula: para.hasFormula,
       isAutoNumbered: isFirstValid ? para.isAutoNumbered : false,
-      images: isFirstValid ? para.images : [],
+      images: runImgs,
       rawFormulaXml: isFirstValid ? para.rawFormulaXml : undefined,
       formulaLatex: isFirstValid ? para.formulaLatex : undefined,
     });
+  }
+
+  // Nếu còn ảnh cấp đoạn văn (para.images) chưa nằm trong run cụ thể nào, ưu tiên gắn vào đoạn con chứa "Câu X" (không gắn vào dòng tiêu đề PHẦN I/II/III để tránh bị bỏ qua)
+  const leftoverParaImages = para.images.filter((img) => !assignedImageUrls.has(img.dataUrl));
+  if (leftoverParaImages.length > 0 && subParagraphs.length > 0) {
+    const targetSub =
+      subParagraphs.find((sp) =>
+        /^(?:[*#•+\-–—\s])*(?:Câu|Bài|Question)\s*\d+/i.test(sp.fullText.trim())
+      ) ||
+      subParagraphs.find(
+        (sp) =>
+          !/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(?:I|II|III|IV|1|2|3|4)\b/i.test(
+            sp.fullText.trim()
+          )
+      ) ||
+      subParagraphs[subParagraphs.length - 1];
+    targetSub.images = [...targetSub.images, ...leftoverParaImages];
   }
 
   return subParagraphs.length > 0 ? subParagraphs : [para];
@@ -1259,22 +1417,54 @@ function decodeXmlEntities(str: string): string {
 /**
  * Bộ bóc tách XML bằng Regex thuần (Pure-Regex XML Fallback):
  * Miễn nhiễm 100% với lỗi <parsererror> của DOMParser khi file Word có namespace lạ (WPS Office, PDF2Word, McMIX...)
- * Vẫn giữ nguyên nhận diện gạch chân (<w:u>) và tô màu đỏ (<w:color>)!
+ * Vẫn giữ nguyên nhận diện gạch chân (<w:u>), tô màu đỏ (<w:color>) VÀ trích xuất toàn bộ hình ảnh từ mediaMap!
  */
-function extractParagraphsFromDocxXmlRegex(xmlString: string): ParsedParagraph[] {
+function extractParagraphsFromDocxXmlRegex(
+  xmlString: string,
+  mediaMap?: Map<string, { dataUrl: string; fileName: string }>
+): ParsedParagraph[] {
   // Loại bỏ các thẻ tự đóng <w:p .../>, <w:r .../>, <w:t .../> trước để tránh Regex nuốt nhầm thẻ kế tiếp
-  const withoutFallback = xmlString
+  const withoutSelfClosingPRT = xmlString
     .replace(/^\uFEFF/, '')
-    .replace(/<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi, '')
     .replace(/<(?:\w+:)?(?:p|r|t)(?:\s[^>]*)?\/>/gi, '');
 
   const paragraphs: ParsedParagraph[] = [];
   const pRegex = /<(?:\w+:)?p(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?p>/gi;
 
   let pMatch: RegExpExecArray | null;
-  while ((pMatch = pRegex.exec(withoutFallback)) !== null) {
-    const pInner = pMatch[1];
-    const isAutoNumbered = /<(?:\w+:)?numPr\b/i.test(pInner);
+  while ((pMatch = pRegex.exec(withoutSelfClosingPRT)) !== null) {
+    const pInnerRaw = pMatch[1];
+    const isAutoNumbered = /<(?:\w+:)?numPr\b/i.test(pInnerRaw);
+
+    // Trích xuất hình ảnh trong đoạn văn bằng Regex (hỗ trợ cả Choice và Fallback)
+    const paraImages: ExamImageAttachment[] = [];
+    if (mediaMap && mediaMap.size > 0) {
+      const seenRIds = new Set<string>();
+      const seenUrls = new Set<string>();
+      const rIdRegex = /\b(?:r:embed|r:id|o:relid|r:link|embed)\s*=\s*["']([^"']+)["']/gi;
+      let rm: RegExpExecArray | null;
+      while ((rm = rIdRegex.exec(pInnerRaw)) !== null) {
+        const rId = rm[1].trim();
+        if (rId && mediaMap.has(rId) && !seenRIds.has(rId)) {
+          const media = mediaMap.get(rId)!;
+          if (!seenUrls.has(media.dataUrl)) {
+            seenRIds.add(rId);
+            seenUrls.add(media.dataUrl);
+            paraImages.push({
+              id: `img-rx-${rId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              dataUrl: media.dataUrl,
+              fileName: media.fileName,
+            });
+          }
+        }
+      }
+    }
+
+    // Khi đọc text runs, loại bỏ <mc:Fallback> để không bị lặp chữ
+    const pInner = pInnerRaw.replace(
+      /<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi,
+      ''
+    );
 
     let paraUnderline = false;
     let paraRed = false;
@@ -1349,7 +1539,7 @@ function extractParagraphsFromDocxXmlRegex(xmlString: string): ParsedParagraph[]
 
     const markedRuns = injectFormattingMarkersIntoRuns(runs);
     const fullText = normalizeVietnameseExamText(markedRuns.map((r) => r.text).join('')).trim();
-    if (fullText) {
+    if (fullText || paraImages.length > 0) {
       const rawPara: ParsedParagraph = {
         fullText,
         runs: markedRuns,
@@ -1357,7 +1547,7 @@ function extractParagraphsFromDocxXmlRegex(xmlString: string): ParsedParagraph[]
         hasRed: markedRuns.some((r) => r.isRed && r.text.trim().length > 0),
         hasFormula: false,
         isAutoNumbered,
-        images: [],
+        images: paraImages,
       };
       paragraphs.push(...splitClumpedParagraphIntoLogicalParagraphs(rawPara));
     }
@@ -1469,6 +1659,7 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
   let maxCols = 0;
   let allCellsCombinedText = '';
   let optionMarkerCellCount = 0;
+  let hasImageOnlyCell = false;
 
   for (let rIdx = 0; rIdx < trNodes.length; rIdx++) {
     const tr = trNodes[rIdx];
@@ -1478,7 +1669,15 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
       if (!tc.tagName || getLocalTagName(tc) !== 'tc') continue;
 
       // Không trích xuất bảng lồng bên trong bảng khác (tránh bảng khung đề thi)
-      if (tc.getElementsByTagName('w:tbl').length > 0) return null;
+      const subElements = tc.getElementsByTagName('*');
+      let cellHasImageNode = false;
+      for (let s = 0; s < subElements.length; s++) {
+        const sTag = getLocalTagName(subElements[s]);
+        if (sTag === 'tbl') return null;
+        if (sTag === 'blip' || sTag === 'imagedata' || sTag === 'svgblip' || sTag === 'imglayer') {
+          cellHasImageNode = true;
+        }
+      }
 
       let colSpan = 1;
       let vMergeContinue = false;
@@ -1486,9 +1685,8 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
       let align: 'left' | 'center' | 'right' | undefined;
       let isBold = false;
 
-      const tcPrNodes = tc.getElementsByTagName('*');
-      for (let k = 0; k < tcPrNodes.length; k++) {
-        const node = tcPrNodes[k];
+      for (let k = 0; k < subElements.length; k++) {
+        const node = subElements[k];
         const tName = getLocalTagName(node);
         if (tName === 'gridspan') {
           const spanVal = parseInt(getXmlAttr(node, 'val') || '1', 10);
@@ -1510,14 +1708,21 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
 
       // Đọc văn bản và công thức OMML trong ô bảng
       const cellParts: string[] = [];
-      const pList = tc.getElementsByTagName('w:p');
-      const targetParas = pList.length > 0 ? Array.from(pList) : [tc];
+      const pList: Element[] = [];
+      for (let pIdx = 0; pIdx < tc.childNodes.length; pIdx++) {
+        const ch = tc.childNodes[pIdx] as Element;
+        if (ch.tagName && getLocalTagName(ch) === 'p') {
+          pList.push(ch);
+        }
+      }
+      const targetParas = pList.length > 0 ? pList : [tc];
       for (const pNode of targetParas) {
         let pStr = '';
         const walkCellNode = (n: Node) => {
           if (n.nodeType === Node.ELEMENT_NODE) {
             const el = n as Element;
             const lTag = getLocalTagName(el);
+            if (lTag === 'fallback') return;
             if (lTag === 't') {
               pStr += normalizeVietnameseExamText(el.textContent || '');
               return;
@@ -1537,6 +1742,9 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
       }
 
       const cellText = cellParts.join('\n').trim();
+      if (cellHasImageNode && (!cellText || /^(?:Hình|Sơ\s+đồ|Đồ\s+thị)\s*\d*[.:)]?$/i.test(cellText))) {
+        hasImageOnlyCell = true;
+      }
       allCellsCombinedText += ' ' + cellText;
 
       if (/^[*#]?\s*[A-Da-d]\s*[.:)]\s+\S/.test(cellText) || /^[*#]?\s*[A-Da-d]\s*[.:)]?$/.test(cellText)) {
@@ -1560,6 +1768,12 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
 
   if (maxCols < 2 || rows.length < 2) return null;
 
+  // Nếu bảng có ô chuyên dùng để đặt Hình vẽ minh họa (Bảng chia 2 cột: 1 bên chữ câu hỏi, 1 bên hình ảnh, hoặc bảng dàn trang 2x2 hình vẽ)
+  // -> Trả về null để các đoạn văn và hình ảnh trong bảng được bóc tách trực tiếp vào câu hỏi!
+  if (hasImageOnlyCell) {
+    return null;
+  }
+
   // Loại trừ các bảng hành chính đầu trang, bảng chứa câu hỏi ("Câu 1."), bảng đáp án/hướng dẫn chấm/thang điểm hoặc bảng chia cột 4 đáp án A, B, C, D
   if (
     /(?:SỞ\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|BẢNG\s+ĐÁP\s+ÁN|HƯỚNG\s+DẪN\s+CHẤM|THANG\s+ĐIỂM|BIỂU\s+ĐIỂM|ĐÁP\s+ÁN\s+CHÍNH\s+THỨC|LỜI\s+GIẢI\s+CHI\s+TIẾT|PHẦN\s+(?:I|II|III|IV)\b|(?:^|\s)(?:Câu|Bài|Question)\s*\d+\s*[.:)])/i.test(
@@ -1582,20 +1796,10 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
 }
 
 /**
- * Bóc tách cây XML của file Word (.docx) thành danh sách các đoạn văn kèm:
- * - Gạch chân / Tô đỏ
- * - Chỉ số trên / dưới (<w:vertAlign w:val="subscript/superscript"/>)
- * - Xử lý thẻ ngắt dòng mềm <w:br/> và <w:cr/>
- * - Giải mã tự động danh sách auto-numbering từ word/numbering.xml & word/styles.xml (Câu 1., A. B. C. D., a) b) c) d))
- * - Trích xuất ảnh, sơ đồ hình vẽ (<w:drawing>, <w:pict>)
- * - Trích xuất Bảng dữ liệu & Bảng ghép đôi Cột A - Cột B (<w:tbl>)
- * - Công thức toán học chuẩn OMML (<m:oMath>)
- */
-/**
  * ENGINE 1.1a: THUẬT TOÁN XÁC ĐỊNH CHỦ QUYỀN KHÔNG GIAN CHO ẢNH TRÔI NỔI (SPATIAL OWNERSHIP HEURISTIC)
  * - Nếu ảnh đặt ở chế độ trôi nổi (wp:anchor, Floating) làm tọa độ bị lệch sang đầu câu hỏi tiếp theo,
- *   hoặc đoạn văn câu trước có từ khóa tham chiếu ảnh ("Hình bên", "Sơ đồ", "Đồ thị", "Phả hệ", "Mạch điện")
- *   mà ảnh lại nằm ở đoạn văn rỗng hoặc bị kéo lệch xuống dòng "Câu X" kế tiếp:
+ *   hoặc khối câu hỏi liền trước có từ khóa tham chiếu ảnh ("Hình bên", "Sơ đồ", "Đồ thị", "Phả hệ", "Mạch điện", "Bảng biến thiên")
+ *   mà ảnh lại bị kéo lệch xuống dòng "Câu X" kế tiếp:
  *   -> Tự động thu hồi và khóa ảnh vào đúng khối nội dung của câu hỏi sở hữu nó; tuyệt đối không để ảnh rơi xuống câu sau!
  */
 function healFloatingImagesSpatialOwnership(
@@ -1612,8 +1816,13 @@ function healFloatingImagesSpatialOwnership(
       txt.trim()
     );
 
+  const isPartSectionHeaderPara = (txt: string): boolean =>
+    /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)\b|TỰ\s+LUẬN\b)/i.test(
+      txt.trim().replace(/^[*#•\-–—\s]+/, '')
+    );
+
   const referencesImageInText = (txt: string): boolean =>
-    /(?:hình\s+bên|hình\s+vẽ|sơ\s+đồ|đồ\s+thị|phả\s+hệ|mạch\s+điện|như\s+hình|hình\s+\d)/i.test(
+    /(?:hình\s+bên|hình\s+vẽ|sơ\s+đồ|đồ\s+thị|phả\s+hệ|mạch\s+điện|như\s+hình|hình\s+\d|bảng\s+biến\s+thiên)/i.test(
       txt
     );
 
@@ -1629,36 +1838,62 @@ function healFloatingImagesSpatialOwnership(
     if (prevIdx < 0) continue;
     const prev = result[prevIdx];
 
+    // Kiểm tra toàn bộ khối câu hỏi liền trước (từ dòng "Câu X-1" tới i - 1) xem có tham chiếu tới hình vẽ và đã có ảnh nào chưa
+    let prevQStartIdx = prevIdx;
+    while (prevQStartIdx > 0 && !isQuestionStartPara(result[prevQStartIdx].fullText)) {
+      if (isPartSectionHeaderPara(result[prevQStartIdx].fullText)) break;
+      prevQStartIdx--;
+    }
+    let prevQuestionCombinedText = '';
+    let prevQuestionHasImages = false;
+    for (let k = prevQStartIdx; k < i; k++) {
+      prevQuestionCombinedText += ' ' + result[k].fullText;
+      if (result[k].images.length > 0) prevQuestionHasImages = true;
+    }
+
     // Điều kiện 1: Ảnh floating có tọa độ dịch ngược lên trên (verticalOffsetEmu < -90000 ~ lệch lên trên > 7pt)
     const isDraggedUpward =
       Boolean(curr.hasFloatingAnchorImage) &&
       typeof curr.floatingVerticalOffsetEmu === 'number' &&
       curr.floatingVerticalOffsetEmu < -90000;
 
-    // Điều kiện 2: Đoạn hiện tại bắt đầu một "Câu X" mới có mang ảnh floating, nhưng câu liền trước có cụm từ "hình bên / sơ đồ / đồ thị / phả hệ" mà chưa có ảnh, trong khi "Câu X" không nhắc tới hình
+    // Điều kiện 2: Đoạn hiện tại bắt đầu một "Câu X" mới có mang ảnh floating, nhưng khối câu liền trước có cụm từ "hình bên / sơ đồ / đồ thị / phả hệ" mà chưa có ảnh, trong khi "Câu X" không nhắc tới hình
     const isMisplacedAtNextQuestionBoundary =
       isQuestionStartPara(curr.fullText) &&
-      referencesImageInText(prev.fullText) &&
-      prev.images.length === 0 &&
+      referencesImageInText(prevQuestionCombinedText) &&
+      !prevQuestionHasImages &&
       !referencesImageInText(curr.fullText);
 
     if (isDraggedUpward || isMisplacedAtNextQuestionBoundary) {
-      prev.images.push(...curr.images);
+      const targetPara = result[prevQStartIdx] || prev;
+      targetPara.images.push(...curr.images);
       curr.images = [];
       curr.hasFloatingAnchorImage = false;
     }
   }
 
-  // Điều kiện 3: Nếu có đoạn văn chỉ chứa ảnh nằm lơ lửng ngay trước "Câu 1" (đầu đề hoặc ngay sau tiêu đề PHẦN I/II/III), gắn khóa vào ngay "Câu 1"
-  for (let i = 0; i + 1 < result.length; i++) {
+  // Điều kiện 3: Chỉ đẩy đoạn văn chỉ chứa ảnh vào "Câu X" kế tiếp NẾU trước đó chưa có câu hỏi nào trong Phần hiện tại
+  // (Tránh việc ảnh đặt ở cuối Câu N - sau đáp án D - bị lấy nhầm sang Câu N+1!)
+  let hasActiveQuestionInCurrentPart = false;
+  for (let i = 0; i < result.length; i++) {
     const curr = result[i];
-    const next = result[i + 1];
+    const cleanTxt = curr.fullText.trim();
+    if (isPartSectionHeaderPara(cleanTxt)) {
+      hasActiveQuestionInCurrentPart = false;
+      continue;
+    }
+    if (isQuestionStartPara(cleanTxt)) {
+      hasActiveQuestionInCurrentPart = true;
+      continue;
+    }
     if (
       curr.images.length > 0 &&
-      !curr.fullText.trim() &&
-      isQuestionStartPara(next.fullText)
+      !cleanTxt &&
+      i + 1 < result.length &&
+      isQuestionStartPara(result[i + 1].fullText) &&
+      !hasActiveQuestionInCurrentPart
     ) {
-      next.images = [...curr.images, ...next.images];
+      result[i + 1].images = [...curr.images, ...result[i + 1].images];
       curr.images = [];
     }
   }
@@ -1666,6 +1901,99 @@ function healFloatingImagesSpatialOwnership(
   return result.filter(
     (p) => p.fullText.trim().length > 0 || p.images.length > 0 || Boolean(p.attachedTable)
   );
+}
+
+/**
+ * Sắp xếp lại thứ tự đoạn văn trong các hàng bảng 2 cột (nơi Cột 1 chỉ chứa Ảnh và Cột 2 chứa nội dung "Câu X..."):
+ * Đảm bảo đoạn văn "Câu X..." luôn đi trước đoạn văn chỉ chứa Ảnh của cùng hàng bảng đó để ảnh gắn đúng vào "Câu X"!
+ */
+function collectOrderedParagraphsFromXmlDoc(xmlDoc: Document): Element[] {
+  const allParas: Element[] = [];
+  const allElements = xmlDoc.getElementsByTagName('*');
+  for (let i = 0; i < allElements.length; i++) {
+    if (getLocalTagName(allElements[i]) === 'p') {
+      allParas.push(allElements[i]);
+    }
+  }
+
+  // Kiểm tra các hàng bảng <w:tr> có ô bên trái chỉ chứa hình ảnh và ô bên phải chứa chữ "Câu X..."
+  const reorderedParas = [...allParas];
+  const trNodes: Element[] = [];
+  for (let i = 0; i < allElements.length; i++) {
+    if (getLocalTagName(allElements[i]) === 'tr') {
+      trNodes.push(allElements[i]);
+    }
+  }
+
+  for (const tr of trNodes) {
+    const tcNodes: Element[] = [];
+    for (let c = 0; c < tr.childNodes.length; c++) {
+      const ch = tr.childNodes[c] as Element;
+      if (ch.tagName && getLocalTagName(ch) === 'tc') {
+        tcNodes.push(ch);
+      }
+    }
+    if (tcNodes.length !== 2) continue;
+
+    const getDirectCellParas = (tc: Element): Element[] => {
+      const res: Element[] = [];
+      const walk = (el: Element) => {
+        for (let k = 0; k < el.childNodes.length; k++) {
+          const ch = el.childNodes[k] as Element;
+          if (!ch.tagName) continue;
+          const t = getLocalTagName(ch);
+          if (t === 'tbl') continue;
+          if (t === 'p') res.push(ch);
+          else walk(ch);
+        }
+      };
+      walk(tc);
+      return res;
+    };
+
+    const getCellPlainText = (tc: Element): string => {
+      let s = '';
+      const sub = tc.getElementsByTagName('*');
+      for (let k = 0; k < sub.length; k++) {
+        if (getLocalTagName(sub[k]) === 't') {
+          s += sub[k].textContent || '';
+        }
+      }
+      return s.trim();
+    };
+
+    const cellHasImage = (tc: Element): boolean => {
+      const sub = tc.getElementsByTagName('*');
+      for (let k = 0; k < sub.length; k++) {
+        const t = getLocalTagName(sub[k]);
+        if (t === 'blip' || t === 'imagedata' || t === 'svgblip' || t === 'imglayer') {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    const leftText = getCellPlainText(tcNodes[0]);
+    const rightText = getCellPlainText(tcNodes[1]);
+    // Nếu cột trái chỉ có ảnh (không có chữ) và cột phải có chữ câu hỏi -> Đưa các đoạn văn cột phải lên trước cột trái
+    if (!leftText && cellHasImage(tcNodes[0]) && rightText.length > 0) {
+      const leftParas = getDirectCellParas(tcNodes[0]);
+      const rightParas = getDirectCellParas(tcNodes[1]);
+      if (leftParas.length > 0 && rightParas.length > 0) {
+        const firstIdx = reorderedParas.indexOf(leftParas[0]);
+        const lastRightIdx = reorderedParas.indexOf(rightParas[rightParas.length - 1]);
+        if (firstIdx !== -1 && lastRightIdx > firstIdx) {
+          const combined = [...rightParas, ...leftParas];
+          const spanLen = lastRightIdx - firstIdx + 1;
+          if (spanLen === combined.length) {
+            reorderedParas.splice(firstIdx, spanLen, ...combined);
+          }
+        }
+      }
+    }
+  }
+
+  return reorderedParas;
 }
 
 /**
@@ -1682,43 +2010,56 @@ function extractParagraphsFromDocxXml(
   oleEmbeddingsMap?: Map<string, string>
 ): ParsedParagraph[] {
   // ENGINE 1.3a: Gỡ bỏ hoàn toàn thuộc tính bảng trôi nổi đè chữ (<w:tblpPr .../>) ngay trên XML để mọi bảng trở về chế độ In-line/Block độc lập
+  // LƯU Ý QUAN TRỌNG: KHÔNG xóa <mc:Fallback> ở đây vì các hình vẽ Shape/Canvas/MathType lưu ảnh preview <v:imagedata> bên trong <mc:Fallback>!
   const cleanXml = xmlString
     .replace(/^\uFEFF/, '')
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-    .replace(/<(?:\w+:)?Fallback\b[^>]*>[\s\S]*?<\/(?:\w+:)?Fallback>/gi, '')
     .replace(/<(?:\w+:)?tblpPr\b[^>]*\/?>/gi, '');
 
   const parser = new DOMParser();
   const xmlDoc = parser.parseFromString(cleanXml, 'application/xml');
 
-  let pNodes = Array.from(xmlDoc.getElementsByTagName('w:p'));
-  if (pNodes.length === 0) {
-    const allElements = xmlDoc.getElementsByTagName('*');
-    for (let i = 0; i < allElements.length; i++) {
-      if (getLocalTagName(allElements[i]) === 'p') {
-        pNodes.push(allElements[i]);
-      }
-    }
-  }
+  const pNodes = collectOrderedParagraphsFromXmlDoc(xmlDoc);
 
-  // Nếu DOMParser gặp lỗi <parsererror> (do file Word thiếu khai báo namespace từ WPS/PDF2Word) -> Chuyển ngay sang bộ đọc Regex XML
+  // Nếu DOMParser gặp lỗi <parsererror> (do file Word thiếu khai báo namespace từ WPS/PDF2Word) -> Chuyển ngay sang bộ đọc Regex XML (có kèm mediaMap!)
   if (pNodes.length === 0 || xmlDoc.getElementsByTagName('parsererror').length > 0) {
-    const regexParas = extractParagraphsFromDocxXmlRegex(cleanXml);
+    const regexParas = extractParagraphsFromDocxXmlRegex(cleanXml, mediaMap);
     if (regexParas.length > 0) {
       return regexParas;
     }
   }
 
+  const consumedImageNodes = new WeakSet<Element>();
+
   // Nhận diện trước các bảng dữ liệu / bảng ghép đôi Cột A - Cột B nằm bên trong câu hỏi
-  const firstParaToTableMap = new Map<Element, ExamStemTable>();
+  const firstParaToTableMap = new Map<
+    Element,
+    { table: ExamStemTable; tableImages: ExamImageAttachment[] }
+  >();
   const skippedTableParas = new Set<Element>();
-  const tblNodes = Array.from(xmlDoc.getElementsByTagName('w:tbl'));
+  const allDocEls = xmlDoc.getElementsByTagName('*');
+  const tblNodes: Element[] = [];
+  for (let i = 0; i < allDocEls.length; i++) {
+    if (getLocalTagName(allDocEls[i]) === 'tbl') {
+      tblNodes.push(allDocEls[i]);
+    }
+  }
   for (const tbl of tblNodes) {
     const extractedTable = tryExtractDataOrMatchingTable(tbl);
     if (extractedTable) {
-      const innerParas = Array.from(tbl.getElementsByTagName('w:p'));
+      const innerParas: Element[] = [];
+      const tblSubEls = tbl.getElementsByTagName('*');
+      for (let k = 0; k < tblSubEls.length; k++) {
+        if (getLocalTagName(tblSubEls[k]) === 'p') {
+          innerParas.push(tblSubEls[k]);
+        }
+      }
       if (innerParas.length > 0) {
-        firstParaToTableMap.set(innerParas[0], extractedTable);
+        const tblImgs = extractImagesFromElement(tbl, mediaMap, consumedImageNodes, true);
+        firstParaToTableMap.set(innerParas[0], {
+          table: extractedTable,
+          tableImages: tblImgs,
+        });
         for (let k = 1; k < innerParas.length; k++) {
           skippedTableParas.add(innerParas[k]);
         }
@@ -1734,8 +2075,8 @@ function extractParagraphsFromDocxXml(
     if (skippedTableParas.has(p)) {
       continue;
     }
-    const attachedDataTable = firstParaToTableMap.get(p);
-    if (attachedDataTable) {
+    const attachedDataTableEntry = firstParaToTableMap.get(p);
+    if (attachedDataTableEntry) {
       rawExtractedParagraphs.push({
         fullText: '',
         runs: [],
@@ -1743,8 +2084,8 @@ function extractParagraphsFromDocxXml(
         hasRed: false,
         hasFormula: false,
         isAutoNumbered: false,
-        images: [],
-        attachedTable: attachedDataTable,
+        images: attachedDataTableEntry.tableImages,
+        attachedTable: attachedDataTableEntry.table,
       });
       continue;
     }
@@ -1801,7 +2142,7 @@ function extractParagraphsFromDocxXml(
       isAutoNumbered = false;
     }
 
-    const paragraphImages = extractImagesFromElement(p, mediaMap);
+    const paragraphImages = extractImagesFromElement(p, mediaMap, consumedImageNodes, false);
     const floatingInfo = inspectFloatingAnchorInParagraph(p);
 
     // ENGINE 1.1b: Nếu đoạn văn không có ảnh bitmap nhưng có cụm các shape vẽ rời rạc (Auto-Grouping), gộp thành 1 ảnh PNG phẳng
@@ -1878,55 +2219,56 @@ function extractParagraphsFromDocxXml(
               hasInlineMath = true;
               let extractedMath = '';
 
-              // 1. Kiểm tra thuộc tính alt / title / o:title trong <v:shape>
-              const shapes = rChild.getElementsByTagName('v:shape');
-              for (let s = 0; s < shapes.length; s++) {
-                const shp = shapes[s];
-                const alt =
-                  shp.getAttribute('alt') ||
-                  shp.getAttribute('title') ||
-                  shp.getAttribute('o:title') ||
-                  '';
-                if (alt.trim()) {
-                  extractedMath = alt.trim();
-                  break;
+              const objSubEls = rChild.getElementsByTagName('*');
+              // 1. Kiểm tra thuộc tính alt / title / o:title trong <v:shape> (chỉ lấy nếu thực sự là công thức LaTeX, không phải tên file)
+              for (let s = 0; s < objSubEls.length; s++) {
+                const shp = objSubEls[s];
+                if (getLocalTagName(shp) === 'shape') {
+                  const alt = (
+                    shp.getAttribute('alt') ||
+                    shp.getAttribute('title') ||
+                    shp.getAttribute('o:title') ||
+                    ''
+                  ).trim();
+                  if (
+                    alt &&
+                    /[\\^_]|\\(?:frac|sqrt|vec|int|sum|lim|alpha|beta|Delta|Omega)/.test(alt)
+                  ) {
+                    extractedMath = alt;
+                    break;
+                  }
                 }
               }
 
               // 2. Kiểm tra thuộc tính o:title hoặc stream MTEF nhị phân trong <o:OLEObject>
               if (!extractedMath) {
-                const oles = rChild.getElementsByTagName('o:OLEObject');
-                for (let o = 0; o < oles.length; o++) {
-                  const ole = oles[o];
-                  const title =
-                    ole.getAttribute('o:title') || ole.getAttribute('title') || '';
-                  if (title.trim()) {
-                    extractedMath = title.trim();
-                    break;
-                  }
-                  const oleRId =
-                    ole.getAttribute('r:id') || ole.getAttribute('id') || '';
-                  if (oleRId && oleEmbeddingsMap?.has(oleRId)) {
-                    extractedMath = oleEmbeddingsMap.get(oleRId) || '';
-                    if (extractedMath) break;
+                for (let o = 0; o < objSubEls.length; o++) {
+                  const ole = objSubEls[o];
+                  if (getLocalTagName(ole) === 'oleobject') {
+                    const oleRId =
+                      ole.getAttribute('r:id') || ole.getAttribute('id') || '';
+                    if (oleRId && oleEmbeddingsMap?.has(oleRId)) {
+                      extractedMath = oleEmbeddingsMap.get(oleRId) || '';
+                      if (extractedMath) break;
+                    }
                   }
                 }
               }
 
               // 3. Kiểm tra thẻ công thức OMML nhúng bên trong object
               if (!extractedMath) {
-                const innerOmml =
-                  rChild.getElementsByTagName('m:oMath')[0] ||
-                  rChild.getElementsByTagName('oMath')[0];
-                if (innerOmml) {
-                  extractedMath = ommlToLatex(innerOmml);
+                for (let m = 0; m < objSubEls.length; m++) {
+                  if (getLocalTagName(objSubEls[m]) === 'omath') {
+                    extractedMath = ommlToLatex(objSubEls[m]);
+                    break;
+                  }
                 }
               }
 
               if (extractedMath) {
                 text += ` $${extractedMath}$ `;
               } else {
-                // FALLBACK BẤT TỬ: Nếu đối tượng MathType bị lỗi (corrupted) hoặc không có chuỗi LaTeX,
+                // FALLBACK BẤT TỬ: Nếu đối tượng MathType không có chuỗi LaTeX nhúng,
                 // tự động trích xuất ảnh preview (v:imagedata) của chính object đó gắn vào paragraphImages
                 const fallbackObjImgs = extractImagesFromElement(rChild, mediaMap);
                 for (const fbImg of fallbackObjImgs) {
@@ -1936,18 +2278,22 @@ function extractParagraphsFromDocxXml(
                 }
               }
             } else if (rTag === 'drawing') {
-              // Bóc tách chú thích công thức trong DrawingML (<wp:docPr descr="...">)
-              const docPr = rChild.getElementsByTagName('wp:docPr')[0];
-              if (docPr) {
-                const descr =
-                  docPr.getAttribute('descr') || docPr.getAttribute('title') || '';
-                if (
-                  descr &&
-                  /[\^_{}\\+\-=/*0-9a-zA-Z]/.test(descr) &&
-                  !/^QR_Code|^figure_/i.test(descr)
-                ) {
-                  hasInlineMath = true;
-                  text += ` $${descr.trim()}$ `;
+              // Chỉ bóc tách chú thích công thức trong DrawingML (<wp:docPr descr="...">) nếu thực sự là biểu thức LaTeX (có \, ^, _ và không phải tên file ảnh)
+              const drwSubEls = rChild.getElementsByTagName('*');
+              for (let d = 0; d < drwSubEls.length; d++) {
+                if (getLocalTagName(drwSubEls[d]) === 'docpr') {
+                  const descr = (drwSubEls[d].getAttribute('descr') || '').trim();
+                  if (
+                    descr &&
+                    /[\\^_]|\\(?:frac|sqrt|vec|int|sum|lim|alpha|beta|Delta|Omega)/.test(descr) &&
+                    !/\.(?:png|jpe?g|gif|bmp|svg|wmf|emf|webp|tiff?)\b|https?:\/\/|^[a-zA-Z]:\\|^QR_Code|^figure_|picture|image|screenshot|diagram/i.test(
+                      descr
+                    )
+                  ) {
+                    hasInlineMath = true;
+                    text += ` $${descr}$ `;
+                  }
+                  break;
                 }
               }
             }
@@ -2990,63 +3336,149 @@ async function loadOleEmbeddingsMap(zip: JSZip): Promise<Map<string, string>> {
 }
 
 /**
- * Đọc toàn bộ quan hệ media từ word/_rels/document.xml.rels
+ * Đọc toàn bộ quan hệ media từ word/_rels/document.xml.rels (và quét dự phòng mọi tệp trong word/media/*)
+ * Hỗ trợ đầy đủ các định dạng ảnh: png, jpg, jpeg, jfif, gif, bmp, webp, svg, emf, wmf, tif, tiff
  */
 async function loadMediaRelationships(
   zip: JSZip
 ): Promise<Map<string, { dataUrl: string; fileName: string }>> {
   const mediaMap = new Map<string, { dataUrl: string; fileName: string }>();
-  const relsFile = zip.file('word/_rels/document.xml.rels');
-  if (!relsFile) return mediaMap;
 
-  const relsXml = await relsFile.async('string');
-  const parser = new DOMParser();
-  const relsDoc = parser.parseFromString(relsXml, 'application/xml');
-  const relNodes = relsDoc.getElementsByTagName('Relationship');
+  const findZipFileFlexible = (rawTarget: string): JSZip.JSZipObject | null => {
+    let cleaned = rawTarget.trim().replace(/\\/g, '/');
+    try {
+      cleaned = decodeURIComponent(cleaned);
+    } catch {
+      // Giữ nguyên nếu không phải chuỗi URI encoded
+    }
+    cleaned = cleaned.replace(/^\/+/, '');
+    const candidates: string[] = [];
+    if (cleaned.startsWith('../')) {
+      candidates.push(cleaned.replace(/^(?:\.\.\/)+/, ''));
+      candidates.push(`word/${cleaned.replace(/^(?:\.\.\/)+/, '')}`);
+    } else if (cleaned.startsWith('word/')) {
+      candidates.push(cleaned);
+      candidates.push(cleaned.replace(/^word\//, ''));
+    } else {
+      candidates.push(`word/${cleaned}`);
+      candidates.push(cleaned);
+    }
 
-  for (let i = 0; i < relNodes.length; i++) {
-    const rel = relNodes[i];
-    const id = rel.getAttribute('Id');
-    const target = rel.getAttribute('Target');
-    const type = rel.getAttribute('Type') || '';
+    for (const c of candidates) {
+      const f = zip.file(c);
+      if (f) return f;
+    }
 
-    if (id && target && (type.includes('image') || /\.(png|jpe?g|gif|svg|emf|wmf)$/i.test(target))) {
-      let zipPath = target;
-      if (target.startsWith('../')) {
-        zipPath = target.replace(/^\.\.\//, '');
-      } else if (!target.startsWith('word/')) {
-        zipPath = `word/${target}`;
+    const lowerCandidates = new Set(candidates.map((c) => c.toLowerCase()));
+    const baseNameLower = (cleaned.split('/').pop() || '').toLowerCase();
+    let fallbackByBaseName: JSZip.JSZipObject | null = null;
+    for (const [pathKey, zipObj] of Object.entries(zip.files)) {
+      if (zipObj.dir) continue;
+      const normKey = pathKey.replace(/\\/g, '/').toLowerCase();
+      if (lowerCandidates.has(normKey)) {
+        return zipObj;
       }
+      if (
+        baseNameLower &&
+        (normKey === `word/media/${baseNameLower}` || normKey.endsWith(`/${baseNameLower}`))
+      ) {
+        fallbackByBaseName = zipObj;
+      }
+    }
+    return fallbackByBaseName;
+  };
 
-      const mediaFile = zip.file(zipPath);
-      if (mediaFile) {
-        const rawFileName = zipPath.split('/').pop() || 'image.png';
-        const ext = rawFileName.split('.').pop()?.toLowerCase() || 'png';
+  const loadSingleMediaEntry = async (id: string, target: string) => {
+    if (!id || !target || mediaMap.has(id)) return;
+    const mediaFile = findZipFileFlexible(target);
+    if (!mediaFile) return;
 
-        if (ext === 'emf' || ext === 'wmf') {
-          const uint8 = await mediaFile.async('uint8array');
-          const healedPngDataUrl =
-            await defaultDocxAutoHealEngine.convertMetafileBytesToPngDataUrl(
-              uint8,
-              rawFileName
-            );
-          mediaMap.set(id, {
-            dataUrl: healedPngDataUrl,
-            fileName: rawFileName.replace(/\.(emf|wmf)$/i, '.png'),
-          });
-        } else {
-          let mime = 'image/png';
-          if (ext === 'jpg' || ext === 'jpeg') mime = 'image/jpeg';
-          else if (ext === 'gif') mime = 'image/gif';
-          else if (ext === 'svg') mime = 'image/svg+xml';
+    const rawFileName = mediaFile.name.split('/').pop() || 'image.png';
+    const ext = rawFileName.split('.').pop()?.toLowerCase() || 'png';
 
-          const base64 = await mediaFile.async('base64');
-          const dataUrl = `data:${mime};base64,${base64}`;
-          mediaMap.set(id, {
-            dataUrl,
-            fileName: rawFileName,
-          });
-        }
+    if (ext === 'emf' || ext === 'wmf') {
+      const uint8 = await mediaFile.async('uint8array');
+      const healedPngDataUrl =
+        await defaultDocxAutoHealEngine.convertMetafileBytesToPngDataUrl(
+          uint8,
+          rawFileName
+        );
+      mediaMap.set(id, {
+        dataUrl: healedPngDataUrl,
+        fileName: rawFileName.replace(/\.(emf|wmf)$/i, '.png'),
+      });
+    } else {
+      let mime = 'image/png';
+      if (ext === 'jpg' || ext === 'jpeg' || ext === 'jfif') mime = 'image/jpeg';
+      else if (ext === 'gif') mime = 'image/gif';
+      else if (ext === 'bmp') mime = 'image/bmp';
+      else if (ext === 'webp') mime = 'image/webp';
+      else if (ext === 'svg') mime = 'image/svg+xml';
+      else if (ext === 'tif' || ext === 'tiff') mime = 'image/tiff';
+
+      const base64 = await mediaFile.async('base64');
+      const dataUrl = `data:${mime};base64,${base64}`;
+      mediaMap.set(id, {
+        dataUrl,
+        fileName: rawFileName,
+      });
+    }
+  };
+
+  // Tìm tất cả các tệp .rels của document (hỗ trợ cả document.xml.rels, document2.xml.rels...)
+  const relsFiles = zip.file(/^word\/_rels\/document.*\.xml\.rels$/i);
+  const primaryRels = zip.file('word/_rels/document.xml.rels');
+  const allRelsToRead =
+    relsFiles.length > 0 ? relsFiles : primaryRels ? [primaryRels] : [];
+
+  for (const relsFile of allRelsToRead) {
+    const relsXml = await relsFile.async('string');
+    const parser = new DOMParser();
+    const relsDoc = parser.parseFromString(relsXml, 'application/xml');
+    const relNodes = relsDoc.getElementsByTagName('*');
+
+    for (let i = 0; i < relNodes.length; i++) {
+      const rel = relNodes[i];
+      const local = (rel.localName || rel.nodeName.replace(/^.*:/, '')).toLowerCase();
+      if (local !== 'relationship') continue;
+
+      const id = rel.getAttribute('Id') || rel.getAttribute('id') || '';
+      const target = rel.getAttribute('Target') || rel.getAttribute('target') || '';
+      const type = (rel.getAttribute('Type') || rel.getAttribute('type') || '').toLowerCase();
+
+      if (
+        id &&
+        target &&
+        (type.includes('image') ||
+          type.includes('svg') ||
+          /\.(png|jpe?g|jfif|gif|bmp|webp|svg|emf|wmf|tiff?)$/i.test(target) ||
+          /media\//i.test(target))
+      ) {
+        await loadSingleMediaEntry(id, target);
+      }
+    }
+
+    // Dự phòng bằng Regex nếu XML của .rels có lỗi cú pháp namespace
+    const relTagRegex = /<(?:\w+:)?Relationship\b([^>]+)\/?>/gi;
+    let rm: RegExpExecArray | null;
+    while ((rm = relTagRegex.exec(relsXml)) !== null) {
+      const attrs = rm[1];
+      const idM = attrs.match(/\bId\s*=\s*["']([^"']+)["']/i);
+      const targetM = attrs.match(/\bTarget\s*=\s*["']([^"']+)["']/i);
+      const typeM = attrs.match(/\bType\s*=\s*["']([^"']+)["']/i);
+      const id = idM ? idM[1] : '';
+      const target = targetM ? targetM[1] : '';
+      const type = typeM ? typeM[1].toLowerCase() : '';
+      if (
+        id &&
+        target &&
+        !mediaMap.has(id) &&
+        (type.includes('image') ||
+          type.includes('svg') ||
+          /\.(png|jpe?g|jfif|gif|bmp|webp|svg|emf|wmf|tiff?)$/i.test(target) ||
+          /media\//i.test(target))
+      ) {
+        await loadSingleMediaEntry(id, target);
       }
     }
   }
@@ -3056,10 +3488,11 @@ async function loadMediaRelationships(
 
 /**
  * Kiểm tra nhanh xem một dòng văn bản có phải là tiêu đề hành chính đầu trang đề thi hay không
+ * LƯU Ý QUAN TRỌNG: Nếu chuỗi rỗng (!clean), trả về false để KHÔNG bao giờ bỏ qua các đoạn văn chỉ chứa hình ảnh (standalone image paragraphs)!
  */
 function isAdministrativeExamHeader(text: string): boolean {
   const clean = text.trim();
-  if (!clean) return true;
+  if (!clean) return false;
   return /^(?:SỞ\s+GD|UBND\s+|PHÒNG\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|BỘ\s+GIÁO\s+DỤC|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|ĐỀ\s+THI\b|ĐỀ\s+THAM\s+KHẢO|MÔN\s*[:.]|Môn\s+thi\s*[:.]|Thời\s+gian\s+làm\s+bài|Họ\s+và\s+tên|Họ,\s+tên\s+thí\s+sinh|Số\s+báo\s+danh|Mã\s+đề\s*(?:thi)?\s*[:.]|Đề\s+thi\s+gồm\s+có|Không\s+kể\s+thời\s+gian|-----\s*HẾT\s*-----|\(Đề\s+gồm|Thí\s+sinh\s+trả\s+lời\s+từ\s+câu|Mỗi\s+câu\s+hỏi\s+thí\s+sinh\s+chỉ\s+chọn|Trong\s+mỗi\s+ý\s+a\)\s*,\s*b\)\s*,\s*c\)\s*,\s*d\))/i.test(
     clean
   );
@@ -3413,7 +3846,7 @@ export function buildQuestionsFromParsedParagraphs(
     const initialImages: ExamImageAttachment[] = [...para.images];
     currentQuestionRuns = [...para.runs];
 
-    // Bóc tách sớm nếu trong cùng đoạn mở đầu câu hỏi có dính kèm اللời giải / Hướng dẫn chấm / Đáp án
+    // Bóc tách sớm nếu trong cùng đoạn mở đầu câu hỏi có dính kèm Lời giải / Hướng dẫn chấm / Đáp án
     let extractedInlineExplanation = '';
     const inlineSolMatch = stemContent.match(
       /(?:\r?\n|\s{2,}|\.\s+)(?:[*#•+\-–—\s])*(?:Lời\s*giải(?:\s*chi\s*tiết)?|Hướng\s*dẫn(?:\s*chấm|\s*giải)?|Giải\s*chi\s*tiết|HDG|HDC|Thang\s*điểm|Biểu\s*điểm)\s*[:=.\-–—]\s*([\s\S]+)$/i
@@ -3572,6 +4005,12 @@ export function buildQuestionsFromParsedParagraphs(
     if (para.attachedTable) {
       if (currentQuestion && !inQuestionSolutionBlock) {
         currentQuestion.stemTables = [...(currentQuestion.stemTables || []), para.attachedTable];
+        if (para.images && para.images.length > 0) {
+          currentQuestion.hasImage = true;
+          currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+        }
+      } else if (!currentQuestion && para.images && para.images.length > 0) {
+        pendingStemParagraphs.push(para);
       }
       continue;
     }
@@ -3608,7 +4047,7 @@ export function buildQuestionsFromParsedParagraphs(
       )
     ) {
       pushCurrentQuestion();
-      pendingStemParagraphs = [];
+      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
       inIgnoredEssaySection = false;
       currentPart = 'PART_4';
       continue;
@@ -3621,7 +4060,7 @@ export function buildQuestionsFromParsedParagraphs(
       )
     ) {
       pushCurrentQuestion();
-      pendingStemParagraphs = [];
+      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
       inIgnoredEssaySection = false;
       currentPart = 'PART_1';
       continue;
@@ -3634,7 +4073,7 @@ export function buildQuestionsFromParsedParagraphs(
       )
     ) {
       pushCurrentQuestion();
-      pendingStemParagraphs = [];
+      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
       inIgnoredEssaySection = false;
       currentPart = 'PART_2';
       continue;
@@ -3646,13 +4085,25 @@ export function buildQuestionsFromParsedParagraphs(
       )
     ) {
       pushCurrentQuestion();
-      pendingStemParagraphs = [];
+      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
       inIgnoredEssaySection = false;
       currentPart = 'PART_3';
       continue;
     }
 
-    if (inIgnoredEssaySection || isAdministrativeExamHeader(text)) {
+    if (inIgnoredEssaySection) {
+      continue;
+    }
+
+    if (isAdministrativeExamHeader(text)) {
+      if (para.images.length > 0) {
+        if (currentQuestion && !inQuestionSolutionBlock) {
+          currentQuestion.hasImage = true;
+          currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+        } else if (!currentQuestion) {
+          pendingStemParagraphs.push({ ...para, fullText: '', runs: [] });
+        }
+      }
       continue;
     }
 
@@ -3676,6 +4127,7 @@ export function buildQuestionsFromParsedParagraphs(
     const qMatch = explicitQMatch || numberedNoPrefixMatch;
 
     const isAutoNumberQuestion =
+      Boolean(text) &&
       para.isAutoNumbered &&
       !/^\s*[*#]?[A-D]\s*[.:)]/i.test(text) &&
       !/^\s*[*#]?[a-d]\s*[).:]/i.test(text) &&
@@ -3683,10 +4135,15 @@ export function buildQuestionsFromParsedParagraphs(
       !isAdministrativeExamHeader(text);
 
     if (qMatch || isAutoNumberQuestion) {
+      const pendingImages = pendingStemParagraphs.flatMap((p) => p.images);
       pushCurrentQuestion();
       pendingStemParagraphs = [];
       const stemContent = qMatch ? qMatch[2].trim() : text;
-      startNewQuestionFromPara(para, stemContent);
+      const mergedParaForNewQ: ParsedParagraph =
+        pendingImages.length > 0
+          ? { ...para, images: [...pendingImages, ...para.images] }
+          : para;
+      startNewQuestionFromPara(mergedParaForNewQ, stemContent);
 
       // Kiểm tra xem ngay trong dòng tiêu đề câu hỏi đã dính chùm sẵn A, B, C, D hoặc a), b), c), d) chưa
       if (currentQuestion && currentPart === 'PART_1') {
@@ -3761,6 +4218,32 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
 
+    // XỬ LÝ ĐẶC BIỆT ĐOẠN VĂN CHỈ CHỨA HÌNH ẢNH (hoặc Hình ảnh kèm chú thích ngắn "Hình 1", "Hình bên"):
+    // Nếu đang có câu hỏi hiện tại (kể cả khi câu hỏi đã đủ 4 phương án A, B, C, D nhưng ảnh đặt ở dưới 4 phương án hoặc cột bên phải),
+    // gắn trực tiếp hình ảnh vào câu hỏi hiện tại chứ TUYỆT ĐỐI KHÔNG tự mở câu hỏi mới rỗng!
+    const isStandaloneOrCaptionImagePara =
+      para.images.length > 0 &&
+      (!text ||
+        /^(?:Hình|Sơ\s+đồ|Đồ\s+thị|Bảng)\s*(?:vẽ|bên|minh\s+họa|\d+[.\d]*|[a-z])?\s*[.:)]?\s*$/i.test(
+          text
+        ));
+
+    if (isStandaloneOrCaptionImagePara) {
+      if (currentQuestion) {
+        currentQuestion.hasImage = true;
+        currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+        if (text && !currentHasCompleteOptions) {
+          currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
+        }
+      } else {
+        pendingStemParagraphs.push(para);
+        if (pendingStemParagraphs.length > 5) {
+          pendingStemParagraphs.shift();
+        }
+      }
+      continue;
+    }
+
     // Kiểm tra xem đoạn văn hiện tại có chứa phương án A, B, C, D hoặc ý a), b), c), d) theo đúng thứ tự không
     const optExtraction =
       currentPart === 'PART_1'
@@ -3771,10 +4254,11 @@ export function buildQuestionsFromParsedParagraphs(
         ? extractSequentialSubItemsFromLine(text)
         : { leadingStem: '', items: [] };
 
-    // Nếu câu hỏi hiện tại đã đủ 4 phương án A,B,C,D (hoặc 4 ý a,b,c,d) mà gặp đoạn văn mới không phải là phương án hay lời giải -> tự động mở câu hỏi mới!
+    // Nếu câu hỏi hiện tại đã đủ 4 phương án A,B,C,D (hoặc 4 ý a,b,c,d) mà gặp đoạn văn có chữ mới không phải là phương án hay lời giải -> tự động mở câu hỏi mới!
     if (
       currentQuestion &&
       currentHasCompleteOptions &&
+      Boolean(text) &&
       !inQuestionSolutionBlock &&
       optExtraction.items.length === 0 &&
       subExtraction.items.length === 0 &&
@@ -3791,7 +4275,10 @@ export function buildQuestionsFromParsedParagraphs(
       if (optExtraction.items.length > 0 || subExtraction.items.length > 0) {
         if (pendingStemParagraphs.length > 0) {
           const firstPending = pendingStemParagraphs[0];
-          const combinedPendingText = pendingStemParagraphs.map((p) => p.fullText).join(' ');
+          const combinedPendingText = pendingStemParagraphs
+            .map((p) => p.fullText)
+            .filter(Boolean)
+            .join(' ');
           const combinedPendingRuns = pendingStemParagraphs.flatMap((p) => [
             ...p.runs,
             { text: ' ', isUnderline: false, isRed: false, isBold: false, hasFormula: false },
@@ -3813,7 +4300,7 @@ export function buildQuestionsFromParsedParagraphs(
       } else {
         if (!isAdministrativeExamHeader(text)) {
           pendingStemParagraphs.push(para);
-          if (pendingStemParagraphs.length > 3) {
+          if (pendingStemParagraphs.length > 5) {
             pendingStemParagraphs.shift();
           }
         }
@@ -3836,6 +4323,8 @@ export function buildQuestionsFromParsedParagraphs(
       currentQuestion.hasImage = true;
       currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
     }
+
+    if (!text) continue;
 
     // 3. Xử lý nội dung bên trong câu hỏi tùy theo từng Phần
     if (currentQuestion.part === 'PART_1') {
@@ -4059,7 +4548,9 @@ export function buildQuestionsFromParsedParagraphs(
   // tự động gom các đoạn văn có nội dung thành câu hỏi để giáo viên vẫn xem và chỉnh sửa được trên giao diện!
   if (questions.length === 0 && paragraphs.length > 0) {
     const meaningfulParas = paragraphs.filter(
-      (p) => p.fullText.trim().length > 2 && !isAdministrativeExamHeader(p.fullText)
+      (p) =>
+        (p.fullText.trim().length > 2 || p.images.length > 0) &&
+        !isAdministrativeExamHeader(p.fullText)
     );
     if (meaningfulParas.length > 0) {
       let idx = 1;
@@ -4070,7 +4561,7 @@ export function buildQuestionsFromParsedParagraphs(
           part: 'PART_1',
           originalIndex: idx,
           displayIndex: idx,
-          stemText: p.fullText.trim(),
+          stemText: p.fullText.trim() || `Câu hỏi hình ảnh ${idx}`,
           hasFormula: p.hasFormula,
           hasImage: p.images.length > 0,
           images: p.images.length > 0 ? p.images : undefined,
@@ -4125,10 +4616,11 @@ export function parseRawTextToExamQuestions(
 }
 
 /**
- * Phân tích dữ liệu HTML khi giáo viên Copy & Paste trực tiếp từ Microsoft Word vào trình duyệt:
+ * Phân tích dữ liệu HTML khi giáo viên Copy & Paste trực tiếp từ Microsoft Word vào trình duyệt (hoặc từ Mammoth HTML):
  * - Nhận diện chính xác cả thẻ <u>, <ins>, style="text-decoration: underline", "text-underline: single"
  * - Nhận diện chính xác cả màu chữ đỏ (color: red, #ff0000, rgb(255,0,0)...)
  * - Bắt trọn các trường hợp chỉ gạch chân chữ cái <u>a</u>), hoặc <u>a)</u>, hoặc <u>a) </u> ở Phần II và Phần I
+ * - Bóc tách đầy đủ các thẻ <img src="data:image/..."> nhúng trong HTML
  */
 export function parseClipboardHtmlToExamQuestions(
   htmlString: string,
@@ -4190,6 +4682,7 @@ export function parseClipboardHtmlToExamQuestions(
 
     const blockNodes = doc.body.querySelectorAll('p, li, div, tr, h1, h2, h3, h4');
     const containers = blockNodes.length > 0 ? Array.from(blockNodes) : [doc.body];
+    let imgCounter = 1;
 
     for (const block of containers) {
       if (
@@ -4200,6 +4693,30 @@ export function parseClipboardHtmlToExamQuestions(
       }
 
       const runs: ParsedRun[] = [];
+      const blockImages: ExamImageAttachment[] = [];
+
+      const imgElements = block.querySelectorAll('img');
+      for (let i = 0; i < imgElements.length; i++) {
+        const imgEl = imgElements[i];
+        const src = (imgEl.getAttribute('src') || '').trim();
+        if (src && (src.startsWith('data:image/') || src.startsWith('blob:') || src.startsWith('http'))) {
+          const wAttr = parseInt(imgEl.getAttribute('width') || '0', 10);
+          const hAttr = parseInt(imgEl.getAttribute('height') || '0', 10);
+          const widthTwips = wAttr > 20 ? Math.min(4800, wAttr * 15) : 2600;
+          const heightTwips = hAttr > 20 ? Math.min(3600, hAttr * 15) : 1700;
+          blockImages.push({
+            id: `img-html-${imgCounter}-${Date.now()}`,
+            fileName: `clipboard_image_${imgCounter}.png`,
+            dataUrl: src,
+            widthTwips,
+            heightTwips,
+            aspectRatio: Number((widthTwips / Math.max(1, heightTwips)).toFixed(4)),
+            dpi: 300,
+          });
+          imgCounter++;
+        }
+      }
+
       const walkTextNodes = (node: Node) => {
         if (node.nodeType === Node.TEXT_NODE) {
           const txt = normalizeVietnameseExamText(node.textContent || '');
@@ -4255,7 +4772,7 @@ export function parseClipboardHtmlToExamQuestions(
       walkTextNodes(block);
       const markedRuns = injectFormattingMarkersIntoRuns(runs);
       const fullText = normalizeVietnameseExamText(markedRuns.map((r) => r.text).join('')).trim();
-      if (!fullText) continue;
+      if (!fullText && blockImages.length === 0) continue;
 
       const p: ParsedParagraph = {
         fullText,
@@ -4264,7 +4781,7 @@ export function parseClipboardHtmlToExamQuestions(
         hasRed: markedRuns.some((r) => r.isRed && r.text.trim().length > 0),
         hasFormula: markedRuns.some((r) => r.hasFormula),
         isAutoNumbered: block.tagName === 'LI',
-        images: [],
+        images: blockImages,
       };
       rawParas.push(...splitClumpedParagraphIntoLogicalParagraphs(p));
     }
@@ -4488,8 +5005,11 @@ export async function parseDocxExamFile(
         return finalizeQuestionsWithEnhancedImages(parsedQuestions);
       }
 
-      const regexParagraphs = extractParagraphsFromDocxXmlRegex(xmlString);
-      const regexQuestions = buildQuestionsFromParsedParagraphs(regexParagraphs, resetPerPart);
+      const regexParagraphs = extractParagraphsFromDocxXmlRegex(xmlString, mediaMap);
+      const regexQuestions = normalizeAllQuestionsStrictFourOptions(
+        buildQuestionsFromParsedParagraphs(regexParagraphs, resetPerPart),
+        resetPerPart
+      );
       if (regexQuestions.length > parsedQuestions.length) {
         return finalizeQuestionsWithEnhancedImages(regexQuestions);
       }
@@ -4501,7 +5021,7 @@ export async function parseDocxExamFile(
     // Chuyển sang tầng Mammoth / Legacy .doc nếu không phải chuẩn ZIP thông thường
   }
 
-  // TẦNG 3: Sử dụng Mammoth.js (Trích xuất HTML có giữ thẻ <u> gạch chân + Raw Text)
+  // TẦNG 3: Sử dụng Mammoth.js (Trích xuất HTML có giữ thẻ <u> gạch chân + ảnh base64 + Raw Text)
   try {
     const [htmlResult, rawTextResult] = await Promise.all([
       mammoth.convertToHtml(
@@ -4558,3 +5078,4 @@ export async function parseDocxExamFile(
     'Không thể đọc nội dung tệp. Nếu tệp đang ở định dạng Word 97-2003 (.doc) bị mã hóa, vui lòng lưu lại dưới dạng Word (.docx) hoặc Copy & Dán (Ctrl+V) trực tiếp vào khung Trang Word A4.'
   );
 }
+
