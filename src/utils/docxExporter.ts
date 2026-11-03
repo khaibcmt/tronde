@@ -3376,69 +3376,69 @@ export async function exportUserManualDocx(features: any[] = []): Promise<Blob> 
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 02 (KHUNG XANH NGỌC LỤC BẢO)',
-      'Xuất 3 File Excel (.xlsx) Đáp Án Chuẩn Cho QM 2025, TNMaker & Azota',
+      'Ô Tùy Chọn Phiếu Trả Lời Trắc Nghiệm Nổi Bật & Xuất 3 File Excel (.xlsx) Chuẩn',
       '047857',
       'ECFDF5',
       [
-        ['3 File Excel .xlsx Chuyên Biệt', 'Tương thích 100% với tính năng Nhập đáp án từ Excel trên QM 2025, TNMaker và Azota.'],
-        ['Đầy Đủ 3 Phần Thi', 'Gồm Phần I (ABCD), Phần II (tách 4 ý a, b, c, d chuẩn Đ/S hoặc T/F) và Phần III (chuẩn hóa dấu thập phân).'],
+        ['Khung Chọn 5 Mẫu Phiếu QM 2025 & Tải Phiếu Riêng', 'Mặc định tích hợp sẵn 5 mẫu phiếu chuẩn (QM 2025 40-8-6, QM 40-16-12, QM 30-20-00, QM A4-40-Ngang 40-0-0, QM Ôn tập TL Ngắn 0-0-10) và hỗ trợ giáo viên tải lên phiếu riêng (.pdf, .jpg, .png). Mọi phiếu được chọn đều tự động nhúng vào tất cả các mã đề trộn.'],
+        ['3 File Excel .xlsx Chuyên Biệt', 'Tương thích 100% với tính năng Nhập đáp án từ Excel trên QM 2025, TNMaker và Azota cho cả 3 phần thi.'],
       ],
-      'Chuẩn OpenXML Spreadsheet (.xlsx) · Tải lẻ từng file hoặc đóng gói tự động trong tệp .zip.'
+      '5 Mẫu phiếu QM 2025 + Tải phiếu tùy chỉnh (.PDF/.JPG/.PNG) nhúng vào mọi đề trộn · 3 File Excel .xlsx.'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 03 (KHUNG TÍM THẠCH ANH)',
-      'Bộ Vi Xử Lý Bóc Tách Đa Tầng (Deep Exam Parser) 4 Phần (Trắc Nghiệm & Tự Luận)',
+      'Bộ Tự Động Chữa Lỗi Đề Gốc (Auto-Healing Pipeline) & Bóc Tách Đa Tầng 4 Phần',
       '6D28D9',
       'F5F3FF',
       [
-        ['Đa Kênh Nhận Diện Đáp Án', 'Nhận diện tự động Gạch chân (<w:u>), Tô chữ màu đỏ (<w:color>) và Bảng đáp án ở cuối đề thi.'],
-        ['Hỗ Trợ Đầy Đủ Phần IV Tự Luận (Không Trộn)', 'Giữ nguyên thứ tự các câu hỏi Tự luận đã tải lên. Nếu đề không có Phần III trả lời ngắn, hệ thống tự động đánh thứ tự thành PHẦN III. Tự luận. Trong bảng đáp án, nếu câu tự luận có đáp án sẽ tự động tích hợp vào, nếu chưa có đáp án vẫn hiển thị nguyên vẹn câu hỏi tự luận để giáo viên chấm và chỉnh sửa.'],
+        ['Auto-Healing Bảng Biểu Vỡ Khung & Đè Chữ', 'Tự động gỡ bỏ chế độ bảng bao quanh chữ (w:tblpPr / Around) về khối độc lập (In-line/Block); tự động tái cân bằng độ rộng cột bảng phương án A, B, C, D về 25% × 4 cột hoặc 50% × 2 cột.'],
+        ['Đa Kênh Nhận Diện Đáp Án & Hỗ Trợ Phần IV Tự Luận', 'Nhận diện tự động Gạch chân (<w:u>), Tô chữ màu đỏ/xanh (<w:color>), Tô nền Highlight và Bảng đáp án cuối đề. Giữ nguyên thứ tự câu hỏi Phần IV Tự luận và tự động tích hợp vào Bảng đáp án.'],
       ],
-      'Quét đồng thời <w:t>, <m:oMath>, MathType OLE, Tự luận và bản chụp/scan PDF.'
+      'Gỡ bảng nổi w:tblpPr · Tái cân bằng cột 25%/50% · Quét đồng thời Phần I, II, III và Phần IV (Tự luận).'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 04 (KHUNG VÀNG HỔ PHÁCH)',
-      'Bộ Hiển Thị & Bảo Toàn Công Thức Toán - Lý - Hóa - Sinh Đa Tầng',
+      'Hàn Gắn & Chuẩn Hóa Công Thức Toán - Lý - Hóa - Sinh, Vectơ, Số Mũ & Ký Hiệu Đặc Biệt',
       'B45309',
       'FFFBEB',
       [
-        ['Toán Học & Vật Lý', 'Hiển thị sắc nét phân số, căn thức, tích phân, vectơ, hệ phương trình bằng KaTeX & Office Math.'],
-        ['Hóa Học & Sinh Học', 'Bảo toàn chỉ số trên/dưới (H₂SO₄, Fe³⁺), mũi tên phản ứng hóa học, kiểu gene (AaBb, XᴬXᵃ) và phép lai.'],
+        ['Hàn Gắn Công Thức Toán & Vật Lý (OMML + MathType OLE)', 'Tự động nối các thẻ <m:oMath> hoặc <w:r> bị cắt đôi (Equation Stitcher); dịch chuẩn OMML và MathType OLE (fallback ảnh vector/bitmap nếu object lỗi). Bảo toàn dấu vectơ (v⃗, a⃗, F⃗, AB⃗), số mũ và ký hiệu Ω, μ, λ, π, Δ, α, β, ω, ⊥, ∥, °C.'],
+        ['Tự Nâng/Hạ Chỉ Số Hóa Học & Chuẩn Hóa Di Truyền Sinh Học', 'Tự phát hiện công thức Hóa học gõ thường (H2SO4, Ca(OH)2, Cu2+, SO42-) chuyển về chỉ số chuẩn (H₂SO₄, Ca(OH)₂, Cu²⁺, SO₄²⁻, mũi tên →, ⇌, ↓, ↑); đóng gói kiểu gen phân số (AB/ab) về phân số chuẩn, giữ nguyên XᴬXᵃ, ♂, ♀.'],
       ],
-      'KaTeX Engine + Subscript/Superscript Parser + OpenXML Math Synthesizer.'
+      'Equation Stitcher + KaTeX & MathJax 3 + Auto Sub/Superscript Hóa-Sinh + CSS Responsive.'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 05 (KHUNG ĐỎ HỒNG NGỌC)',
-      'Động Cơ Xử Lý Hình Ảnh, Sơ Đồ Phả Hệ, Đồ Thị 300 DPI Không Mất Ảnh Khi Trộn',
+      'Động Cơ Nhận Diện & Bóc Tách Hình Ảnh Đa Tầng Từ Đề Gốc (Không Lỗi, Không Rơi Ảnh)',
       'BE123C',
       'FFF1F2',
       [
-        ['Không Bao Giờ Mất Ảnh Khi Trộn', 'Sao chép sâu (Deep Clone) mọi đồ thị, hình học không gian, sơ đồ phả hệ đi theo đúng câu hỏi sang mọi mã đề 101-104.'],
-        ['Khóa Liền Kề Trong Word', 'Xuất ảnh In Line with Text căn giữa trang và khóa <w:keepNext/> chống nhảy trang.'],
+        ['Nhận Diện 100% Ảnh Từ Đề Gốc (.docx, .pdf & Clipboard)', 'Bóc tách trọn vẹn ảnh nằm trên dòng riêng (Standalone Image), ảnh đặt dưới 4 phương án A/B/C/D, ảnh kèm chú thích ("Hình 1", "Hình bên", "Sơ đồ", "Đồ thị"), ảnh trong bảng chia 2 cột không viền và ảnh trong <mc:AlternateContent> / Drawing Canvas.'],
+        ['Thu Hồi Chủ Quyền Không Gian & Giải Mã WMF/EMF 300 DPI', 'Khóa ảnh trôi nổi (wp:anchor) vào đúng câu hỏi sở hữu, chống nhảy nhầm sang câu kế tiếp; giải mã trực tiếp ảnh .wmf/.emf sang PNG, khử nền xám, khóa tỉ lệ gốc (Aspect Ratio) và gắn nhãn [HINH_ANH_CAU_X] sao chép sang mọi mã đề.'],
       ],
-      'Hỗ trợ PNG, JPEG, SVG Vector 300 DPI · Tự động khử nền xám bản chụp.'
+      'Spatial Ownership Heuristic + WMF/EMF DIB & Vector Decoder + Deep Clone [HINH_ANH_CAU_X].'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 06 (KHUNG XANH CỔ VỊT)',
-      'Trình Biên Tập Trực Tiếp (Live In-App Editor) & Tự Động Sửa Lỗi 1 Chạm',
+      'Lưu Chỉnh Sửa Từng Câu Độc Lập, Nút Lưu Toàn Bộ & Tự Động Sửa Lỗi 1 Chạm',
       '0F766E',
       'F0FDFA',
       [
-        ['Phát Hiện Lỗi Thời Gian Thực', 'Tự động chỉ rõ câu thiếu đáp án, thừa đáp án hoặc thiếu mệnh đề.'],
-        ['Tự Động Sửa Nhanh Tất Cả Lỗi', 'Chuẩn hóa toàn bộ đề thi chỉ bằng 1 cú nhấp chuột để mở khóa nút Trộn Đề Ngay.'],
+        ['Nút "Lưu Câu Này" & "Lưu Toàn Bộ Chỉnh Sửa"', 'Lưu ngay nội dung, công thức, đáp án, hình ảnh vừa sửa ở từng câu hỏi hoặc lưu toàn bộ đề chỉ với 1 chạm, giúp chuyển sang câu khác mà không bị mất hay trôi thay đổi.'],
+        ['Phát Hiện Lỗi Thời Gian Thực & Sửa Nhanh 1 Chạm', 'Tự động chỉ rõ câu thiếu đáp án, cảnh báo câu Phần II có 4 Đúng/4 Sai, giới hạn 4 ký tự Phần III và hỗ trợ nút Tự Động Sửa Nhanh Tất Cả Lỗi.'],
       ],
-      'Đồng bộ cây dữ liệu AST tức thời ngay trên trình duyệt.'
+      'Per-Question State Lock + Global Save Snapshot + Realtime AST Validator.'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 07 (KHUNG XANH CHÀM SÂU)',
-      'Khung Chỉnh Sửa Văn Bản Word Gốc & Dán Nhanh Trực Tiếp (Clipboard HTML)',
+      'Khung Chỉnh Sửa Văn Bản Word Gốc & Dán Nhanh Trực Tiếp (Clipboard HTML Kèm Ảnh)',
       '4338CA',
       'EEF2FF',
       [
-        ['Dán Nhanh Ctrl+V Từ Word', 'Giữ nguyên định dạng gạch chân và chữ đỏ khi copy-paste trực tiếp từ Microsoft Word.'],
-        ['Sửa Văn Bản Nguồn Toàn Đề', 'Chỉnh sửa hàng loạt câu hỏi và biên dịch lại tức thì mà không làm mất hình ảnh đã gắn.'],
+        ['Dán Nhanh Ctrl+V Từ Word Giữ Nguyên Ảnh & Công Thức', 'Giữ nguyên định dạng gạch chân, chữ đỏ, chỉ số trên/dưới (sub/sup) và cả hình ảnh minh họa khi copy-paste trực tiếp từ Microsoft Word.'],
+        ['Sửa Văn Bản Nguồn Toàn Đề', 'Chỉnh sửa hàng loạt câu hỏi và biên dịch lại tức thì mà không làm mất hình ảnh đã gắn của từng câu.'],
       ],
-      'HTML Clipboard Rich-Text Parser + Live Source Re-compiler.'
+      'HTML Clipboard Rich-Text & Image Parser + Live Source Re-compiler.'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 08 (KHUNG HỒNG TÍM AI)',
@@ -3479,37 +3479,52 @@ export async function exportUserManualDocx(features: any[] = []): Promise<Blob> 
       '4D7C0F',
       'F7FEE7',
       [
-        ['Đề Mẫu Sinh Học 12 Cuối HK1 (28 Câu)', 'Đầy đủ sơ đồ DNA, Operon Lac, bài tập đột biến, quy luật Mendel, liên kết giới tính, ưu thế lai và 2 sơ đồ phả hệ.'],
+        ['Đề Mẫu Sinh Học 12 (28 Câu)', 'Đầy đủ sơ đồ DNA, Operon Lac, bài tập đột biến, quy luật Mendel, liên kết giới tính, ưu thế lai và 2 sơ đồ phả hệ.'],
         ['Đề Mẫu Tổng Hợp Toán - Lý - Hóa - Sinh', 'Đầy đủ đồ thị hàm số, hình học không gian, mạch điện và phản ứng hóa học.'],
       ],
       'Đính kèm sẵn 4 sơ đồ Vector SVG 300 DPI + Sạch 100% lỗi.'
     ),
     buildColoredFeatureFrameXml(
       'TÍNH NĂNG 12 (KHUNG XANH BĂNG)',
-      'Đóng Gói Trọn Bộ (.zip) Đồng Nhất Quy Chuẩn Đặt Tên Tệp Khảo Thí',
+      'Tùy Chỉnh Thời Gian (Mặc Định 45 Phút), Kỳ Kiểm Tra Ôn Tập & Đóng Gói (.zip) Đồng Nhất',
       '0E7490',
       'ECFEFF',
       [
-        ['Quy Chuẩn Tên File Đồng Nhất', 'Tự động đặt tên: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] - [Hậu tố].docx/.xlsx/.png/.zip.'],
-        ['Đầy Đủ 6 Thành Phần Trong 1 Gói .zip', 'Gồm bộ đề học sinh, đề gốc chuẩn, bảng đáp án A4 nhúng 3 QR, ma trận CV 7991, bộ ảnh 3 QR và 3 file Excel .xlsx.'],
+        ['Mặc Định Thông Minh: 45 Phút & Kỳ Kiểm Tra Ôn Tập', 'Thiết lập sẵn Thời gian làm bài mặc định 45 phút (tùy chỉnh linh hoạt 15p/45p/60p/90p) và Kỳ kiểm tra mặc định là "KIỂM TRA ÔN TẬP".'],
+        ['Quy Chuẩn Tên File Đồng Nhất & Đóng Gói 2 Thư Mục', 'Tự động đặt tên: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] - [Hậu tố] và đóng gói gọn gàng vào Thư mục các mã đề (nhúng sẵn Phiếu trả lời đã chọn) & Thư mục đáp án.'],
       ],
-      'Font Times New Roman 12pt chuẩn in ấn nhà trường.'
+      'Mặc định 45 phút · Kỳ kiểm tra ôn tập · Font Times New Roman 12pt chuẩn in ấn nhà trường.'
     ),
   ];
+
+  const changelogBlocks =
+    Array.isArray(features) && features.length > 0
+      ? [
+          h1('PHẦN IV. NHẬT KÝ CẬP NHẬT TÍNH NĂNG HỆ THỐNG MỚI NHẤT'),
+          ...features.map((item: any) =>
+            bullet(
+              `[${item.version || 'v4.x'} - ${item.releaseDate || '2026'}] ${item.title || ''}`,
+              `${item.description || ''} (Thông số: ${item.technicalSpec || 'Chuẩn OpenXML'})`,
+              '1E3A8A'
+            )
+          ),
+        ]
+      : [];
 
   const contentBlocks = [
     titlePara,
     h1('PHẦN I. VAI TRÒ VÀ SỨ MỆNH CỐT LÕI CỦA HỆ THỐNG'),
-    p('Hệ thống EduMix 2025 là Bộ vi xử lý, phân tích, biên tập và chuẩn hóa tài liệu đề thi cấp độ chuyên sâu (Deep Exam Parser & Word XML Synthesizer), được xây dựng phục vụ Chương trình GDPT 2018, Công văn 7991/BGDĐT-GDTrH và Kỳ thi tốt nghiệp THPT cấu trúc 3 phần.'),
+    p('Hệ thống EduMix 2025 là Bộ vi xử lý, tự động chữa lỗi định dạng (Auto-Healing Pipeline 4 Engines), biên tập và chuẩn hóa tài liệu đề thi cấp độ chuyên sâu (Deep Exam Parser & Word XML Synthesizer), được xây dựng phục vụ Chương trình GDPT 2018, Công văn 7991/BGDĐT-GDTrH và Kỳ thi tốt nghiệp THPT cấu trúc mới.'),
     h1('PHẦN II. TRỌN BỘ 12 TÍNH NĂNG ĐỘT PHÁ (MỖI TÍNH NĂNG 1 KHUNG MÀU ĐỒNG BỘ)'),
     ...twelveFeatureFrames,
     h1('PHẦN III. QUY TRÌNH HƯỚNG DẪN SỬ DỤNG 6 BƯỚC THỰC CHIẾN'),
-    bullet('Bước 1', 'Chuẩn bị file Word đề gốc (.docx/.doc), PDF hoặc chọn ngay Đề mẫu Sinh học 12 Cuối HK1 / Đề mẫu Tổng hợp KHTN.', '1D4ED8'),
-    bullet('Bước 2', 'Bấm nút [Tải Word / PDF] hoặc dán trực tiếp nội dung từ Word (Ctrl+V).', '047857'),
-    bullet('Bước 3', 'Kiểm tra lỗi và bấm [Tự Động Sửa Nhanh Tất Cả Lỗi] để chuẩn hóa toàn bộ đề trong 1 chạm.', 'B45309'),
+    bullet('Bước 1', 'Chuẩn bị file Word đề gốc (.docx/.doc), PDF hoặc chọn ngay Đề mẫu Sinh học 12 / Đề mẫu Tổng hợp KHTN.', '1D4ED8'),
+    bullet('Bước 2', 'Bấm nút [Tải Word / PDF] hoặc dán trực tiếp nội dung từ Word (Ctrl+V). Hệ thống tự động chạy 4 Engine Auto-Healing khôi phục hình ảnh (kể cả WMF/EMF, ảnh dòng riêng, bảng 2 cột), bảng biểu và công thức Toán-Lý-Hóa-Sinh.', '047857'),
+    bullet('Bước 3', 'Chỉnh sửa câu hỏi/đáp án, bấm [Lưu câu này] ở từng câu hoặc [Lưu Toàn Bộ Chỉnh Sửa] trên thanh công cụ để chuyển câu không bị mất dữ liệu.', 'B45309'),
     bullet('Bước 4', '(Tùy chọn) Mở AI Gemini Studio để nhân bản cùng lúc 4 đề tương đương mới.', 'A21CAF'),
-    bullet('Bước 5', 'Thiết lập thông tin trường, môn, lớp, số lượng mã đề (101, 102, 103, 104...) và bấm [Trộn Đề Ngay].', '6D28D9'),
+    bullet('Bước 5', 'Thiết lập thông tin trường, môn, lớp, Thời gian làm bài (mặc định 45 phút), Kỳ kiểm tra (mặc định KIỂM TRA ÔN TẬP), chọn Phiếu trả lời trắc nghiệm (5 mẫu chuẩn có sẵn hoặc tải phiếu riêng .pdf/.jpg/.png) và bấm [Trộn Đề Ngay].', '6D28D9'),
     bullet('Bước 6', 'Quét trực tiếp Bộ 3 Mã QR (1. QM 2025, 2. TNMaker, 3. Azota), tải 3 file Excel (.xlsx), xuất Ma trận CV 7991 và bấm [Tải Bộ Đề (.zip)].', 'BE123C'),
+    ...changelogBlocks,
   ];
 
   const bodyXml = contentBlocks.join('\n');
