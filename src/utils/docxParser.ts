@@ -17,6 +17,7 @@ import {
   ExtractedShapePrimitive,
   renderGroupedShapesToFlatPngDataUrl,
 } from './scientificExamProcessor';
+import { defaultDocxAutoHealEngine } from './docxAutoHeal';
 
 const RED_COLOR_HEXES = new Set([
   'FF0000',
@@ -586,9 +587,13 @@ function ommlToLatex(mathNode: Element): string {
         const chrVal = chrNode ? (chrNode.getAttribute('m:val') || chrNode.getAttribute('val') || '→') : '→';
         const e = getDirectChildByLocalName(el, 'e');
         const eText = e ? walk(e).trim() : '';
-        if (chrVal === '¯' || chrVal === '_') return `\\overline{${eText}}`;
-        if (chrVal === 'ˆ' || chrVal === '^') return `\\hat{${eText}}`;
-        if (/^[A-Z]{2,}$/.test(eText)) return `\\overrightarrow{${eText}}`;
+        if (chrVal === '¯' || chrVal === '_' || chrVal === '\u0304' || chrVal === '\u0305') {
+          return `\\overline{${eText}}`;
+        }
+        if (chrVal === 'ˆ' || chrVal === '^' || chrVal === '\u0302') {
+          return eText.length > 1 ? `\\widehat{${eText}}` : `\\hat{${eText}}`;
+        }
+        if (eText.length > 1) return `\\overrightarrow{${eText}}`;
         return `\\vec{${eText}}`;
       }
       case 'bar': {
@@ -3015,19 +3020,33 @@ async function loadMediaRelationships(
 
       const mediaFile = zip.file(zipPath);
       if (mediaFile) {
-        const ext = zipPath.split('.').pop()?.toLowerCase() || 'png';
-        let mime = 'image/png';
-        if (ext === 'jpg' || ext === 'jpeg') mime = 'image/jpeg';
-        else if (ext === 'gif') mime = 'image/gif';
-        else if (ext === 'svg') mime = 'image/svg+xml';
-        else if (ext === 'emf' || ext === 'wmf') mime = 'image/x-emf';
+        const rawFileName = zipPath.split('/').pop() || 'image.png';
+        const ext = rawFileName.split('.').pop()?.toLowerCase() || 'png';
 
-        const base64 = await mediaFile.async('base64');
-        const dataUrl = `data:${mime};base64,${base64}`;
-        mediaMap.set(id, {
-          dataUrl,
-          fileName: zipPath.split('/').pop() || `image.${ext}`,
-        });
+        if (ext === 'emf' || ext === 'wmf') {
+          const uint8 = await mediaFile.async('uint8array');
+          const healedPngDataUrl =
+            await defaultDocxAutoHealEngine.convertMetafileBytesToPngDataUrl(
+              uint8,
+              rawFileName
+            );
+          mediaMap.set(id, {
+            dataUrl: healedPngDataUrl,
+            fileName: rawFileName.replace(/\.(emf|wmf)$/i, '.png'),
+          });
+        } else {
+          let mime = 'image/png';
+          if (ext === 'jpg' || ext === 'jpeg') mime = 'image/jpeg';
+          else if (ext === 'gif') mime = 'image/gif';
+          else if (ext === 'svg') mime = 'image/svg+xml';
+
+          const base64 = await mediaFile.async('base64');
+          const dataUrl = `data:${mime};base64,${base64}`;
+          mediaMap.set(id, {
+            dataUrl,
+            fileName: rawFileName,
+          });
+        }
       }
     }
   }

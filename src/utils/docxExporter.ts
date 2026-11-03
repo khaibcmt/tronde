@@ -1,8 +1,10 @@
 import JSZip from 'jszip';
+import * as pdfjsLib from 'pdfjs-dist';
 import {
   ExamImageAttachment,
   ExamQuestion,
   OptionPart1,
+  PhieuQMSelectionCode,
   ShuffleConfig,
   ShuffledVariant,
 } from '../types/exam';
@@ -63,20 +65,23 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 
 /**
  * ============================================================================
- * BỘ ÁNH XẠ 4 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 THEO MÔN HỌC (CHẠY TỨC THÌ 0.01s)
- * - Không gửi ảnh lên AI, hoàn toàn nạp tĩnh từ Base64 nhúng sẵn trong mã nguồn (0 API token)
- * - Kích thước khóa cứng chuẩn Camera AI nhận diện: Width = 16.5cm (624px / 5,943,600 EMUs) × Height = 8.2cm (310px / 2,952,750 EMUs)
+ * KHO MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM ĐA NĂNG (MẶC ĐỊNH THEO MÔN + TÙY CHỌN MỞ RỘNG + TẢI LÊN TÙY Ý)
+ * - Bao gồm 4 mẫu phiếu mặc định theo môn học (nạp tức thì 0.01s từ Base64)
+ * - Bổ sung 5 mẫu phiếu chuyên dụng mới (40-0-0, 0-0-10, 40-16-12, 30-20-00, 40-8-6)
+ * - Hỗ trợ giáo viên tự tải phiếu riêng (.jpg, .png, .pdf)
  * ============================================================================
  */
 export interface PhieuQM2025Info {
-  groupCode: 'TOAN' | 'KHTN_DIA' | 'NGOAI_NGU' | 'KHXH_CN_TIN';
+  groupCode: Exclude<PhieuQMSelectionCode, 'AUTO'>;
   groupName: string;
   subjectsLabel: string;
   structureDesc: string;
-  standardFileName: 'phieu_toan.jpg' | 'phieu_khtn.jpg' | 'phieu_ngoaingu.jpg' | 'phieu_khxh.jpg';
+  standardFileName: string;
   assetPath: string;
   publicUrl: string;
   fallbackUrl: string;
+  isPdfSource?: boolean;
+  sizeLabel?: string;
   widthPx: number;
   heightPx: number;
   widthEmu: number;
@@ -86,13 +91,14 @@ export interface PhieuQM2025Info {
 export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
   {
     groupCode: 'TOAN',
-    groupName: 'Môn Toán',
+    groupName: 'Môn Toán (Mặc định)',
     subjectsLabel: 'Toán học',
     structureDesc: 'Phần I: 12 câu | Phần II: 4 câu | Phần III: 6 câu',
     standardFileName: 'phieu_toan.jpg',
     assetPath: 'assets/phieu_toan.jpg',
     publicUrl: PHIEU_TOAN_BASE64,
     fallbackUrl: PHIEU_TOAN_BASE64,
+    sizeLabel: '16.5×8.2cm',
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600, // 16.5 cm chuẩn khít lề A4
@@ -100,13 +106,14 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
   },
   {
     groupCode: 'KHTN_DIA',
-    groupName: 'Nhóm KHTN & Địa',
+    groupName: 'Nhóm KHTN & Địa (Mặc định)',
     subjectsLabel: 'Sinh học, Vật lí, Hóa học, Địa lí',
     structureDesc: 'Phần I: 18 câu | Phần II: 4 câu | Phần III: 6 câu',
     standardFileName: 'phieu_khtn.jpg',
     assetPath: 'assets/phieu_khtn.jpg',
     publicUrl: PHIEU_KHTN_BASE64,
     fallbackUrl: PHIEU_KHTN_BASE64,
+    sizeLabel: '16.5×8.2cm',
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600,
@@ -114,13 +121,14 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
   },
   {
     groupCode: 'NGOAI_NGU',
-    groupName: 'Môn Ngoại ngữ',
+    groupName: 'Môn Ngoại ngữ (Mặc định)',
     subjectsLabel: 'Tiếng Anh, Ngoại ngữ khác',
     structureDesc: 'Phần I: 40 câu trắc nghiệm 4 lựa chọn',
     standardFileName: 'phieu_ngoaingu.jpg',
     assetPath: 'assets/phieu_ngoaingu.jpg',
     publicUrl: PHIEU_NGOAINGU_BASE64,
     fallbackUrl: PHIEU_NGOAINGU_BASE64,
+    sizeLabel: '16.5×8.2cm',
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600,
@@ -128,19 +136,165 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
   },
   {
     groupCode: 'KHXH_CN_TIN',
-    groupName: 'Nhóm KHXH, CN, Tin',
+    groupName: 'Nhóm KHXH, CN, Tin (Mặc định)',
     subjectsLabel: 'Lịch sử, Tin học, Công nghệ, GD Kinh tế & Pháp luật',
     structureDesc: 'Phần I: 24 câu | Phần II: 6 câu (Không có Phần III)',
     standardFileName: 'phieu_khxh.jpg',
     assetPath: 'assets/phieu_khxh.jpg',
     publicUrl: PHIEU_KHXH_BASE64,
     fallbackUrl: PHIEU_KHXH_BASE64,
+    sizeLabel: '16.5×8.2cm',
     widthPx: 624,
     heightPx: 310,
     widthEmu: 5943600,
     heightEmu: 2952750,
   },
+  {
+    groupCode: 'QM_40_0_0',
+    groupName: 'Phiếu A4-40-Ngang (40-0-0)',
+    subjectsLabel: 'Đề 40 câu Trắc nghiệm 4 lựa chọn (Có khung Lời phê & Điểm)',
+    structureDesc: 'Phần I: 40 câu A, B, C, D | Khung Lời phê GV & Phụ huynh',
+    standardFileName: 'phieu_qm_40_0_0.jpg',
+    assetPath: '/assets/aistudio/QM-__40_-_0_-_0_7adbcf30.jpg',
+    publicUrl: '/assets/aistudio/QM-__40_-_0_-_0_7adbcf30.jpg',
+    fallbackUrl: PHIEU_NGOAINGU_BASE64,
+    sizeLabel: '16.5×11.6cm',
+    widthPx: 624,
+    heightPx: 440,
+    widthEmu: 5943600,
+    heightEmu: 4180000,
+  },
+  {
+    groupCode: 'QM_0_0_10',
+    groupName: 'Phiếu Ôn Tập - TL Ngắn (0-0-10)',
+    subjectsLabel: 'Kiểm tra ôn tập / Chuyên đề Trả lời ngắn (10 câu)',
+    structureDesc: 'Phần III: 10 câu trả lời ngắn (0 - 0 - 10)',
+    standardFileName: 'phieu_qm_0_0_10.jpg',
+    assetPath: '/assets/aistudio/QM_0-0-10_b6b9c5d5.jpg',
+    publicUrl: '/assets/aistudio/QM_0-0-10_b6b9c5d5.jpg',
+    fallbackUrl: PHIEU_TOAN_BASE64,
+    sizeLabel: '16.5×5.7cm',
+    widthPx: 624,
+    heightPx: 216,
+    widthEmu: 5943600,
+    heightEmu: 2052000,
+  },
+  {
+    groupCode: 'QM_40_8_6',
+    groupName: 'Phiếu QM 2025 - CV 1239 (40-8-6)',
+    subjectsLabel: 'Đề tổng hợp Công văn 1239 (Có cả Trắc nghiệm & Tự luận)',
+    structureDesc: 'Phần I: 40 câu | Phần II: 8 câu | Phần III: 6 câu',
+    standardFileName: 'phieu_qm_40_8_6.png',
+    assetPath: '/assets/aistudio/QM_2025_40-8-6_420f9135.pdf',
+    publicUrl: '/assets/aistudio/QM_2025_40-8-6_420f9135.pdf',
+    fallbackUrl: PHIEU_KHTN_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×23.3cm (A4)',
+    widthPx: 624,
+    heightPx: 880,
+    widthEmu: 5943600,
+    heightEmu: 8390000,
+  },
+  {
+    groupCode: 'QM_40_16_12',
+    groupName: 'Phiếu QM 2025 - CV 1239 (40-16-12)',
+    subjectsLabel: 'Đề chuẩn Công văn 1239 mở rộng (Tối đa 40-16-12 câu)',
+    structureDesc: 'Phần I: 40 câu | Phần II: 16 câu | Phần III: 12 câu',
+    standardFileName: 'phieu_qm_40_16_12.png',
+    assetPath: '/assets/aistudio/QM_-_40_16_12_9dc0a0eb.pdf',
+    publicUrl: '/assets/aistudio/QM_-_40_16_12_9dc0a0eb.pdf',
+    fallbackUrl: PHIEU_KHTN_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×23.3cm (A4)',
+    widthPx: 624,
+    heightPx: 880,
+    widthEmu: 5943600,
+    heightEmu: 8390000,
+  },
+  {
+    groupCode: 'QM_30_20_0',
+    groupName: 'Phiếu QM 2025 - HSG (30-20-00)',
+    subjectsLabel: 'Đề thi Học Sinh Giỏi / Chuyên đề nâng cao (30-20-00)',
+    structureDesc: 'Phần I: 30 câu | Phần II: 20 câu | Khung tự luận dòng kẻ',
+    standardFileName: 'phieu_qm_30_20_0.png',
+    assetPath: '/assets/aistudio/QM_30-20-00_7aa43b25.pdf',
+    publicUrl: '/assets/aistudio/QM_30-20-00_7aa43b25.pdf',
+    fallbackUrl: PHIEU_KHTN_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×23.3cm (A4)',
+    widthPx: 624,
+    heightPx: 880,
+    widthEmu: 5943600,
+    heightEmu: 8390000,
+  },
 ];
+
+// Bộ nhớ đệm DataURL của các mẫu phiếu PDF/JPG để chỉ cần giải mã 1 lần duy nhất
+const phieuDataUrlCache = new Map<string, string>();
+
+/**
+ * Chuyển đổi file/URL phiếu trả lời (.pdf hoặc .jpg/.png) sang Base64 PNG/JPEG DataURL sắc nét
+ */
+export async function renderAnswerSheetAssetToDataUrl(
+  sourceUrlOrDataUrl: string,
+  isPdf?: boolean
+): Promise<string> {
+  if (!sourceUrlOrDataUrl) return PHIEU_KHTN_BASE64;
+  if (sourceUrlOrDataUrl.startsWith('data:image/')) {
+    return sourceUrlOrDataUrl;
+  }
+  if (phieuDataUrlCache.has(sourceUrlOrDataUrl)) {
+    return phieuDataUrlCache.get(sourceUrlOrDataUrl)!;
+  }
+
+  try {
+    const resp = await fetch(sourceUrlOrDataUrl);
+    const arrayBuffer = await resp.arrayBuffer();
+
+    if (isPdf || /\.pdf($|\?)/i.test(sourceUrlOrDataUrl)) {
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+        useSystemFonts: true,
+      });
+      const pdfDoc = await loadingTask.promise;
+      const page = await pdfDoc.getPage(1);
+      const viewport = page.getViewport({ scale: 2.2 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+          canvas,
+        }).promise;
+        const pngDataUrl = canvas.toDataURL('image/png', 1.0);
+        phieuDataUrlCache.set(sourceUrlOrDataUrl, pngDataUrl);
+        return pngDataUrl;
+      }
+    } else {
+      const uint8 = new Uint8Array(arrayBuffer);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+      }
+      const mime = /\.png($|\?)/i.test(sourceUrlOrDataUrl)
+        ? 'image/png'
+        : 'image/jpeg';
+      const dataUrl = `data:${mime};base64,${btoa(binary)}`;
+      phieuDataUrlCache.set(sourceUrlOrDataUrl, dataUrl);
+      return dataUrl;
+    }
+  } catch (err) {
+    console.warn('Không thể nạp phiếu trả lời từ đường dẫn:', sourceUrlOrDataUrl, err);
+  }
+
+  return PHIEU_KHTN_BASE64;
+}
 
 /**
  * 1. Hàm ánh xạ lấy đúng đường dẫn ảnh phiếu QM 2025 theo môn học (Chuẩn tài liệu kỹ thuật)
@@ -185,13 +339,59 @@ export function getPhieuQMInfoBySubject(subjectName: string): PhieuQM2025Info {
 }
 
 /**
- * Nạp Base64 DataURL của ảnh phiếu QM 2025 theo môn học (Lấy trực tiếp từ Base64 tĩnh trong 0.001s, không qua mạng)
+ * Lấy thông tin mẫu phiếu trả lời đang được chọn trong ShuffleConfig:
+ * - Nếu selectedPhieuQMCode === 'AUTO' (hoặc chưa chọn): Tự động lấy theo môn học hiện tại
+ * - Nếu selectedPhieuQMCode === 'CUSTOM' và có customPhieuQMDataUrl: Dùng phiếu do giáo viên tự tải lên
+ * - Nếu chọn một mã phiếu cụ thể trong kho 9 mẫu phiếu: Lấy đúng mẫu phiếu đó
+ */
+export function resolvePhieuQMInfoForConfig(config: ShuffleConfig): PhieuQM2025Info {
+  const code = config.selectedPhieuQMCode || 'AUTO';
+  if (code === 'AUTO') {
+    return getPhieuQMInfoBySubject(config.subjectName);
+  }
+  if (code === 'CUSTOM' && config.customPhieuQMDataUrl) {
+    const ratio =
+      config.customPhieuQMAspectRatio && config.customPhieuQMAspectRatio > 0.2
+        ? config.customPhieuQMAspectRatio
+        : 624 / 310;
+    const widthEmu = 5943600; // 16.5cm chuẩn lề A4
+    const heightEmu = Math.min(8450000, Math.max(1800000, Math.round(widthEmu / ratio)));
+    const heightCm = (heightEmu / 360000).toFixed(1);
+    return {
+      groupCode: 'CUSTOM',
+      groupName: 'Phiếu Tùy Chỉnh Của Giáo Viên',
+      subjectsLabel: 'Áp dụng cho mọi đề trộn theo tùy chọn của Giáo viên',
+      structureDesc: `Tệp tải lên: ${config.customPhieuQMName || 'phieu_tu_chon.png'}`,
+      standardFileName: 'phieu_tu_chon_gv.png',
+      assetPath: 'custom/phieu_tu_chon_gv.png',
+      publicUrl: config.customPhieuQMDataUrl,
+      fallbackUrl: config.customPhieuQMDataUrl,
+      sizeLabel: `16.5×${heightCm}cm`,
+      widthPx: 624,
+      heightPx: Math.round(624 / ratio),
+      widthEmu,
+      heightEmu,
+    };
+  }
+  const found = ALL_PHIEU_QM_2025_TEMPLATES.find((t) => t.groupCode === code);
+  return found || getPhieuQMInfoBySubject(config.subjectName);
+}
+
+/**
+ * Nạp Base64 DataURL của ảnh phiếu QM 2025 theo môn học hoặc theo phiếu giáo viên đã chọn
  */
 export async function loadPhieuQMDataUrlBySubject(
-  subjectName: string
+  subjectName: string,
+  config?: ShuffleConfig
 ): Promise<{ info: PhieuQM2025Info; dataUrl: string | null }> {
-  const info = getPhieuQMInfoBySubject(subjectName);
-  return { info, dataUrl: info.publicUrl };
+  const info = config
+    ? resolvePhieuQMInfoForConfig(config)
+    : getPhieuQMInfoBySubject(subjectName);
+  const resolvedDataUrl = await renderAnswerSheetAssetToDataUrl(
+    info.publicUrl,
+    info.isPdfSource
+  );
+  return { info, dataUrl: resolvedDataUrl };
 }
 
 /**
@@ -2029,7 +2229,10 @@ export async function exportCleanedMasterDocx(
   let phieuQmDrawingXml = '';
 
   if (shouldEmbedPhieuQM) {
-    const { info, dataUrl } = await loadPhieuQMDataUrlBySubject(config.subjectName);
+    const { info, dataUrl } = await loadPhieuQMDataUrlBySubject(
+      config.subjectName,
+      config
+    );
     if (dataUrl) {
       const relId = 'rIdPhieuQM2025';
       imagesToEmbed.push({
@@ -2113,10 +2316,13 @@ export async function exportSingleVariantDocx(
 ): Promise<Blob> {
   const { imagesToEmbed, imageRelMap } = await collectImagesAndBuildRelMap(variant.questions);
 
-  // Tự động nạp ảnh phiếu QM 2025 theo môn học (chạy tức thì trên trình duyệt, mặc định BẬT)
+  // Tự động nạp ảnh phiếu trả lời trắc nghiệm (theo môn học mặc định hoặc theo mẫu phiếu giáo viên tùy chọn)
   let phieuQmDrawingXml = '';
   if (config.embedPhieuQM2025 !== false) {
-    const { info, dataUrl } = await loadPhieuQMDataUrlBySubject(config.subjectName);
+    const { info, dataUrl } = await loadPhieuQMDataUrlBySubject(
+      config.subjectName,
+      config
+    );
     if (dataUrl) {
       const relId = 'rIdPhieuQM2025';
       imagesToEmbed.push({

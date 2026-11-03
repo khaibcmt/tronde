@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRightLeft,
@@ -49,6 +49,7 @@ import {
   LayoutMode,
   OptionPart1,
   PartType,
+  PhieuQMSelectionCode,
   QRAppFormat,
   ShuffleConfig,
   ShuffledVariant,
@@ -89,6 +90,8 @@ import {
   exportSingleVariantDocx,
   formatPedagogicalSubject,
   getPhieuQMInfoBySubject,
+  renderAnswerSheetAssetToDataUrl,
+  resolvePhieuQMInfoForConfig,
   triggerBrowserDownload,
 } from './utils/docxExporter';
 import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
@@ -147,7 +150,7 @@ export default function App() {
     text: string;
   } | null>(null);
 
-  // 2. State cấu hình Trộn đề, Tiêu đề Quốc ngữ, Môn thi (SINH HỌC 12 - KIỂM TRA CUỐI KÌ I), Số phút (50 phút) & Mã QR
+  // 2. State cấu hình Trộn đề, Tiêu đề Quốc ngữ, Kỳ kiểm tra mặc định "KIỂM TRA ÔN TẬP", Số phút mặc định (45 phút) & Phiếu trả lời trắc nghiệm
   const [config, setConfig] = useState<ShuffleConfig>({
     numVariants: 4,
     examCodeDigits: 3,
@@ -160,26 +163,127 @@ export default function App() {
     qrFormat: 'QM2025',
     embedQrInWord: true,
     embedPhieuQM2025: true,
+    selectedPhieuQMCode: 'AUTO',
     includeSolutionsInExport: false,
     departmentName: 'SỞ GD&ĐT VĨNH LONG',
     schoolName: 'TRƯỜNG THPT MANG THÍT',
     nationalHeader: 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM',
     nationalMotto: 'Độc lập - Tự do - Hạnh phúc',
-    examTitle: 'KIỂM TRA CUỐI KÌ I',
+    examTitle: 'KIỂM TRA ÔN TẬP',
     examSubtitle: '( Đề chính thức )',
     subjectName: 'SINH HỌC',
     gradeLevel: 'Lớp 12',
     schoolYear: `Năm học ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
-    durationMinutes: 50,
+    durationMinutes: 45,
   });
   const [isConfigCollapsed, setIsConfigCollapsed] = useState<boolean>(false);
   const [showCustomCodeEditor, setShowCustomCodeEditor] = useState<boolean>(false);
   const [isPhieuQmGalleryOpen, setIsPhieuQmGalleryOpen] = useState<boolean>(false);
+  const phieuUploadInputRef = useRef<HTMLInputElement | null>(null);
 
   const activePhieuQMInfo = useMemo(
-    () => getPhieuQMInfoBySubject(config.subjectName),
-    [config.subjectName]
+    () => resolvePhieuQMInfoForConfig(config),
+    [config]
   );
+  const [resolvedPhieuPreviewUrl, setResolvedPhieuPreviewUrl] = useState<string>(
+    () => activePhieuQMInfo.publicUrl
+  );
+  const [galleryPdfPreviews, setGalleryPdfPreviews] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activePhieuQMInfo.publicUrl.startsWith('data:image/')) {
+      setResolvedPhieuPreviewUrl(activePhieuQMInfo.publicUrl);
+      return;
+    }
+    renderAnswerSheetAssetToDataUrl(
+      activePhieuQMInfo.publicUrl,
+      activePhieuQMInfo.isPdfSource
+    ).then((url) => {
+      if (!cancelled && url) {
+        setResolvedPhieuPreviewUrl(url);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePhieuQMInfo]);
+
+  useEffect(() => {
+    if (!isPhieuQmGalleryOpen) return;
+    let cancelled = false;
+    ALL_PHIEU_QM_2025_TEMPLATES.forEach((tpl) => {
+      if (tpl.isPdfSource && !galleryPdfPreviews[tpl.groupCode]) {
+        renderAnswerSheetAssetToDataUrl(tpl.publicUrl, true).then((dataUrl) => {
+          if (!cancelled && dataUrl) {
+            setGalleryPdfPreviews((prev) => ({
+              ...prev,
+              [tpl.groupCode]: dataUrl,
+            }));
+          }
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPhieuQmGalleryOpen, galleryPdfPreviews]);
+
+  // Tải lên Phiếu trả lời trắc nghiệm tùy chọn (.jpg, .png, .pdf) của giáo viên
+  const handleUploadCustomPhieuQM = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessing(true);
+    try {
+      const isPdf =
+        file.name.toLowerCase().endsWith('.pdf') ||
+        file.type === 'application/pdf';
+      const objectUrl = URL.createObjectURL(file);
+      let finalDataUrl = '';
+      try {
+        finalDataUrl = await renderAnswerSheetAssetToDataUrl(objectUrl, isPdf);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
+
+      const aspect = await new Promise<number>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const w = img.naturalWidth || 624;
+          const h = img.naturalHeight || 310;
+          resolve(w / Math.max(1, h));
+        };
+        img.onerror = () => resolve(2.0129);
+        img.src = finalDataUrl;
+      });
+
+      setConfig((prev) => ({
+        ...prev,
+        embedPhieuQM2025: true,
+        selectedPhieuQMCode: 'CUSTOM',
+        customPhieuQMDataUrl: finalDataUrl,
+        customPhieuQMName: file.name,
+        customPhieuQMAspectRatio: aspect,
+      }));
+      setResolvedPhieuPreviewUrl(finalDataUrl);
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã nạp phiếu trả lời tùy chỉnh "${file.name}"! Phiếu này sẽ được tự động đưa vào tất cả các đề trộn Word (.docx) và bản xem trước.`,
+      });
+    } catch (err) {
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Không thể đọc file phiếu trả lời: ${
+          err instanceof Error ? err.message : 'Lỗi định dạng'
+        }`,
+      });
+    } finally {
+      setIsProcessing(false);
+      if (phieuUploadInputRef.current) phieuUploadInputRef.current.value = '';
+    }
+  };
 
   // 2b. State Chế độ Soạn thảo Trực tiếp kiểu MS Word (Word Ribbon + Trang A4)
   const [editorViewMode, setEditorViewMode] = useState<'CARDS_3D' | 'WORD_A4_PAGE'>('CARDS_3D');
@@ -561,11 +665,11 @@ export default function App() {
     setWordRawDocumentText(serializeQuestionsToWordRawText(numbered));
     setConfig((prev) => ({
       ...prev,
-      examTitle: 'KIỂM TRA CUỐI KÌ I',
+      examTitle: 'KIỂM TRA ÔN TẬP',
       examSubtitle: '( Đề chính thức )',
       subjectName: 'SINH HỌC',
       gradeLevel: 'Lớp 12',
-      durationMinutes: 50,
+      durationMinutes: 45,
     }));
     setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
     setHasUnsavedChanges(false);
@@ -1052,12 +1156,12 @@ export default function App() {
 
   const handleUpdateShortAnswerPart3 = (questionId: string, val: string) => {
     setQuestions((prev) => {
-      const next = prev.map((q) =>
+      const next: ExamQuestion[] = prev.map((q) =>
         q.id === questionId
           ? {
               ...q,
               shortAnswer: val,
-              shortAnswerDetectedBy: val.trim() ? 'MANUAL' : 'NONE',
+              shortAnswerDetectedBy: val.trim() ? ('MANUAL' as const) : ('NONE' as const),
             }
           : q
       );
@@ -2438,23 +2542,32 @@ export default function App() {
                     />
                   </div>
 
-                  {/* 3. Kỳ kiểm tra */}
+                  {/* 3. Kỳ kiểm tra (Mặc định: KIỂM TRA ÔN TẬP, cho phép chọn nhanh hoặc tự gõ) */}
                   <div>
                     <label className="block text-[11px] font-extrabold text-blue-950 uppercase truncate mb-0.5">
                       3. Kỳ kiểm tra:
                     </label>
                     <select
                       value={config.examTitle}
-                      onChange={(e) =>
-                        setConfig((prev) => ({ ...prev, examTitle: e.target.value }))
-                      }
+                      onChange={(e) => {
+                        const newTitle = e.target.value;
+                        setConfig((prev) => ({
+                          ...prev,
+                          examTitle: newTitle,
+                          durationMinutes:
+                            newTitle === 'KIỂM TRA ÔN TẬP'
+                              ? 45
+                              : prev.durationMinutes,
+                        }));
+                      }}
                       className="w-full px-2 py-1.5 text-xs font-black text-blue-950 bg-blue-50/80 border border-blue-400 rounded-xl focus:outline-none focus:border-blue-700 cursor-pointer"
                     >
+                      <option value="KIỂM TRA ÔN TẬP">KIỂM TRA ÔN TẬP (Mặc định 45p)</option>
+                      <option value="KIỂM TRA THƯỜNG XUYÊN">KIỂM TRA THƯỜNG XUYÊN</option>
                       <option value="KIỂM TRA GIỮA KÌ I">KIỂM TRA GIỮA KÌ I</option>
                       <option value="KIỂM TRA GIỮA KÌ II">KIỂM TRA GIỮA KÌ II</option>
                       <option value="KIỂM TRA CUỐI KÌ I">KIỂM TRA CUỐI KÌ I</option>
                       <option value="KIỂM TRA CUỐI KÌ II">KIỂM TRA CUỐI KÌ II</option>
-                      <option value="KIỂM TRA ÔN TẬP">KIỂM TRA ÔN TẬP</option>
                       <option value="KỲ THI TỐT NGHIỆP THPT">KỲ THI TỐT NGHIỆP THPT</option>
                     </select>
                   </div>
@@ -2471,21 +2584,24 @@ export default function App() {
                         const minsMap: Record<string, number> = {
                           'TOÁN HỌC': 90,
                           'NGỮ VĂN': 120,
-                          'SINH HỌC': 50,
-                          'VẬT LÍ': 50,
-                          'HÓA HỌC': 50,
-                          'TIẾNG ANH': 50,
-                          'LỊCH SỬ': 50,
-                          'ĐỊA LÍ': 50,
-                          'GD KINH TẾ & PHÁP LUẬT': 50,
-                          'TIN HỌC': 50,
-                          'CÔNG NGHỆ CÔNG NGHIỆP': 50,
-                          'CÔNG NGHỆ NÔNG NGHIỆP': 50,
+                          'SINH HỌC': 45,
+                          'VẬT LÍ': 45,
+                          'HÓA HỌC': 45,
+                          'TIẾNG ANH': 45,
+                          'LỊCH SỬ': 45,
+                          'ĐỊA LÍ': 45,
+                          'GD KINH TẾ & PHÁP LUẬT': 45,
+                          'TIN HỌC': 45,
+                          'CÔNG NGHỆ CÔNG NGHIỆP': 45,
+                          'CÔNG NGHỆ NÔNG NGHIỆP': 45,
                         };
                         setConfig((prev) => ({
                           ...prev,
                           subjectName: val,
-                          durationMinutes: minsMap[val] || prev.durationMinutes,
+                          durationMinutes:
+                            prev.examTitle === 'KIỂM TRA ÔN TẬP'
+                              ? 45
+                              : minsMap[val] || prev.durationMinutes,
                         }));
                       }}
                       className="w-full px-2 py-1.5 text-xs font-black text-emerald-950 bg-emerald-50/80 border border-emerald-400 rounded-xl focus:outline-none focus:border-emerald-700 cursor-pointer"
@@ -2506,7 +2622,7 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Hàng 5 - 6 - 7 - 8: Lớp, Phút, Số đề, Mã đề */}
+                {/* Hàng 5 - 6 - 7 - 8: Lớp, Phút (Mặc định 45 phút, tùy chỉnh linh hoạt), Số đề, Mã đề */}
                 <div className="grid grid-cols-4 gap-1.5 items-end pt-0.5">
                   {/* 5. Lớp */}
                   <div>
@@ -2526,24 +2642,40 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* 6. Phút */}
+                  {/* 6. Số phút làm bài (Mặc định 45 phút, tùy chỉnh trực tiếp hoặc chọn nhanh) */}
                   <div>
-                    <label className="block text-[11px] font-extrabold text-rose-950 uppercase truncate mb-0.5">
-                      6. Phút:
+                    <label
+                      className="block text-[11px] font-extrabold text-rose-950 uppercase truncate mb-0.5"
+                      title="Tùy chỉnh số phút làm bài (Mặc định: 45 phút)"
+                    >
+                      6. Phút (45p):
                     </label>
-                    <input
-                      type="number"
-                      min={15}
-                      max={300}
-                      value={config.durationMinutes}
-                      onChange={(e) =>
-                        setConfig((prev) => ({
-                          ...prev,
-                          durationMinutes: Number(e.target.value) || 50,
-                        }))
-                      }
-                      className="w-full px-1.5 py-1.5 text-xs font-mono font-black text-rose-700 bg-rose-50/60 border border-rose-300 rounded-xl text-center focus:outline-none"
-                    />
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        min={5}
+                        max={300}
+                        step={5}
+                        list="duration-presets"
+                        value={config.durationMinutes}
+                        onChange={(e) =>
+                          setConfig((prev) => ({
+                            ...prev,
+                            durationMinutes: Math.max(1, Number(e.target.value) || 45),
+                          }))
+                        }
+                        className="w-full px-1.5 py-1.5 text-xs font-mono font-black text-rose-700 bg-rose-50/80 border-2 border-rose-400 rounded-xl text-center focus:outline-none focus:border-rose-600 focus:bg-white"
+                      />
+                      <datalist id="duration-presets">
+                        <option value={15}>15 phút</option>
+                        <option value={30}>30 phút</option>
+                        <option value={45}>45 phút (Mặc định Kiểm tra ôn tập)</option>
+                        <option value={50}>50 phút</option>
+                        <option value={60}>60 phút</option>
+                        <option value={90}>90 phút</option>
+                        <option value={120}>120 phút</option>
+                      </datalist>
+                    </div>
                   </div>
 
                   {/* 7. Số đề */}
@@ -2593,6 +2725,41 @@ export default function App() {
                       <span>Sửa mã</span>
                     </button>
                   </div>
+                </div>
+
+                {/* Thanh chọn nhanh số phút làm bài & tự gõ tên kỳ kiểm tra tùy ý */}
+                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5 px-1">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-[10px] font-extrabold text-slate-600">
+                      Chọn nhanh phút:
+                    </span>
+                    {[15, 30, 45, 50, 60, 90].map((m) => (
+                      <button
+                        key={`preset-min-${m}`}
+                        type="button"
+                        onClick={() =>
+                          setConfig((prev) => ({ ...prev, durationMinutes: m }))
+                        }
+                        className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono font-black cursor-pointer transition-all ${
+                          config.durationMinutes === m
+                            ? 'bg-rose-600 text-white shadow-2xs scale-105'
+                            : 'bg-rose-50 text-rose-800 border border-rose-200 hover:bg-rose-100'
+                        }`}
+                      >
+                        {m}p
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="text"
+                    value={config.examTitle}
+                    onChange={(e) =>
+                      setConfig((prev) => ({ ...prev, examTitle: e.target.value }))
+                    }
+                    placeholder="Gõ tên kỳ kiểm tra tùy ý..."
+                    className="px-2 py-0.5 text-[11px] font-bold text-blue-950 bg-blue-50/60 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 w-44 sm:w-48"
+                    title="Giáo viên có thể tự gõ tên kỳ kiểm tra tùy ý tại đây"
+                  />
                 </div>
 
                 {/* Khung mở rộng khi bấm [Sửa mã]: Cho phép sửa từng mã đề 101, 102... và tùy chỉnh Dàn trang / QR */}
@@ -2695,8 +2862,24 @@ export default function App() {
                   </div>
                 )}
 
-                {/* Khung tự động ánh xạ 4 Mẫu Phiếu QM 2025 theo môn học (Tốc độ 0.01s, khóa cứng 16.5cm x 8.2cm) */}
-                <div className="p-2.5 rounded-xl bg-gradient-to-r from-amber-50 via-yellow-50/80 to-emerald-50 border border-amber-300 space-y-1.5">
+                {/* ================= Ô TÙY CHỌN PHIẾU TRẢ LỜI TRẮC NGHIỆM NỔI BẬT (MẶC ĐỊNH THEO MÔN + 9 MẪU CHUẨN + TẢI PHIẾU RIÊNG) ================= */}
+                <input
+                  ref={phieuUploadInputRef}
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,.pdf"
+                  onChange={handleUploadCustomPhieuQM}
+                  className="hidden"
+                />
+                <div
+                  className="p-3 rounded-2xl border-2 border-amber-400 space-y-2 relative overflow-hidden"
+                  style={{
+                    background:
+                      'linear-gradient(135deg, #fffbeb 0%, #fef3c7 45%, #ecfdf5 100%)',
+                    boxShadow:
+                      '0 8px 20px -4px rgba(245, 158, 11, 0.28), 0 3px 0 #d97706, inset 0 1px 0 rgba(255,255,255,0.9)',
+                  }}
+                >
+                  {/* Hàng tiêu đề nổi bật */}
                   <div className="flex items-center justify-between gap-1.5">
                     <label className="flex items-center gap-1.5 cursor-pointer">
                       <input
@@ -2708,34 +2891,137 @@ export default function App() {
                             embedPhieuQM2025: e.target.checked,
                           }))
                         }
-                        className="w-3.5 h-3.5 accent-emerald-600 rounded cursor-pointer shrink-0"
+                        className="w-4 h-4 accent-emerald-600 rounded cursor-pointer shrink-0"
                       />
-                      <span className="text-[11px] font-black text-amber-950 uppercase tracking-tight">
-                        Chèn Phiếu QM 2025 Trang 1 (.docx)
+                      <span className="text-[11px] font-black text-amber-950 uppercase tracking-tight flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>CHỌN PHIẾU TRẢ LỜI ĐƯA VÀO ĐỀ TRỘN</span>
                       </span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsPhieuQmGalleryOpen(true)}
-                      className="px-2 py-0.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-extrabold shadow-2xs cursor-pointer shrink-0"
-                      title="Xem bảng ánh xạ và hình ảnh 4 mẫu phiếu QM 2025 chuẩn"
-                    >
-                      Xem 4 Mẫu Phiếu
-                    </button>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider shadow-2xs shrink-0">
+                      {config.selectedPhieuQMCode === 'AUTO' || !config.selectedPhieuQMCode
+                        ? 'Mặc định'
+                        : 'Tùy chọn'}
+                    </span>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 text-[11px] bg-white/90 px-2.5 py-1 rounded-lg border border-amber-200">
-                    <div className="truncate">
-                      <span className="font-black text-emerald-800">
-                        {activePhieuQMInfo.standardFileName}
-                      </span>
-                      <span className="text-slate-600 font-semibold ml-1">
-                        ({activePhieuQMInfo.structureDesc})
+                  {/* Ô Dropdown chọn mẫu phiếu trả lời trắc nghiệm nổi bật */}
+                  <div className="space-y-1.5">
+                    <select
+                      value={config.selectedPhieuQMCode || 'AUTO'}
+                      onChange={(e) => {
+                        const code = e.target.value as PhieuQMSelectionCode;
+                        setConfig((prev) => ({
+                          ...prev,
+                          embedPhieuQM2025: true,
+                          selectedPhieuQMCode: code,
+                        }));
+                      }}
+                      className="w-full px-2.5 py-2 text-xs font-black text-slate-900 bg-white border-2 border-amber-500 rounded-xl shadow-xs focus:outline-none focus:border-emerald-600 cursor-pointer"
+                    >
+                      <option value="AUTO">
+                        ★ Mặc định tự động theo môn ({getPhieuQMInfoBySubject(config.subjectName).groupName})
+                      </option>
+                      <optgroup label="── 4 Mẫu Phiếu Mặc Định Chuẩn Bộ GD&ĐT ──">
+                        <option value="KHTN_DIA">
+                          1. Nhóm KHTN &amp; Địa (18 - 4 - 6) · phieu_khtn.jpg
+                        </option>
+                        <option value="TOAN">
+                          2. Môn Toán học (12 - 4 - 6) · phieu_toan.jpg
+                        </option>
+                        <option value="NGOAI_NGU">
+                          3. Môn Ngoại ngữ (40 câu TN) · phieu_ngoaingu.jpg
+                        </option>
+                        <option value="KHXH_CN_TIN">
+                          4. Nhóm KHXH, CN, Tin (24 - 6 - 0) · phieu_khxh.jpg
+                        </option>
+                      </optgroup>
+                      <optgroup label="── 5 Mẫu Phiếu Chuyên Dụng Mới (Ôn Tập / CV 1239 / HSG) ──">
+                        <option value="QM_40_0_0">
+                          5. Phiếu A4-40-Ngang (40 - 0 - 0 · Có khung Lời phê &amp; Điểm)
+                        </option>
+                        <option value="QM_0_0_10">
+                          6. Phiếu Ôn Tập - Trả lời ngắn (0 - 0 - 10 · 10 câu TL ngắn)
+                        </option>
+                        <option value="QM_40_8_6">
+                          7. Phiếu QM 2025 - CV 1239 (40 - 8 - 6 · Trắc nghiệm + Tự luận)
+                        </option>
+                        <option value="QM_40_16_12">
+                          8. Phiếu QM 2025 - CV 1239 (40 - 16 - 12 · Đa năng mở rộng)
+                        </option>
+                        <option value="QM_30_20_0">
+                          9. Phiếu QM 2025 - HSG / Chuyên đề (30 - 20 - 00 + Tự luận)
+                        </option>
+                      </optgroup>
+                      {config.customPhieuQMDataUrl && (
+                        <optgroup label="── Phiếu Do Giáo Viên Tải Lên ──">
+                          <option value="CUSTOM">
+                            ★ Phiếu riêng: {config.customPhieuQMName || 'phieu_tuy_chon.png'}
+                          </option>
+                        </optgroup>
+                      )}
+                    </select>
+
+                    {/* Cụm nút: Kho 9 Mẫu Phiếu & Tải Phiếu Riêng */}
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsPhieuQmGalleryOpen(true)}
+                        className="px-2.5 py-1.5 rounded-xl font-black text-white text-[11px] btn-3d-amber flex items-center justify-center gap-1 cursor-pointer"
+                        title="Mở kho 9 mẫu phiếu trả lời trắc nghiệm trực quan để xem và bấm chọn"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+                        <span>Kho 9 Mẫu Phiếu</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => phieuUploadInputRef.current?.click()}
+                        className="px-2.5 py-1.5 rounded-xl font-black text-white text-[11px] btn-3d-emerald flex items-center justify-center gap-1 cursor-pointer"
+                        title="Tải file ảnh (.jpg, .png) hoặc PDF (.pdf) phiếu trả lời riêng của trường bạn lên để nhúng vào đề trộn"
+                      >
+                        <Upload className="w-3.5 h-3.5 shrink-0" />
+                        <span>Tải Phiếu Riêng</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Khung xem trước trực quan mẫu phiếu đang được chọn */}
+                  <div className="bg-white/95 p-2 rounded-xl border border-amber-300 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="truncate">
+                        <span className="font-black text-emerald-800">
+                          {activePhieuQMInfo.groupName}
+                        </span>
+                        <span className="text-slate-600 font-semibold ml-1">
+                          ({activePhieuQMInfo.structureDesc})
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
+                        {activePhieuQMInfo.sizeLabel || '16.5×8.2cm'}
                       </span>
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-amber-900 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">
-                      16.5×8.2cm
-                    </span>
+                    {config.embedPhieuQM2025 !== false && resolvedPhieuPreviewUrl && (
+                      <div
+                        className="relative group cursor-pointer rounded-lg overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center max-h-28"
+                        onClick={() =>
+                          setPreviewModalImage({
+                            src: resolvedPhieuPreviewUrl,
+                            caption: `Phiếu trả lời đang chọn: ${activePhieuQMInfo.groupName} (${activePhieuQMInfo.structureDesc}) — Tự động đưa vào tất cả các đề trộn Word (.docx)`,
+                          })
+                        }
+                        title="Bấm để phóng to xem chi tiết phiếu trả lời đang chọn"
+                      >
+                        <img
+                          src={resolvedPhieuPreviewUrl}
+                          alt={activePhieuQMInfo.groupName}
+                          className="max-h-24 w-auto object-contain mx-auto transition-transform group-hover:scale-[1.02]"
+                        />
+                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-slate-900/75 text-white text-[9px] font-bold">
+                          Phóng to
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -5398,7 +5684,7 @@ export default function App() {
                               <div className="text-xs font-sans font-bold text-emerald-800 flex items-center gap-1.5 min-w-0 flex-1">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span className="truncate sm:whitespace-normal">
-                                  Đã nhúng tự động <strong>{activePhieuQMInfo.standardFileName}</strong> ({activePhieuQMInfo.groupName}: {activePhieuQMInfo.structureDesc}) — Khóa tỷ lệ 16.5cm × 8.2cm
+                                  Đã nhúng <strong>{activePhieuQMInfo.standardFileName}</strong> ({activePhieuQMInfo.groupName}: {activePhieuQMInfo.structureDesc}) — Kích thước in: {activePhieuQMInfo.sizeLabel || '16.5cm × 8.2cm'}
                                 </span>
                               </div>
                             ) : (
@@ -5409,22 +5695,22 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* HIỂN THỊ TRỰC QUAN ẢNH PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 NGAY DƯỚI HEADER TRANG 1 */}
+                          {/* HIỂN THỊ TRỰC QUAN ẢNH PHIẾU TRẢ LỜI TRẮC NGHIỆM ĐANG CHỌN NGAY DƯỚI HEADER TRANG 1 */}
                           {config.embedPhieuQM2025 !== false && (
                             <div className="py-2.5 px-2 flex flex-col items-center justify-center border-b-2 border-dashed border-slate-300 bg-slate-50/50 rounded-xl">
                               <img
-                                src={activePhieuQMInfo.publicUrl}
-                                alt={`Phiếu trả lời trắc nghiệm QM 2025 - ${activePhieuQMInfo.groupName}`}
+                                src={resolvedPhieuPreviewUrl}
+                                alt={`Phiếu trả lời trắc nghiệm - ${activePhieuQMInfo.groupName}`}
                                 className="w-full max-w-[624px] h-auto object-contain border border-slate-300 rounded-lg shadow-xs bg-white cursor-pointer hover:shadow-md transition-shadow"
                                 onClick={() =>
                                   setPreviewModalImage({
-                                    src: activePhieuQMInfo.publicUrl,
-                                    caption: `Phiếu trả lời QM 2025 (${activePhieuQMInfo.standardFileName}) — ${activePhieuQMInfo.groupName} (${activePhieuQMInfo.structureDesc}) — Kích thước in Word: 16.5cm × 8.2cm`,
+                                    src: resolvedPhieuPreviewUrl,
+                                    caption: `Phiếu trả lời (${activePhieuQMInfo.standardFileName}) — ${activePhieuQMInfo.groupName} (${activePhieuQMInfo.structureDesc}) — Kích thước in Word: ${activePhieuQMInfo.sizeLabel || '16.5cm × 8.2cm'}`,
                                   })
                                 }
                               />
                               <span className="mt-1.5 text-[11px] font-sans font-semibold text-slate-500 text-center">
-                                ▲ Ảnh Phiếu QM 2025 ({activePhieuQMInfo.standardFileName} · 16.5cm × 8.2cm) được chèn tự động ngay dưới Header Trang 1 trong file De_{activeVariant.examCode}.docx (Bấm vào ảnh để phóng to)
+                                ▲ Ảnh Phiếu Trả Lời ({activePhieuQMInfo.groupName} · {activePhieuQMInfo.sizeLabel || '16.5cm × 8.2cm'}) được chèn tự động ngay dưới Header Trang 1 trong mọi file De_{activeVariant.examCode}.docx (Bấm vào ảnh để phóng to)
                               </span>
                             </div>
                           )}
@@ -5856,7 +6142,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Xem Bảng Ánh Xạ & 4 Mẫu Phiếu Trả Lời Trắc Nghiệm QM 2025 */}
+      {/* Modal Kho 9 Mẫu Phiếu Trả Lời Trắc Nghiệm QM 2025 & Tải Phiếu Tùy Chọn */}
       {isPhieuQmGalleryOpen && (
         <div
           className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
@@ -5869,34 +6155,63 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-amber-200">
               <div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase">
-                  BẢNG ÁNH XẠ 4 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM QM 2025 VÀO ĐẦU TRANG 1 ĐỀ THI WORD (.DOCX)
+                  KHO 9 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM CHUẨN &amp; TÙY CHỌN NHÚNG VÀO ĐỀ TRỘN (.DOCX)
                 </h3>
                 <p className="text-xs font-semibold text-slate-600">
-                  Tự động nhận diện theo môn học trong 0.01s (0 API token) · Khóa cứng tỷ lệ chuẩn Camera QM: Width = 16.5cm (624px) × Height = 8.2cm (310px)
+                  Mặc định tự động chọn theo môn học hoặc giáo viên bấm chọn bất kỳ mẫu phiếu nào bên dưới để đưa vào tất cả các đề trộn Word (.docx)
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsPhieuQmGalleryOpen(false)}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white btn-3d-rose cursor-pointer"
-              >
-                Đóng
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfig((prev) => ({
+                      ...prev,
+                      embedPhieuQM2025: true,
+                      selectedPhieuQMCode: 'AUTO',
+                    }));
+                    setStatusBanner({
+                      type: 'SUCCESS',
+                      text: `Đã đặt về chế độ Mặc định tự động theo môn học (${getPhieuQMInfoBySubject(config.subjectName).groupName}).`,
+                    });
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-white btn-3d-primary cursor-pointer"
+                >
+                  Đặt Mặc Định Theo Môn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => phieuUploadInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl text-xs font-extrabold text-white btn-3d-emerald cursor-pointer flex items-center gap-1"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Tải Phiếu Riêng (.jpg/.pdf)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPhieuQmGalleryOpen(false)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold text-white btn-3d-rose cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
             </div>
 
             <div className="overflow-x-auto rounded-2xl border-2 border-amber-300">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-amber-900 text-white font-bold">
-                    <th className="py-2.5 px-3 border-r border-amber-700">Nhóm môn</th>
-                    <th className="py-2.5 px-3 border-r border-amber-700">Tên môn áp dụng</th>
-                    <th className="py-2.5 px-3 border-r border-amber-700">Cấu trúc trắc nghiệm trên phiếu</th>
-                    <th className="py-2.5 px-3">Tên file ảnh chuẩn</th>
+                    <th className="py-2.5 px-3 border-r border-amber-700">Tên mẫu phiếu</th>
+                    <th className="py-2.5 px-3 border-r border-amber-700">Môn / Kỳ kiểm tra áp dụng</th>
+                    <th className="py-2.5 px-3 border-r border-amber-700">Cấu trúc câu hỏi trên phiếu</th>
+                    <th className="py-2.5 px-3 text-center">Tác vụ chọn</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-amber-200">
                   {ALL_PHIEU_QM_2025_TEMPLATES.map((tpl) => {
-                    const isCurrent = tpl.standardFileName === activePhieuQMInfo.standardFileName;
+                    const isCurrent =
+                      tpl.standardFileName === activePhieuQMInfo.standardFileName &&
+                      config.selectedPhieuQMCode !== 'CUSTOM';
                     return (
                       <tr
                         key={tpl.groupCode}
@@ -5906,7 +6221,7 @@ export default function App() {
                           {tpl.groupName}
                           {isCurrent && (
                             <span className="ml-2 px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px]">
-                              Đang chọn
+                              Đang áp dụng
                             </span>
                           )}
                         </td>
@@ -5916,8 +6231,28 @@ export default function App() {
                         <td className="py-2 px-3 border-r border-amber-200 text-blue-900 font-semibold">
                           {tpl.structureDesc}
                         </td>
-                        <td className="py-2 px-3 font-mono font-black text-amber-900">
-                          {tpl.standardFileName}
+                        <td className="py-2 px-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConfig((prev) => ({
+                                ...prev,
+                                embedPhieuQM2025: true,
+                                selectedPhieuQMCode: tpl.groupCode,
+                              }));
+                              setStatusBanner({
+                                type: 'SUCCESS',
+                                text: `Đã chọn mẫu phiếu "${tpl.groupName}" (${tpl.structureDesc}) để đưa vào tất cả các mã đề trộn!`,
+                              });
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-black cursor-pointer ${
+                              isCurrent
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                            }`}
+                          >
+                            {isCurrent ? '✓ Đang dùng' : 'Chọn phiếu này'}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -5928,11 +6263,16 @@ export default function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {ALL_PHIEU_QM_2025_TEMPLATES.map((tpl) => {
-                const isCurrent = tpl.standardFileName === activePhieuQMInfo.standardFileName;
+                const isCurrent =
+                  tpl.standardFileName === activePhieuQMInfo.standardFileName &&
+                  config.selectedPhieuQMCode !== 'CUSTOM';
+                const previewSrc = tpl.isPdfSource
+                  ? galleryPdfPreviews[tpl.groupCode] || tpl.fallbackUrl
+                  : tpl.publicUrl;
                 return (
                   <div
                     key={`card-${tpl.groupCode}`}
-                    className={`p-3.5 rounded-2xl border-2 space-y-2 ${
+                    className={`p-3.5 rounded-2xl border-2 space-y-2 flex flex-col justify-between ${
                       isCurrent
                         ? 'border-emerald-500 bg-emerald-50/50 shadow-md'
                         : 'border-slate-200 bg-slate-50/70'
@@ -5941,29 +6281,48 @@ export default function App() {
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <div className="text-xs font-black text-slate-900 uppercase">
-                          {tpl.groupName} ({tpl.standardFileName})
+                          {tpl.groupName}
                         </div>
                         <div className="text-[11px] font-semibold text-slate-600">
                           {tpl.structureDesc}
                         </div>
                       </div>
-                      <span className="px-2 py-0.5 rounded-lg bg-amber-100 border border-amber-300 font-mono text-[10px] font-bold text-amber-900">
-                        16.5cm × 8.2cm
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfig((prev) => ({
+                            ...prev,
+                            embedPhieuQM2025: true,
+                            selectedPhieuQMCode: tpl.groupCode,
+                          }));
+                          setIsPhieuQmGalleryOpen(false);
+                          setStatusBanner({
+                            type: 'SUCCESS',
+                            text: `Đã áp dụng "${tpl.groupName}" vào đề trộn!`,
+                          });
+                        }}
+                        className={`px-3 py-1 rounded-xl text-[11px] font-black cursor-pointer shrink-0 ${
+                          isCurrent
+                            ? 'bg-emerald-600 text-white'
+                            : 'btn-3d-amber text-white'
+                        }`}
+                      >
+                        {isCurrent ? '✓ Đang Chọn' : 'Chọn Dùng Phiếu Này'}
+                      </button>
                     </div>
                     <img
-                      src={tpl.publicUrl}
+                      src={previewSrc}
                       onError={(e) => {
                         const target = e.currentTarget;
-                        if (target.src !== window.location.origin + tpl.fallbackUrl) {
+                        if (target.src !== tpl.fallbackUrl) {
                           target.src = tpl.fallbackUrl;
                         }
                       }}
                       alt={tpl.groupName}
-                      className="w-full h-auto object-contain rounded-xl border border-slate-300 bg-white cursor-pointer hover:shadow-md"
+                      className="w-full max-h-64 object-contain rounded-xl border border-slate-300 bg-white cursor-pointer hover:shadow-md"
                       onClick={() =>
                         setPreviewModalImage({
-                          src: tpl.publicUrl,
+                          src: previewSrc,
                           caption: `${tpl.groupName} (${tpl.standardFileName}) — ${tpl.structureDesc}`,
                         })
                       }

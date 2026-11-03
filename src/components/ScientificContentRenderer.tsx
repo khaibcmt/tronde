@@ -118,6 +118,57 @@ function renderChemicalHtml(chemText: string): React.ReactNode {
 }
 
 /**
+ * Hiển thị văn bản thường nhưng có chứa chỉ số trên/dưới (^{...}, _{...}, ^2, _1) từ Word <w:vertAlign>
+ * giúp không bao giờ bị lộ ký tự thô ^{2} hoặc _{1} ngoài công thức
+ */
+function renderPlainSegmentWithSubSup(plainText: string, keyPrefix: string): React.ReactNode {
+  if (!plainText) return null;
+  if (!/[_^]/.test(plainText)) {
+    return <span key={keyPrefix}>{plainText}</span>;
+  }
+
+  const tokenRegex = /(_\{([^{}]+)\}|_([0-9a-zA-Z+-])|\^\{([^{}]+)\}|\^([0-9+-]+))/g;
+  const parts: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  let idx = 0;
+
+  while ((m = tokenRegex.exec(plainText)) !== null) {
+    if (m.index > lastIdx) {
+      parts.push(plainText.slice(lastIdx, m.index));
+    }
+    const subVal = m[2] ?? m[3];
+    const supVal = m[4] ?? m[5];
+    if (subVal !== undefined) {
+      parts.push(
+        <sub
+          key={`${keyPrefix}-sub-${idx++}`}
+          className="text-[0.76em] bottom-[-0.18em] relative font-semibold"
+        >
+          {subVal}
+        </sub>
+      );
+    } else if (supVal !== undefined) {
+      parts.push(
+        <sup
+          key={`${keyPrefix}-sup-${idx++}`}
+          className="text-[0.76em] top-[-0.35em] relative font-semibold"
+        >
+          {supVal}
+        </sup>
+      );
+    }
+    lastIdx = m.index + m[0].length;
+  }
+
+  if (lastIdx < plainText.length) {
+    parts.push(plainText.slice(lastIdx));
+  }
+
+  return <span key={keyPrefix}>{parts}</span>;
+}
+
+/**
  * ENGINE 4: COMPONENT KẾT XUẤT NỘI DUNG KHOA HỌC (KATEX + FALLBACK MATHJAX 3 + AUTO-HEALING STEM)
  * - Tự động chạy Auto-Heal (hàn gắn công thức gãy, chuẩn hóa Hóa học H2SO4/Ca(OH)2/Cu2+/SO42-, Sinh học AB/ab -> \frac{AB}{ab}, X^A X^a, ×, ♂, ♀, Vật lý \vec{v}, \Omega, \mu, \lambda, \perp, \parallel)
  * - Ưu tiên kết xuất tốc độ cao bằng KaTeX, tự động kích hoạt MathJax 3 fallback nếu có biểu thức đặc biệt
@@ -153,7 +204,7 @@ export const ScientificContentRenderer: React.FC<ScientificContentRendererProps>
       while ((match = mathSplitter.exec(healedContent)) !== null) {
         if (match.index > lastIndex) {
           const plainText = healedContent.slice(lastIndex, match.index);
-          segments.push(<span key={`plain-${segIdx++}`}>{plainText}</span>);
+          segments.push(renderPlainSegmentWithSubSup(plainText, `plain-${segIdx++}`));
         }
 
         const mathRaw = match[0];
@@ -213,7 +264,9 @@ export const ScientificContentRenderer: React.FC<ScientificContentRendererProps>
       }
 
       if (lastIndex < healedContent.length) {
-        segments.push(<span key="plain-end">{healedContent.slice(lastIndex)}</span>);
+        segments.push(
+          renderPlainSegmentWithSubSup(healedContent.slice(lastIndex), 'plain-end')
+        );
       }
 
       return { renderedNodes: segments, needsMathJaxFallback: fallbackRequired };
@@ -259,7 +312,7 @@ export const ScientificContentRenderer: React.FC<ScientificContentRendererProps>
     }
 
     return {
-      renderedNodes: <span>{healedContent}</span>,
+      renderedNodes: renderPlainSegmentWithSubSup(healedContent, 'root-plain'),
       needsMathJaxFallback: fallbackRequired,
     };
   }, [text, formulaLatex]);

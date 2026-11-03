@@ -89,9 +89,36 @@ const LATEX_SYMBOL_MAP: Record<string, string> = {
   '\\emptyset': '∅',
   '\\varnothing': '∅',
   '\\angle': '∠',
+  '\\measuredangle': '∡',
+  '\\sphericalangle': '∢',
   '\\perp': '⊥',
   '\\parallel': '∥',
   '\\triangle': '△',
+  '\\square': '□',
+  '\\lozenge': '◊',
+  '\\odot': '⊙',
+  '\\oplus': '⊕',
+  '\\otimes': '⊗',
+  '\\star': '⋆',
+  '\\hbar': 'ℏ',
+  '\\ell': 'ℓ',
+  '\\supset': '⊃',
+  '\\supseteq': '⊇',
+  '\\setminus': '∖',
+  '\\vee': '∨',
+  '\\wedge': '∧',
+  '\\neg': '¬',
+  '\\implies': '⇒',
+  '\\mapsto': '↦',
+  '\\updownarrow': '↕',
+  '\\nearrow': '↗',
+  '\\searrow': '↘',
+  '\\prime': '′',
+  '\\dots': '…',
+  '\\cdots': '⋯',
+  '\\ldots': '…',
+  '\\male': '♂',
+  '\\female': '♀',
   '\\circ': '°',
   '\\degree': '°',
 };
@@ -925,13 +952,8 @@ export function autoHealScientificAndStemText(rawInput: string): string {
     .replace(/&perp;/gi, '⊥')
     .replace(/&parallel;/gi, '∥');
 
-  // 1. Hàn gắn dấu mũi tên vectơ kết hợp Unicode (combining right arrow above U+20D7 / U+20D6)
-  // Ví dụ: AB⃗ -> $\overrightarrow{AB}$, F⃗ -> $\vec{F}$, v⃗ -> $\vec{v}$
-  text = text.replace(/([A-Za-z]{2,3})\u20d7/g, '$\\overrightarrow{$1}$');
-  text = text.replace(/([A-Za-z])\u20d7/g, '$\\vec{$1}$');
-
-  // Nâng cấp \vec{AB} (2 chữ cái in hoa điểm đầu-cuối) thành \overrightarrow{AB} để mũi tên phủ trọn 2 điểm
-  text = text.replace(/\\vec\{([A-Z]{2})\}/g, '\\overrightarrow{$1}');
+  // 1. Nâng cấp \vec{AB} (2-3 chữ cái in hoa điểm đầu-cuối) thành \overrightarrow{AB} để mũi tên phủ trọn 2 điểm
+  text = text.replace(/\\vec\{([A-Z]{2,3})\}/g, '\\overrightarrow{$1}');
 
   // 2. EQUATION STITCHER (Hàn gắn công thức bị Word cắt đôi thành nhiều cụm $...$ đứt đoạn)
   // 2a. Nối công thức có chỉ số trên/dưới bị tách rời: "$A$ $_{2}$" hoặc "$\vec{F}$ $_{1}$" -> "$A_{2}$", "$\vec{F}_{1}$"
@@ -957,18 +979,37 @@ export function autoHealScientificAndStemText(rawInput: string): string {
 
   const healedSegments = segments.map((seg) => {
     if (seg.startsWith('$') && seg.endsWith('$')) {
-      // Bên trong $...$: Chuẩn hóa các ký hiệu gõ thô trong công thức toán/lý/hóa/sinh
+      // Bên trong $...$: Chuẩn hóa các ký hiệu gõ thô trong công thức toán/lý/hóa/sinh (KHÔNG chèn thêm dấu $ lồng bên trong)
       let inner = seg;
       inner = inner
+        .replace(/([A-Za-z]{2,3})[\u20d7\u20d6\u20e1]/g, '\\overrightarrow{$1}')
+        .replace(/([A-Za-z0-9])[\u20d7\u20d6\u20e1]/g, '\\vec{$1}')
+        .replace(/([A-Za-z]{2,3})[\u0304\u0305]/g, '\\overline{$1}')
+        .replace(/([A-Za-z0-9])[\u0304\u0305]/g, '\\bar{$1}')
+        .replace(/([A-Za-z]{2,3})\u0302/g, '\\widehat{$1}')
         .replace(/<==>|\\leftrightharpoons/g, '\\rightleftharpoons ')
         .replace(/<=>/g, '\\rightleftharpoons ')
         .replace(/-->/g, '\\rightarrow ')
         .replace(/(?<![<=-])->(?![>])/g, '\\rightarrow ')
-        .replace(/\\vec\{([A-Z]{2})\}/g, '\\overrightarrow{$1}');
+        .replace(/\\vec\{([A-Z]{2,3})\}/g, '\\overrightarrow{$1}');
       return inner;
     }
 
     let plain = seg;
+
+    // 3.0. Hàn gắn dấu mũi tên vectơ / gạch ngang trên / góc kết hợp Unicode ở văn bản ngoài $...$:
+    // Ví dụ: AB⃗ -> $\overrightarrow{AB}$, F⃗ -> $\vec{F}$, v⃗ -> $\vec{v}$
+    plain = plain
+      .replace(/([A-Za-z]{2,3})[\u20d7\u20d6\u20e1]/g, '$\\overrightarrow{$1}$')
+      .replace(/([A-Za-z0-9])[\u20d7\u20d6\u20e1]/g, '$\\vec{$1}$')
+      .replace(/([A-Za-z]{2,3})[\u0304\u0305]/g, '$\\overline{$1}$')
+      .replace(/([A-Za-z]{2,3})\u0302/g, '$\\widehat{$1}$');
+
+    // Tự động bọc dấu $...$ cho các lệnh \vec{...}, \overrightarrow{...}, \widehat{...}, \overline{...} bị gõ trần ngoài công thức
+    plain = plain.replace(
+      /\\(overrightarrow|vec|widehat|overline)\s*\{([^{}]+)\}(?:\s*[_^]\s*\{?[0-9a-zA-Z+-]+\}?)*/g,
+      (match) => `$${match}$`
+    );
 
     // 3.1. Chuẩn hóa mũi tên điều kiện nhiệt độ, xúc tác gõ thô:
     // VD: "--t°-->", "--(t°, xt)-->", "-> (t°)", "--> (t°, p, xt)" -> $\xrightarrow{t^\circ}$

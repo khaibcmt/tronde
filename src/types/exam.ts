@@ -124,6 +124,19 @@ export interface ValidationIssue {
   suggestion: string;
 }
 
+export type PhieuQMSelectionCode =
+  | 'AUTO'
+  | 'TOAN'
+  | 'KHTN_DIA'
+  | 'NGOAI_NGU'
+  | 'KHXH_CN_TIN'
+  | 'QM_40_0_0'
+  | 'QM_0_0_10'
+  | 'QM_40_16_12'
+  | 'QM_30_20_0'
+  | 'QM_40_8_6'
+  | 'CUSTOM';
+
 export interface ShuffleConfig {
   numVariants: number; // 4, 8, 12, 24...
   examCodeDigits: 3 | 4; // 3 số (101) hoặc 4 số (1001)
@@ -135,7 +148,11 @@ export interface ShuffleConfig {
   shuffleSubItemsPart2: boolean;
   qrFormat: QRAppFormat;
   embedQrInWord: boolean;
-  embedPhieuQM2025?: boolean; // Tự động chèn Phiếu trả lời trắc nghiệm QM 2025 (16.5cm x 8.2cm) vào đầu Trang 1 của mỗi mã đề Word
+  embedPhieuQM2025?: boolean; // Tự động chèn Phiếu trả lời trắc nghiệm vào đầu Trang 1 của mỗi mã đề Word
+  selectedPhieuQMCode?: PhieuQMSelectionCode; // Mã phiếu trả lời giáo viên chọn ('AUTO' = mặc định theo môn, hoặc chọn phiếu cụ thể)
+  customPhieuQMDataUrl?: string; // Ảnh PNG/JPEG DataURL của phiếu do giáo viên tự tải lên
+  customPhieuQMName?: string;    // Tên file phiếu do giáo viên tự tải lên
+  customPhieuQMAspectRatio?: number; // Tỷ lệ khung hình gốc (width / height) của phiếu tự tải lên
   includeSolutionsInExport: boolean; // Tùy chọn xuất kèm lời giải chi tiết trong Word
 
   // Thông tin tiêu đề đề thi & Quốc hiệu Tiêu ngữ
@@ -143,12 +160,12 @@ export interface ShuffleConfig {
   schoolName: string;     // VD: TRƯỜNG THPT MANG THÍT
   nationalHeader: string; // VD: CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
   nationalMotto: string;  // VD: Độc lập - Tự do - Hạnh phúc
-  examTitle: string;      // VD: KỲ THI TỐT NGHIỆP THPT NĂM 2025
+  examTitle: string;      // VD: KIỂM TRA ÔN TẬP
   examSubtitle: string;   // VD: ĐỀ THI CHÍNH THỨC
   subjectName: string;    // VD: TOÁN HỌC
   gradeLevel?: string;    // VD: Lớp 12
   schoolYear: string;     // VD: Năm 2026 - 2027
-  durationMinutes: number; // VD: 90
+  durationMinutes: number; // VD: 45
 }
 
 export interface SingleQrItem {
