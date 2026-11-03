@@ -1,4 +1,4 @@
-import JSZip from 'jszip';
+import { DocxAutoHealEngine } from './docxAutoHeal';import JSZip from 'jszip';
 import mammoth from 'mammoth';
 import {
   ExamImageAttachment,
