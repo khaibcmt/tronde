@@ -13,9 +13,11 @@ import {
 import {
   assignDeterministicImageTagsToQuestions,
   autoHealScientificAndStemText,
+  decodeWordSymChar,
   enhanceAndCropExamImage,
   ExtractedShapePrimitive,
   renderGroupedShapesToFlatPngDataUrl,
+  sanitizeSpecialCharsToUtf8,
 } from './scientificExamProcessor';
 import { defaultDocxAutoHealEngine } from './docxAutoHeal';
 
@@ -1135,7 +1137,7 @@ function sliceRunsByCharRange(
  */
 export function normalizeVietnameseExamText(raw: string): string {
   if (!raw) return '';
-  let text = raw
+  let text = sanitizeSpecialCharsToUtf8(raw)
     .normalize('NFC')
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
     .replace(/[\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ');
@@ -1506,7 +1508,7 @@ function extractParagraphsFromDocxXmlRegex(
 
       let runText = '';
       const tokenRegex =
-        /<(?:\w+:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?t>|<(?:\w+:)?(tab|br|cr|noBreakHyphen)\b[^>]*\/?>/gi;
+        /<(?:\w+:)?t(?:\s[^>]*)?>([\s\S]*?)<\/(?:\w+:)?t>|<(?:\w+:)?(tab|br|cr|noBreakHyphen)\b[^>]*\/?>|<(?:\w+:)?sym\b([^>]*)\/?>/gi;
       let tMatch: RegExpExecArray | null;
       while ((tMatch = tokenRegex.exec(rInner)) !== null) {
         if (tMatch[1] !== undefined) {
@@ -1516,6 +1518,15 @@ function extractParagraphsFromDocxXmlRegex(
           if (kind === 'tab') runText += '\t';
           else if (kind === 'br' || kind === 'cr') runText += '\n';
           else if (kind === 'nobreakhyphen') runText += '-';
+        } else if (tMatch[3] !== undefined) {
+          const symAttrs = tMatch[3];
+          const fontMatch = symAttrs.match(/(?:\w+:)?font="([^"]+)"/i);
+          const charMatch = symAttrs.match(/(?:\w+:)?char="([^"]+)"/i);
+          const decodedSym = decodeWordSymChar(
+            fontMatch ? fontMatch[1] : 'Symbol',
+            charMatch ? charMatch[1] : ''
+          );
+          if (decodedSym) runText += decodedSym;
         }
       }
 
@@ -2197,6 +2208,11 @@ function extractParagraphsFromDocxXml(
 
             if (rTag === 't') {
               text += normalizeVietnameseExamText(rChild.textContent || '');
+            } else if (rTag === 'sym') {
+              const symFont = getXmlAttr(rChild, 'font') || 'Symbol';
+              const symChar = getXmlAttr(rChild, 'char');
+              const decodedSym = decodeWordSymChar(symFont, symChar);
+              if (decodedSym) text += decodedSym;
             } else if (rTag === 'tab') {
               text += '\t';
             } else if (rTag === 'br' || rTag === 'cr') {

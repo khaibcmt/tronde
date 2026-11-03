@@ -11,6 +11,7 @@ import {
 import {
   buildRichScientificRunsAndMathXml,
   buildStructuredStemTableXml,
+  sanitizeSpecialCharsToUtf8,
 } from './scientificExamProcessor';
 import {
   enforceStrictFourOptionsPart1,
@@ -32,7 +33,7 @@ import {
 } from './phieuQmBase64Assets';
 
 function escapeXml(unsafe: string): string {
-  return unsafe
+  return sanitizeSpecialCharsToUtf8(unsafe || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -2118,22 +2119,63 @@ async function packOpenXmlDocx(
   const hasQrImage = Boolean(embeddedQrDataUrl);
   const hasAnyImage = hasQrImage || (embeddedImages && embeddedImages.length > 0);
 
+  const utf8Encoder = new TextEncoder();
+  const encodeUtf8Xml = (xmlStr: string): Uint8Array =>
+    utf8Encoder.encode(xmlStr.normalize('NFC'));
+
   const defaultStylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+          xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
   <w:docDefaults>
     <w:rPrDefault>
       <w:rPr>
         <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:eastAsia="Times New Roman" w:cs="Times New Roman"/>
         <w:sz w:val="24"/>
         <w:szCs w:val="24"/>
+        <w:lang w:val="vi-VN" w:eastAsia="vi-VN" w:bidi="ar-SA"/>
       </w:rPr>
     </w:rPrDefault>
   </w:docDefaults>
 </w:styles>`;
 
+  const settingsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">
+  <w:compat>
+    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
+  </w:compat>
+  <m:mathPr>
+    <m:mathFont m:val="Cambria Math"/>
+    <m:brkBin m:val="before"/>
+    <m:brkBinSub m:val="--"/>
+    <m:smallFrac m:val="0"/>
+    <m:dispDef/>
+    <m:lMargin m:val="0"/>
+    <m:rMargin m:val="0"/>
+    <m:defJc m:val="centerGroup"/>
+    <m:wrapIndent m:val="1440"/>
+    <m:intLim m:val="subSup"/>
+    <m:naryLim m:val="undOvr"/>
+  </m:mathPr>
+</w:settings>`;
+
+  const fontTableXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:font w:name="Times New Roman">
+    <w:charset w:val="00"/>
+    <w:family w:val="roman"/>
+    <w:pitch w:val="variable"/>
+  </w:font>
+  <w:font w:name="Cambria Math">
+    <w:charset w:val="00"/>
+    <w:family w:val="roman"/>
+    <w:pitch w:val="variable"/>
+  </w:font>
+</w:fonts>`;
+
   zip.file(
     '[Content_Types].xml',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    encodeUtf8Xml(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
@@ -2144,20 +2186,24 @@ async function packOpenXmlDocx(
   ${hasAnyImage ? '<Default Extension="svg" ContentType="image/svg+xml"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
+  <Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/>
   <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
-</Types>`
+</Types>`)
   );
 
   zip.file(
     '_rels/.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    encodeUtf8Xml(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
-</Relationships>`
+</Relationships>`)
   );
 
   const relsItems: string[] = [
     `<Relationship Id="rIdStyles1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`,
+    `<Relationship Id="rIdSettings1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>`,
+    `<Relationship Id="rIdFontTable1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>`,
     `<Relationship Id="rIdFooter1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>`,
   ];
 
@@ -2184,14 +2230,19 @@ async function packOpenXmlDocx(
 
   zip.file(
     'word/_rels/document.xml.rels',
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    encodeUtf8Xml(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   ${relsItems.join('\n  ')}
-</Relationships>`
+</Relationships>`)
   );
 
-  zip.file('word/styles.xml', defaultStylesXml);
-  zip.file('word/footer1.xml', buildFooterXml(config, footerExamCodeLabel, isLandscape));
+  zip.file('word/styles.xml', encodeUtf8Xml(defaultStylesXml));
+  zip.file('word/settings.xml', encodeUtf8Xml(settingsXml));
+  zip.file('word/fontTable.xml', encodeUtf8Xml(fontTableXml));
+  zip.file(
+    'word/footer1.xml',
+    encodeUtf8Xml(buildFooterXml(config, footerExamCodeLabel, isLandscape))
+  );
 
   const pgSzXml = isLandscape
     ? `<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>`
@@ -2214,7 +2265,7 @@ async function packOpenXmlDocx(
   </w:body>
 </w:document>`;
 
-  zip.file('word/document.xml', documentXml);
+  zip.file('word/document.xml', encodeUtf8Xml(documentXml));
 
   return zip.generateAsync({
     type: 'blob',

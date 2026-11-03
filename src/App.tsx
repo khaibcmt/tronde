@@ -1597,6 +1597,24 @@ export default function App() {
     }
   };
 
+  const handleExportWordEquationOmathDocx = async () => {
+    if (questions.length === 0) return;
+    setIsProcessing(true);
+    try {
+      const blob = await exportCleanedMasterDocx(questions, config, false);
+      triggerBrowserDownload(
+        blob,
+        buildStandardExportFileName(config, 'docx', 'Đề chuẩn Word Equation oMath')
+      );
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: 'Đã xuất file Word (.docx) chuẩn Microsoft Office Equation <m:oMath> (LaTeX → MathML → OMML mml2omml · Font Cambria Math · Chuẩn UTF-8 không lỗi ô vuông)!',
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleDownloadMasterAnswerSheetDocx = async () => {
     if (shuffledVariants.length === 0) return;
     setIsProcessing(true);
@@ -3483,17 +3501,29 @@ export default function App() {
 
               {/* Nhóm 4: Chọn cỡ chữ & Chèn nhanh ký hiệu khoa học */}
               <div className="pt-1 border-t border-sky-200/80 flex flex-wrap items-center justify-between gap-1.5">
-                <select
-                  value={wordFontSizePt}
-                  onChange={(e) => setWordFontSizePt(Number(e.target.value))}
-                  className="px-2 py-1 rounded-xl bg-white border border-sky-300 text-xs font-mono font-bold text-slate-900 cursor-pointer"
-                  title="Chọn cỡ chữ hiển thị"
-                >
-                  <option value={11}>Times 11pt</option>
-                  <option value={12}>Times 12pt</option>
-                  <option value={13}>Times 13pt</option>
-                  <option value={14}>Times 14pt</option>
-                </select>
+                <div className="flex items-center gap-1.5">
+                  <select
+                    value={wordFontSizePt}
+                    onChange={(e) => setWordFontSizePt(Number(e.target.value))}
+                    className="px-2 py-1 rounded-xl bg-white border border-sky-300 text-xs font-mono font-bold text-slate-900 cursor-pointer"
+                    title="Chọn cỡ chữ hiển thị"
+                  >
+                    <option value={11}>Times 11pt</option>
+                    <option value={12}>Times 12pt</option>
+                    <option value={13}>Times 13pt</option>
+                    <option value={14}>Times 14pt</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={handleExportWordEquationOmathDocx}
+                    disabled={isProcessing || questions.length === 0}
+                    className="px-2 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-mono font-bold flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
+                    title="Tải ngay file Word (.docx) nhúng trực tiếp công thức <m:oMath> chuẩn Cambria Math UTF-8 (Không bị ô vuông)"
+                  >
+                    <Download className="w-3 h-3 shrink-0" />
+                    <span>Xuất Word Equation &lt;m:oMath&gt;</span>
+                  </button>
+                </div>
 
                 <div className="flex items-center gap-1 flex-wrap">
                   {[
@@ -3844,9 +3874,16 @@ export default function App() {
                                   <Sigma className="w-3.5 h-3.5 text-blue-600" />
                                   <span>Định dạng công thức trực quan (Auto-Heal KaTeX / MathJax 3 — Toán · Lý · Hóa · Sinh):</span>
                                 </span>
-                                <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                  Xuất Word Equation &lt;m:oMath&gt;
-                                </span>
+                                <button
+                                  type="button"
+                                  onClick={handleExportWordEquationOmathDocx}
+                                  disabled={isProcessing}
+                                  className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-600 hover:text-white px-2.5 py-0.5 rounded-lg border border-emerald-300 shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                                  title="Bấm để tải ngay file Word (.docx) với công thức chuyển từ LaTeX -> MathML (KaTeX) -> OMML <m:oMath> chuẩn font Cambria Math UTF-8"
+                                >
+                                  <Download className="w-3 h-3 shrink-0" />
+                                  <span>Xuất Word Equation &lt;m:oMath&gt;</span>
+                                </button>
                               </div>
                               <ScientificContentRenderer text={q.stemText} formulaLatex={q.formulaLatex} hasFormula={q.hasFormula} />
                             </div>
@@ -3863,9 +3900,16 @@ export default function App() {
                                 {q.formulaLatex || 'Chuẩn LaTeX / Office Math Markup (OMML)'}
                               </span>
                             </div>
-                            <span className="text-[11px] font-bold text-indigo-600 bg-white/70 px-2 py-0.5 rounded">
-                              Xuất trực tiếp Word Equation / Sub-Superscript chuẩn
-                            </span>
+                            <button
+                              type="button"
+                              onClick={handleExportWordEquationOmathDocx}
+                              disabled={isProcessing}
+                              className="text-[11px] font-bold text-indigo-700 hover:text-white bg-white hover:bg-indigo-600 px-2.5 py-0.5 rounded-lg border border-indigo-300 transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Tải file Word (.docx) nhúng trực tiếp <m:oMath> chuẩn Cambria Math"
+                            >
+                              <Download className="w-3 h-3 shrink-0" />
+                              <span>Xuất Word Equation &lt;m:oMath&gt;</span>
+                            </button>
                           </div>
                         )}
 
