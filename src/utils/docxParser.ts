@@ -73,7 +73,7 @@ async function convertWmfBufferToPngDataUrl(buffer: Uint8Array): Promise<string>
 /**
  * ENGINE ĐỌC VÀ CHỮA LỖI TẤT CẢ FILE ẢNH/MEDIA TRONG DOCX
  */
-async function extractMediaMap(zip: JSZip): Promise> {
+async function extractMediaMap(zip: JSZip): Promise<any> {
   const mediaMap = new Map<string, { dataUrl: string; fileName: string }>();
   
   // 1. Phân tích bảng ánh xạ rId -> tên file trong document.xml.rels
