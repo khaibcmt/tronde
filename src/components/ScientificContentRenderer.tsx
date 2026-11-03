@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import { autoHealScientificAndStemText } from '../utils/scientificExamProcessor';
 
 declare global {
@@ -223,6 +224,7 @@ export const ScientificContentRenderer: React.FC<ScientificContentRendererProps>
             throwOnError: true,
             strict: false,
             trust: true,
+            output: 'html',
           });
           segments.push(
             <span
@@ -239,6 +241,7 @@ export const ScientificContentRenderer: React.FC<ScientificContentRendererProps>
               throwOnError: false,
               strict: false,
               trust: true,
+              output: 'html',
             });
             segments.push(
               <span
@@ -285,6 +288,7 @@ export const ScientificContentRenderer: React.FC<ScientificContentRendererProps>
           throwOnError: false,
           strict: false,
           trust: true,
+          output: 'html',
         });
         return {
           renderedNodes: (

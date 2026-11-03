@@ -3662,334 +3662,242 @@ export default function App() {
                 </div>
               )}
 
-              {/* Danh sách câu hỏi trực quan */}
-              <div className="space-y-4">
-                {filteredQuestions.map((q, idx) => {
-                  const prevQ = idx > 0 ? filteredQuestions[idx - 1] : null;
-                  const showPartHeader = !prevQ || prevQ.part !== q.part;
-                  const questionIssues = validationIssues.filter(
-                    (iss) => iss.questionId === q.id
-                  );
-                  const isHighlighted = highlightedQuestionId === q.id;
+              {/* TRANG ĐỀ THI HOÀN CHỈNH ĐÃ CHUẨN HÓA (CHỈ HIỂN THỊ CÂU HỎI CHUẨN, KHÔNG LẶP NỘI DUNG THÔ) */}
+              {editorViewMode === 'CARDS_3D' && (
+                <div
+                  style={{
+                    fontFamily: "'Times New Roman', Times, serif",
+                    fontSize: `${wordFontSizePt}pt`,
+                  }}
+                  className="p-6 sm:p-8 bg-white rounded-3xl border-2 border-slate-300 shadow-lg space-y-5 text-slate-950"
+                >
+                  {/* Quốc hiệu - Tiêu ngữ - Tiêu đề Đề thi chuẩn */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 pb-3 border-b-2 border-slate-800 text-center">
+                    <div className="sm:col-span-5 space-y-0.5">
+                      <div className="font-bold uppercase">
+                        {config.departmentName}
+                      </div>
+                      <div className="font-bold uppercase underline">
+                        {config.schoolName}
+                      </div>
+                      <div className="font-bold pt-1">
+                        {config.examSubtitle}
+                      </div>
+                    </div>
+                    <div className="sm:col-span-7 space-y-0.5">
+                      <div className="font-bold uppercase">
+                        {config.nationalHeader}
+                      </div>
+                      <div className="font-bold underline">
+                        {config.nationalMotto}
+                      </div>
+                      <div className="font-bold uppercase pt-1">
+                        {config.examTitle} ({config.schoolYear})
+                      </div>
+                      <div className="italic">
+                        Môn thi: <strong className="font-bold not-italic">{config.subjectName}</strong> — Thời gian làm bài: {config.durationMinutes} phút
+                      </div>
+                    </div>
+                  </div>
 
-                  const effectiveLayout =
-                    config.layoutOverride === 'AUTO'
-                      ? q.computedLayout || '4_ROW_1_COL'
-                      : config.layoutOverride;
+                  {/* Nội dung các phần và câu hỏi đã chuẩn hóa */}
+                  <div className="space-y-4">
+                    {filteredQuestions.map((q, idx) => {
+                      const prevQ = idx > 0 ? filteredQuestions[idx - 1] : null;
+                      const showPartHeader = !prevQ || prevQ.part !== q.part;
+                      const questionIssues = validationIssues.filter(
+                        (iss) => iss.questionId === q.id
+                      );
+                      const isHighlighted = highlightedQuestionId === q.id;
+                      const isEditingThisQuestion = activeFocusedQuestionId === q.id;
 
-                  return (
-                    <React.Fragment key={q.id}>
-                      {showPartHeader && (
-                        <div
-                          className={`px-5 py-3 text-white rounded-2xl flex items-center justify-between shadow-lg ${
-                            q.part === 'PART_1'
-                              ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600'
-                              : q.part === 'PART_2'
-                              ? 'bg-gradient-to-r from-emerald-700 via-teal-700 to-cyan-700'
-                              : q.part === 'PART_3'
-                              ? 'bg-gradient-to-r from-orange-600 via-amber-600 to-rose-600'
-                              : 'bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700'
-                          }`}
-                        >
-                          <h3 className="text-sm font-black tracking-wide uppercase">
-                            {q.part === 'PART_1' &&
-                              'PHẦN I. Trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)'}
-                            {q.part === 'PART_2' &&
-                              'PHẦN II. Trắc nghiệm Đúng / Sai (a, b, c, d)'}
-                            {q.part === 'PART_3' &&
-                              'PHẦN III. Trắc nghiệm Trả lời ngắn'}
-                            {q.part === 'PART_4' &&
-                              `${essayRomanLabel}. Tự luận`}
-                          </h3>
-                          <span className="text-xs font-mono font-bold bg-black/20 px-3 py-1 rounded-lg shrink-0">
-                            {q.part === 'PART_1'
-                              ? `${part1Count} câu`
-                              : q.part === 'PART_2'
-                              ? `${part2Count} câu`
-                              : q.part === 'PART_3'
-                              ? `${part3Count} câu`
-                              : `${part4Count} câu`}
-                          </span>
-                        </div>
-                      )}
+                      const effectiveLayout =
+                        config.layoutOverride === 'AUTO'
+                          ? q.computedLayout || '4_ROW_1_COL'
+                          : config.layoutOverride;
 
-                      <div
-                        ref={(el) => {
-                          questionRefs.current[q.id] = el;
-                        }}
-                        className={`exam-content p-5 rounded-2xl transition-all ${
-                          isHighlighted
-                            ? 'bg-amber-50 border-2 border-amber-500 ring-4 ring-amber-300 shadow-xl'
-                            : questionIssues.length > 0
-                            ? 'bg-rose-50/95 border-2 border-rose-400 shadow-md'
-                            : 'card-3d-panel'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3 border-b border-sky-200">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-black font-mono shadow-xs">
-                              Câu {q.displayIndex}
-                            </span>
-                            <select
-                              value={q.bloomLevel || 'NHAN_BIET'}
-                              onChange={(e) =>
-                                handleUpdateBloomLevel(
-                                  q.id,
-                                  e.target.value as BloomLevel
-                                )
-                              }
-                              className="px-2 py-0.5 text-[11px] font-bold bg-sky-100 text-sky-900 border border-sky-300 rounded-md focus:outline-none"
-                            >
-                              <option value="NHAN_BIET">Mức độ: Nhận biết</option>
-                              <option value="THONG_HIEU">Mức độ: Thông hiểu</option>
-                              <option value="VAN_DUNG">Mức độ: Vận dụng</option>
-                              <option value="VAN_DUNG_CAO">Mức độ: Vận dụng cao</option>
-                            </select>
-                          </div>
+                      return (
+                        <React.Fragment key={q.id}>
+                          {showPartHeader && (
+                            <div className="pt-3 pb-1 font-bold text-slate-950 border-b border-slate-300">
+                              {q.part === 'PART_1' &&
+                                'PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn. Mỗi câu hỏi thí sinh chỉ chọn một phương án.'}
+                              {q.part === 'PART_2' &&
+                                'PHẦN II. Câu trắc nghiệm đúng sai. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai.'}
+                              {q.part === 'PART_3' &&
+                                'PHẦN III. Câu trắc nghiệm trả lời ngắn.'}
+                              {q.part === 'PART_4' &&
+                                `${essayRomanLabel}. Tự luận.`}
+                            </div>
+                          )}
 
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div
+                            ref={(el) => {
+                              questionRefs.current[q.id] = el;
+                            }}
+                            className={`exam-content group relative rounded-xl transition-all ${
+                              isHighlighted
+                                ? 'p-3 bg-amber-50 border-2 border-amber-500 ring-2 ring-amber-300'
+                                : questionIssues.length > 0
+                                ? 'p-3 bg-rose-50/90 border border-rose-400'
+                                : isEditingThisQuestion
+                                ? 'p-4 bg-sky-50/70 border border-sky-300'
+                                : 'py-1.5 px-2 hover:bg-slate-50/80'
+                            }`}
+                          >
+                            {/* Cảnh báo nếu câu hỏi thiếu/sai quy chuẩn đáp án */}
                             {questionIssues.length > 0 && (
-                              <div className="flex items-center gap-1 text-xs font-extrabold text-rose-700 bg-rose-100/90 px-2.5 py-1 rounded-lg border border-rose-300">
+                              <div className="mb-2 flex items-center gap-1.5 text-xs font-bold text-rose-700 bg-rose-100 px-2.5 py-1 rounded-lg border border-rose-300">
                                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                                 <span>{questionIssues[0].message}</span>
                               </div>
                             )}
 
-                            <input
-                              type="file"
-                              accept="image/*"
-                              id={`upload-img-${q.id}`}
-                              onChange={(e) => handleAddImageToQuestion(q.id, e)}
-                              className="hidden"
-                            />
-                            <label
-                              htmlFor={`upload-img-${q.id}`}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 flex items-center gap-1 cursor-pointer transition-colors"
-                              title="Thêm hình ảnh / sơ đồ minh họa cho câu hỏi"
-                            >
-                              <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
-                              <span>+ Thêm ảnh</span>
-                            </label>
-                          </div>
-                        </div>
+                            {/* Chế độ hiển thị chuẩn hóa (Mặc định) vs Chế độ sửa câu hỏi khi bấm nút Sửa */}
+                            {!isEditingThisQuestion ? (
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="text-left leading-relaxed flex-1">
+                                    <strong className="font-bold">
+                                      Câu {q.displayIndex}.{' '}
+                                    </strong>
+                                    <ScientificContentRenderer
+                                      text={q.stemText}
+                                      formulaLatex={q.formulaLatex}
+                                      hasFormula={q.hasFormula}
+                                      inline
+                                    />
+                                  </div>
 
-                        {/* Ô biên tập trực tiếp thân câu hỏi */}
-                        <div className="mb-3">
-                          <textarea
-                            rows={2}
-                            value={q.stemText}
-                            onFocus={() => setActiveFocusedQuestionId(q.id)}
-                            onChange={(e) =>
-                              handleUpdateStemText(q.id, e.target.value)
-                            }
-                            style={{
-                              fontFamily: "'Times New Roman', Times, serif",
-                              fontSize: '12pt',
-                            }}
-                            className="w-full px-3.5 py-2 text-left text-slate-900 bg-white border-2 border-sky-200 rounded-xl focus:outline-none focus:border-blue-600 leading-relaxed shadow-inner"
-                          />
-
-                          {/* Xem trước trực quan công thức Toán - Lý - Hóa - Sinh */}
-                          {(q.stemText.includes('$') ||
-                            q.stemText.includes('\\') ||
-                            q.hasFormula ||
-                            /[A-Z][a-z]?\d/.test(q.stemText) ||
-                            /\b([A-DF-Z][a-df-z]{1,3})\s*\/\s*([A-DF-Z][a-df-z]{1,3})\b/.test(q.stemText) ||
-                            /\bX([A-Za-z])X([A-Za-z])\b|\bX([A-Za-z])Y\b/.test(q.stemText) ||
-                            q.stemText.includes('→') ||
-                            q.stemText.includes('⇌') ||
-                            q.stemText.includes('->') ||
-                            q.stemText.includes('<=>')) && (
-                            <div className="mt-2 px-3 py-2 rounded-xl bg-blue-50/60 border border-blue-200/80 text-slate-900">
-                              <ScientificContentRenderer text={q.stemText} formulaLatex={q.formulaLatex} hasFormula={q.hasFormula} />
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Bảng dữ liệu trong câu hỏi */}
-                        {q.stemTables && q.stemTables.length > 0 && (
-                          <div className="mb-3 space-y-2">
-                            {q.stemTables.map((tbl) => (
-                              <div
-                                key={tbl.id}
-                                className="overflow-x-auto rounded-xl border border-slate-300 bg-white shadow-2xs"
-                              >
-                                <table
-                                  className="w-full border-collapse text-xs text-slate-900"
-                                  style={{ fontFamily: "'Times New Roman', Times, serif" }}
-                                >
-                                  <tbody>
-                                    {tbl.rows.map((row, rIdx) => (
-                                      <tr
-                                        key={`${tbl.id}-r-${rIdx}`}
-                                        className={rIdx === 0 ? 'bg-slate-100 font-bold' : 'bg-white'}
-                                      >
-                                        {row.map((cell, cIdx) =>
-                                          cell.vMergeContinue ? null : (
-                                            <td
-                                              key={`${tbl.id}-c-${rIdx}-${cIdx}`}
-                                              colSpan={cell.colSpan || 1}
-                                              rowSpan={cell.rowSpan || 1}
-                                              className={`border border-slate-300 px-2.5 py-1.5 ${
-                                                cell.align === 'center'
-                                                  ? 'text-center'
-                                                  : cell.align === 'right'
-                                                  ? 'text-right'
-                                                  : 'text-left'
-                                              } ${cell.isBold || rIdx === 0 ? 'font-bold' : ''}`}
-                                            >
-                                              {cell.text}
-                                            </td>
-                                          )
-                                        )}
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Hình ảnh đính kèm của câu hỏi */}
-                        {q.images && q.images.length > 0 && (
-                          <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                            {q.images.map((img, imgIdx) => {
-                              const displayTag =
-                                img.tagId ||
-                                `Câu ${q.displayIndex}${
-                                  (q.images?.length || 0) > 1 ? ` (${imgIdx + 1})` : ''
-                                }`;
-                              return (
-                                <div
-                                  key={img.id}
-                                  className="exam-pedigree-block relative group p-2 rounded-xl bg-white border border-sky-200 shadow-xs flex flex-col items-center"
-                                >
-                                  <img
-                                    src={img.dataUrl}
-                                    alt={img.caption || displayTag}
-                                    className="max-h-40 object-contain rounded-lg cursor-pointer transition-transform group-hover:scale-102"
-                                    onClick={() =>
-                                      setPreviewModalImage({
-                                        src: img.dataUrl,
-                                        caption: `Hình minh họa — Câu ${q.displayIndex}`,
-                                      })
-                                    }
-                                  />
-                                  <div className="mt-1 flex items-center justify-end gap-1 w-full px-1">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setPreviewModalImage({
-                                          src: img.dataUrl,
-                                          caption: `Hình minh họa — Câu ${q.displayIndex}`,
-                                        })
+                                  <div className="opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                                    <select
+                                      value={q.bloomLevel || 'NHAN_BIET'}
+                                      onChange={(e) =>
+                                        handleUpdateBloomLevel(
+                                          q.id,
+                                          e.target.value as BloomLevel
+                                        )
                                       }
-                                      className="p-1 text-slate-500 hover:text-blue-600 rounded cursor-pointer"
-                                      title="Phóng to xem chi tiết"
+                                      className="px-1.5 py-0.5 text-[11px] font-bold bg-white text-slate-700 border border-slate-300 rounded focus:outline-none cursor-pointer"
+                                      title="Chọn mức độ nhận thức"
                                     >
-                                      <Maximize2 className="w-3.5 h-3.5" />
-                                    </button>
+                                      <option value="NHAN_BIET">Nhận biết</option>
+                                      <option value="THONG_HIEU">Thông hiểu</option>
+                                      <option value="VAN_DUNG">Vận dụng</option>
+                                      <option value="VAN_DUNG_CAO">Vận dụng cao</option>
+                                    </select>
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveImageFromQuestion(q.id, img.id)}
-                                      className="p-1 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
-                                      title="Xóa hình ảnh này"
+                                      onClick={() => setActiveFocusedQuestionId(q.id)}
+                                      className="px-2 py-0.5 rounded text-[11px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 flex items-center gap-1 cursor-pointer"
+                                      title="Chỉnh sửa nội dung câu hỏi này"
                                     >
-                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <Edit3 className="w-3 h-3" />
+                                      <span>Sửa</span>
                                     </button>
                                   </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
 
-                        {/* ================= NỘI DUNG PHẦN I: 4 PHƯƠNG ÁN A, B, C, D ================= */}
-                        {q.part === 'PART_1' && q.options && (
-                          <div className="space-y-2.5">
-                            {q.options.filter((o) => o.isCorrect).length === 0 && (
-                              <div className="px-3 py-2 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-black flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                                  <span>
-                                    CHƯA CÓ ĐÁP ÁN ĐÚNG (Hệ thống tuyệt đối không tự bịa đáp án): Giáo viên vui lòng bấm vào nút A, B, C hoặc D bên dưới để chọn đáp án chuẩn!
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            {q.options.filter((o) => o.isCorrect).length > 1 && (
-                              <div className="px-3 py-2 rounded-xl bg-rose-100 border-2 border-rose-500 text-rose-900 text-xs font-black flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                                  <span>
-                                    ĐANG ĐÁNH DẤU NHIỀU HƠN 1 ĐÁP ÁN ĐÚNG: Giáo viên vui lòng bấm chọn 1 phương án duy nhất (A, B, C hoặc D)!
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                            <div
-                              className={`grid gap-3 ${
-                                effectiveLayout === '1_ROW_4_COL'
-                                  ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4'
-                                  : effectiveLayout === '2_ROW_2_COL'
-                                  ? 'grid-cols-1 sm:grid-cols-2'
-                                  : 'grid-cols-1'
-                              }`}
-                            >
-                              {q.options.map((opt) => (
-                                <div
-                                  key={opt.id}
-                                  className={`p-2.5 rounded-xl border-2 flex items-center gap-2 transition-all ${
-                                    opt.isCorrect
-                                      ? 'bg-rose-50/90 border-rose-400 shadow-md'
-                                      : 'bg-sky-50/60 border-sky-200'
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleSelectSingleCorrectPart1(q.id, opt.id)
-                                    }
-                                    title={`Click 1 chạm chọn ${opt.currentLabel} làm đáp án đúng`}
-                                    className={`w-8 h-8 rounded-lg text-xs font-black text-white flex items-center justify-center shrink-0 ${
-                                      opt.isCorrect
-                                        ? 'btn-3d-rose'
-                                        : 'btn-3d-primary opacity-80 hover:opacity-100'
+                                {/* Bảng dữ liệu trong câu hỏi */}
+                                {q.stemTables && q.stemTables.length > 0 && (
+                                  <div className="my-2 space-y-2">
+                                    {q.stemTables.map((tbl) => (
+                                      <div
+                                        key={tbl.id}
+                                        className="overflow-x-auto rounded-lg border border-slate-300 bg-white"
+                                      >
+                                        <table
+                                          className="w-full border-collapse text-xs text-slate-900"
+                                          style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                                        >
+                                          <tbody>
+                                            {tbl.rows.map((row, rIdx) => (
+                                              <tr
+                                                key={`${tbl.id}-r-${rIdx}`}
+                                                className={rIdx === 0 ? 'bg-slate-100 font-bold' : 'bg-white'}
+                                              >
+                                                {row.map((cell, cIdx) =>
+                                                  cell.vMergeContinue ? null : (
+                                                    <td
+                                                      key={`${tbl.id}-c-${rIdx}-${cIdx}`}
+                                                      colSpan={cell.colSpan || 1}
+                                                      rowSpan={cell.rowSpan || 1}
+                                                      className={`border border-slate-300 px-2.5 py-1.5 ${
+                                                        cell.align === 'center'
+                                                          ? 'text-center'
+                                                          : cell.align === 'right'
+                                                          ? 'text-right'
+                                                          : 'text-left'
+                                                      } ${cell.isBold || rIdx === 0 ? 'font-bold' : ''}`}
+                                                    >
+                                                      <ScientificContentRenderer text={cell.text} inline />
+                                                    </td>
+                                                  )
+                                                )}
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Hình ảnh đính kèm */}
+                                {q.images && q.images.length > 0 && (
+                                  <div className="my-2 flex flex-wrap items-center justify-center gap-4">
+                                    {q.images.map((img) => (
+                                      <div
+                                        key={img.id}
+                                        className="exam-pedigree-block relative flex flex-col items-center"
+                                      >
+                                        <img
+                                          src={img.dataUrl}
+                                          alt={img.caption || `Hình câu ${q.displayIndex}`}
+                                          className="max-h-52 object-contain rounded cursor-pointer"
+                                          onClick={() =>
+                                            setPreviewModalImage({
+                                              src: img.dataUrl,
+                                              caption: `Câu ${q.displayIndex}`,
+                                            })
+                                          }
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* PHẦN I: 4 phương án A, B, C, D đã chuẩn hóa (Bấm trực tiếp để chọn đáp án đúng) */}
+                                {q.part === 'PART_1' && q.options && (
+                                  <div
+                                    className={`grid gap-x-4 gap-y-1.5 pl-1 pt-0.5 ${
+                                      effectiveLayout === '1_ROW_4_COL'
+                                        ? 'grid-cols-2 sm:grid-cols-4'
+                                        : effectiveLayout === '2_ROW_2_COL'
+                                        ? 'grid-cols-1 sm:grid-cols-2'
+                                        : 'grid-cols-1'
                                     }`}
                                   >
-                                    {opt.currentLabel}
-                                  </button>
-
-                                  <div className="flex-1 min-w-0">
-                                    <input
-                                      type="text"
-                                      value={opt.text}
-                                      onChange={(e) =>
-                                        handleUpdateOptionTextPart1(
-                                          q.id,
-                                          opt.id,
-                                          e.target.value
-                                        )
-                                      }
-                                      style={{
-                                        fontFamily: "'Times New Roman', Times, serif",
-                                        fontSize: '12pt',
-                                      }}
-                                      className={`w-full px-2 py-1 text-left bg-transparent border-b border-transparent focus:border-blue-600 focus:bg-white focus:outline-none ${
-                                        opt.isUnderline ? 'underline decoration-2' : ''
-                                      } ${
-                                        opt.isRed
-                                          ? 'text-rose-600 font-bold'
-                                          : 'text-slate-900 font-medium'
-                                      }`}
-                                    />
-                                    {(opt.text.includes('$') ||
-                                      opt.text.includes('\\') ||
-                                      /[A-Z][a-z]?\d/.test(opt.text) ||
-                                      /\b([A-DF-Z][a-df-z]{1,3})\s*\/\s*([A-DF-Z][a-df-z]{1,3})\b/.test(opt.text) ||
-                                      /\bX([A-Za-z])X([A-Za-z])\b|\bX([A-Za-z])Y\b/.test(opt.text)) && (
-                                      <div className="text-[11px] px-1.5 py-0.5 mt-0.5 text-slate-800 bg-white/70 rounded border border-slate-200/60">
+                                    {q.options.map((opt) => (
+                                      <div
+                                        key={opt.id}
+                                        onClick={() =>
+                                          handleSelectSingleCorrectPart1(q.id, opt.id)
+                                        }
+                                        title={`Bấm để chọn ${opt.currentLabel} làm đáp án đúng`}
+                                        className={`text-left leading-relaxed cursor-pointer rounded px-1.5 py-0.5 transition-colors ${
+                                          opt.isCorrect
+                                            ? 'bg-rose-50/90 text-rose-700 font-bold'
+                                            : 'text-slate-950 hover:bg-sky-50'
+                                        }`}
+                                      >
+                                        <strong
+                                          className={`font-bold ${
+                                            opt.isCorrect ? 'underline decoration-2 text-rose-700' : ''
+                                          }`}
+                                        >
+                                          {opt.currentLabel}.{' '}
+                                        </strong>
                                         <ScientificContentRenderer
                                           text={opt.text}
                                           inline
@@ -3998,268 +3906,321 @@ export default function App() {
                                           isRed={opt.isRed}
                                         />
                                       </div>
-                                    )}
+                                    ))}
                                   </div>
+                                )}
 
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleToggleOptionPropertyPart1(
-                                          q.id,
-                                          opt.id,
-                                          'isUnderline'
-                                        )
-                                      }
-                                      className={`w-7 h-7 rounded-lg text-xs font-serif underline font-black flex items-center justify-center ${
-                                        opt.isUnderline
-                                          ? 'btn-3d-indigo text-white'
-                                          : 'btn-3d-neutral text-slate-700'
-                                      }`}
-                                    >
-                                      U
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleToggleOptionPropertyPart1(
-                                          q.id,
-                                          opt.id,
-                                          'isRed'
-                                        )
-                                      }
-                                      className={`w-7 h-7 rounded-lg text-xs font-black flex items-center justify-center ${
-                                        opt.isRed
-                                          ? 'btn-3d-rose text-white'
-                                          : 'btn-3d-neutral text-rose-600'
-                                      }`}
-                                    >
-                                      A
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* ================= NỘI DUNG PHẦN II: 4 Ý CON a), b), c), d) ĐÚNG / SAI ================= */}
-                        {q.part === 'PART_2' && q.subItems && (() => {
-                          const p2TrueCount = q.subItems.filter((s) => s.isTrue).length;
-                          const isAllTrueOrAllFalse = p2TrueCount === 4 || p2TrueCount === 0;
-                          return (
-                            <div className="space-y-2.5">
-                              {isAllTrueOrAllFalse && (
-                                <div className="px-3 py-2 rounded-xl border-2 bg-rose-100 border-rose-500 text-rose-900 flex items-center gap-2 text-xs font-black">
-                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                                  <span>
-                                    {p2TrueCount === 4
-                                      ? 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là ĐÚNG (4 Đúng — 0 Sai). Giáo viên vui lòng kiểm tra lại!'
-                                      : 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là SAI (4 Sai — 0 Đúng). Giáo viên vui lòng kiểm tra lại!'}
-                                  </span>
-                                </div>
-                              )}
-
-                              <div className="space-y-2.5">
-                                {q.subItems.map((sub) => (
-                                  <div
-                                    key={sub.id}
-                                    className={`p-2.5 rounded-xl border-2 flex items-center gap-3 ${
-                                      sub.isTrue
-                                        ? 'bg-emerald-50/90 border-emerald-300 shadow-xs'
-                                        : 'bg-sky-50/60 border-sky-200'
-                                    }`}
-                                  >
-                                    <span className="text-sm font-black text-sky-950 w-6 shrink-0">
-                                      {sub.currentLabel})
-                                    </span>
-
-                                    <div className="flex-1 min-w-0">
-                                      <input
-                                        type="text"
-                                        value={sub.text}
-                                        onChange={(e) =>
-                                          handleUpdateSubItemTextPart2(
-                                            q.id,
-                                            sub.id,
-                                            e.target.value
-                                          )
-                                        }
-                                        style={{
-                                          fontFamily: "'Times New Roman', Times, serif",
-                                          fontSize: '12pt',
-                                        }}
-                                        className={`w-full px-3 py-1.5 text-left bg-white border border-sky-200 rounded-lg focus:outline-none focus:border-blue-600 ${
-                                          sub.isTrue
-                                            ? 'underline decoration-emerald-600 text-slate-900 font-bold'
-                                            : 'text-slate-700 font-medium'
-                                        }`}
-                                      />
-                                      {(sub.text.includes('$') ||
-                                        sub.text.includes('\\') ||
-                                        /[A-Z][a-z]?\d/.test(sub.text)) && (
-                                        <div className="text-[11px] px-2 py-0.5 mt-1 text-slate-800 bg-white/80 rounded border border-slate-200">
+                                {/* PHẦN II: 4 ý a), b), c), d) Đúng / Sai đã chuẩn hóa */}
+                                {q.part === 'PART_2' && q.subItems && (
+                                  <div className="space-y-1 pl-2 pt-0.5">
+                                    {q.subItems.map((sub) => (
+                                      <div
+                                        key={sub.id}
+                                        className="flex items-start justify-between gap-3 py-0.5 px-1.5 rounded hover:bg-sky-50/60"
+                                      >
+                                        <div
+                                          className={`text-left leading-relaxed flex-1 ${
+                                            sub.isTrue
+                                              ? 'text-emerald-900 font-semibold underline decoration-emerald-600/70'
+                                              : 'text-slate-950'
+                                          }`}
+                                        >
+                                          <strong className="font-bold">
+                                            {sub.currentLabel}){' '}
+                                          </strong>
                                           <ScientificContentRenderer text={sub.text} inline />
                                         </div>
-                                      )}
-                                    </div>
 
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleToggleSubItemPart2(q.id, sub.id, true)
-                                        }
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
-                                          sub.isTrue
-                                            ? 'btn-3d-emerald text-white'
-                                            : 'btn-3d-neutral text-slate-600'
-                                        }`}
-                                      >
-                                        Đúng (Đ)
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          handleToggleSubItemPart2(q.id, sub.id, false)
-                                        }
-                                        className={`px-3 py-1.5 rounded-lg text-xs font-extrabold ${
-                                          !sub.isTrue
-                                            ? 'btn-3d-rose text-white'
-                                            : 'btn-3d-neutral text-slate-600'
-                                        }`}
-                                      >
-                                        Sai (S)
-                                      </button>
-                                    </div>
+                                        <div className="flex items-center gap-1 shrink-0 pt-0.5">
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleToggleSubItemPart2(q.id, sub.id, true)
+                                            }
+                                            className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer border ${
+                                              sub.isTrue
+                                                ? 'bg-emerald-600 text-white border-emerald-700'
+                                                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                                            }`}
+                                          >
+                                            Đúng
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleToggleSubItemPart2(q.id, sub.id, false)
+                                            }
+                                            className={`px-2 py-0.5 rounded text-[11px] font-bold cursor-pointer border ${
+                                              !sub.isTrue
+                                                ? 'bg-rose-600 text-white border-rose-700'
+                                                : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'
+                                            }`}
+                                          >
+                                            Sai
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
+                                )}
+
+                                {/* PHẦN III: Trả lời ngắn */}
+                                {q.part === 'PART_3' && (
+                                  <div className="pl-2 pt-1 flex flex-wrap items-center gap-2 text-sm">
+                                    <span className="font-bold text-slate-800">
+                                      Đáp án:
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={q.shortAnswer || ''}
+                                      onChange={(e) =>
+                                        handleUpdateShortAnswerPart3(q.id, e.target.value)
+                                      }
+                                      placeholder="Nhập đáp số (tối đa 4 ký tự)"
+                                      className="w-36 px-2.5 py-0.5 text-sm font-bold text-rose-700 bg-amber-50/70 border border-amber-400 rounded focus:outline-none focus:border-blue-600 focus:bg-white"
+                                    />
+                                  </div>
+                                )}
+
+                                {/* PHẦN IV: Tự luận */}
+                                {q.part === 'PART_4' &&
+                                  (q.essayAnswer || q.explanation || '').trim() && (
+                                    <div className="pl-2 pt-1 text-slate-800 italic">
+                                      <strong className="font-bold not-italic">
+                                        Hướng dẫn chấm:{' '}
+                                      </strong>
+                                      <ScientificContentRenderer
+                                        text={q.essayAnswer || q.explanation || ''}
+                                        inline
+                                      />
+                                    </div>
+                                  )}
                               </div>
-                            </div>
-                          );
-                        })()}
+                            ) : (
+                              /* Khung chỉnh sửa khi giáo viên bấm nút "Sửa" trên câu hỏi */
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-200">
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2.5 py-0.5 rounded bg-blue-600 text-white text-xs font-bold">
+                                      Đang sửa Câu {q.displayIndex}
+                                    </span>
+                                    <select
+                                      value={q.bloomLevel || 'NHAN_BIET'}
+                                      onChange={(e) =>
+                                        handleUpdateBloomLevel(
+                                          q.id,
+                                          e.target.value as BloomLevel
+                                        )
+                                      }
+                                      className="px-2 py-0.5 text-xs font-bold bg-white text-sky-900 border border-sky-300 rounded focus:outline-none"
+                                    >
+                                      <option value="NHAN_BIET">Mức độ: Nhận biết</option>
+                                      <option value="THONG_HIEU">Mức độ: Thông hiểu</option>
+                                      <option value="VAN_DUNG">Mức độ: Vận dụng</option>
+                                      <option value="VAN_DUNG_CAO">Mức độ: Vận dụng cao</option>
+                                    </select>
+                                  </div>
 
-                        {/* ================= NỘI DUNG PHẦN III: TRẢ LỜI NGẮN (TỐI ĐA 4 KÝ TỰ KỂ CẢ "-" VÀ ",") ================= */}
-                        {q.part === 'PART_3' && (() => {
-                          const rawShortAns = (q.shortAnswer || '').trim();
-                          const charLen = rawShortAns.length;
-                          const isMissingAns = charLen === 0;
-                          const isExceedsMax4 = charLen > 4;
-                          const isInvalidFormat =
-                            !isMissingAns && !/^-?\d+([.,]\d+)?$/.test(rawShortAns);
-                          const hasP3Error = isMissingAns || isExceedsMax4 || isInvalidFormat;
-
-                          let suggested4Char = '';
-                          if (isExceedsMax4 && /^-?\d+([.,]\d+)?$/.test(rawShortAns)) {
-                            const useComma = rawShortAns.includes(',');
-                            const numVal = parseFloat(rawShortAns.replace(',', '.'));
-                            if (!Number.isNaN(numVal)) {
-                              for (let dec = 2; dec >= 0; dec--) {
-                                const roundedStr = Number(numVal.toFixed(dec)).toString();
-                                const formatted = useComma
-                                  ? roundedStr.replace('.', ',')
-                                  : roundedStr;
-                                if (formatted.length <= 4) {
-                                  suggested4Char = formatted;
-                                  break;
-                                }
-                              }
-                            }
-                          }
-
-                          return (
-                            <div
-                              className={`pt-2 p-3.5 rounded-xl border-2 space-y-2.5 ${
-                                hasP3Error
-                                  ? 'bg-rose-50/95 border-rose-500'
-                                  : 'bg-amber-50/90 border-amber-300'
-                              }`}
-                            >
-                              <div className="flex flex-wrap items-center gap-3">
-                                <span className="text-xs font-black text-amber-950 uppercase">
-                                  Đáp số (Tối đa 4 ký tự):
-                                </span>
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={q.shortAnswer || ''}
-                                    onChange={(e) =>
-                                      handleUpdateShortAnswerPart3(q.id, e.target.value)
-                                    }
-                                    placeholder="Nhập đáp số (VD: -2,5 hoặc 375)"
-                                    className={`w-48 px-3 py-1.5 text-sm font-mono font-extrabold underline bg-white border-2 rounded-xl focus:outline-none focus:border-blue-600 ${
-                                      hasP3Error
-                                        ? 'text-rose-700 border-rose-500 ring-2 ring-rose-200'
-                                        : 'text-rose-600 border-amber-400'
-                                    }`}
-                                  />
-                                  <span
-                                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black border ${
-                                      hasP3Error
-                                        ? 'bg-rose-600 text-white border-rose-700'
-                                        : 'bg-emerald-600 text-white border-emerald-700'
-                                    }`}
-                                  >
-                                    {charLen}/4 ký tự
-                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      id={`upload-img-${q.id}`}
+                                      onChange={(e) => handleAddImageToQuestion(q.id, e)}
+                                      className="hidden"
+                                    />
+                                    <label
+                                      htmlFor={`upload-img-${q.id}`}
+                                      className="px-2.5 py-1 rounded text-xs font-bold text-sky-800 bg-white hover:bg-sky-100 border border-sky-300 flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                                      <span>+ Thêm ảnh</span>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      onClick={() => setActiveFocusedQuestionId(null)}
+                                      className="px-3 py-1 rounded text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 flex items-center gap-1 cursor-pointer"
+                                    >
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Hoàn tất</span>
+                                    </button>
+                                  </div>
                                 </div>
 
-                                {suggested4Char && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleUpdateShortAnswerPart3(q.id, suggested4Char)
-                                    }
-                                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer shadow-2xs"
-                                    title={`Làm tròn đáp số "${rawShortAns}" thành "${suggested4Char}" (đúng 4 ký tự)`}
-                                  >
-                                    Làm tròn thành &quot;{suggested4Char}&quot;
-                                  </button>
+                                <textarea
+                                  rows={2}
+                                  value={q.stemText}
+                                  onChange={(e) =>
+                                    handleUpdateStemText(q.id, e.target.value)
+                                  }
+                                  className="w-full px-3 py-2 text-left text-slate-900 bg-white border border-sky-300 rounded-lg focus:outline-none focus:border-blue-600 leading-relaxed"
+                                />
+
+                                {q.images && q.images.length > 0 && (
+                                  <div className="flex flex-wrap gap-3">
+                                    {q.images.map((img) => (
+                                      <div
+                                        key={img.id}
+                                        className="relative p-2 rounded-lg bg-white border border-sky-200 flex flex-col items-center"
+                                      >
+                                        <img
+                                          src={img.dataUrl}
+                                          alt={img.caption || `Hình câu ${q.displayIndex}`}
+                                          className="max-h-36 object-contain"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleRemoveImageFromQuestion(q.id, img.id)
+                                          }
+                                          className="mt-1 text-xs text-rose-600 hover:underline flex items-center gap-1 cursor-pointer"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                          <span>Xóa ảnh</span>
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {q.part === 'PART_1' && q.options && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {q.options.map((opt) => (
+                                      <div
+                                        key={opt.id}
+                                        className="p-2 rounded-lg bg-white border border-sky-200 flex items-center gap-2"
+                                      >
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleSelectSingleCorrectPart1(q.id, opt.id)
+                                          }
+                                          className={`w-7 h-7 rounded text-xs font-bold text-white shrink-0 cursor-pointer ${
+                                            opt.isCorrect ? 'bg-rose-600' : 'bg-blue-600'
+                                          }`}
+                                        >
+                                          {opt.currentLabel}
+                                        </button>
+                                        <input
+                                          type="text"
+                                          value={opt.text}
+                                          onChange={(e) =>
+                                            handleUpdateOptionTextPart1(
+                                              q.id,
+                                              opt.id,
+                                              e.target.value
+                                            )
+                                          }
+                                          className="flex-1 px-2 py-1 text-left bg-transparent border-b border-slate-200 focus:border-blue-600 focus:outline-none"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {q.part === 'PART_2' && q.subItems && (
+                                  <div className="space-y-2">
+                                    {q.subItems.map((sub) => (
+                                      <div
+                                        key={sub.id}
+                                        className="p-2 rounded-lg bg-white border border-sky-200 flex items-center gap-2"
+                                      >
+                                        <span className="font-bold w-5 shrink-0">
+                                          {sub.currentLabel})
+                                        </span>
+                                        <input
+                                          type="text"
+                                          value={sub.text}
+                                          onChange={(e) =>
+                                            handleUpdateSubItemTextPart2(
+                                              q.id,
+                                              sub.id,
+                                              e.target.value
+                                            )
+                                          }
+                                          className="flex-1 px-2 py-1 text-left bg-transparent border-b border-slate-200 focus:border-blue-600 focus:outline-none"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleToggleSubItemPart2(q.id, sub.id, true)
+                                          }
+                                          className={`px-2 py-1 rounded text-xs font-bold cursor-pointer ${
+                                            sub.isTrue
+                                              ? 'bg-emerald-600 text-white'
+                                              : 'bg-slate-100 text-slate-600'
+                                          }`}
+                                        >
+                                          Đúng
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleToggleSubItemPart2(q.id, sub.id, false)
+                                          }
+                                          className={`px-2 py-1 rounded text-xs font-bold cursor-pointer ${
+                                            !sub.isTrue
+                                              ? 'bg-rose-600 text-white'
+                                              : 'bg-slate-100 text-slate-600'
+                                          }`}
+                                        >
+                                          Sai
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {q.part === 'PART_3' && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold">
+                                      Đáp số (Tối đa 4 ký tự):
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={q.shortAnswer || ''}
+                                      onChange={(e) =>
+                                        handleUpdateShortAnswerPart3(q.id, e.target.value)
+                                      }
+                                      className="w-40 px-2.5 py-1 text-sm font-bold text-rose-700 bg-white border border-amber-400 rounded"
+                                    />
+                                  </div>
+                                )}
+
+                                {q.part === 'PART_4' && (
+                                  <div className="space-y-1">
+                                    <span className="block text-xs font-bold">
+                                      Đáp án / Hướng dẫn chấm tự luận:
+                                    </span>
+                                    <textarea
+                                      rows={2}
+                                      value={q.essayAnswer ?? q.explanation ?? ''}
+                                      onChange={(e) =>
+                                        handleUpdateEssayAnswerPart4(q.id, e.target.value)
+                                      }
+                                      className="w-full px-3 py-1.5 text-left bg-white border border-purple-300 rounded-lg focus:outline-none"
+                                    />
+                                  </div>
                                 )}
                               </div>
-
-                              {hasP3Error && (
-                                <div className="px-3 py-1.5 rounded-lg bg-rose-100 border border-rose-400 text-rose-900 text-xs font-black flex items-center gap-2">
-                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                                  <span>
-                                    {isMissingAns
-                                      ? 'CHƯA CÓ ĐÁP SỐ PHẦN III: Giáo viên vui lòng nhập đáp số (tối đa 4 ký tự kể cả dấu "-" và dấu ",")!'
-                                      : isExceedsMax4
-                                      ? `VƯỢT QUÁ 4 KÝ TỰ: Đáp số "${rawShortAns}" đang có ${charLen} ký tự. Vui lòng làm tròn hoặc chỉnh sửa tối đa 4 ký tự!`
-                                      : `SAI ĐỊNH DẠNG ĐÁP SỐ: "${rawShortAns}" chỉ được phép dùng chữ số 0–9, dấu trừ "-" và dấu phẩy ","!`}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
-
-                        {/* ================= NỘI DUNG PHẦN IV (HOẶC PHẦN III): TỰ LUẬN (KHÔNG TRỘN) ================= */}
-                        {q.part === 'PART_4' && (
-                          <div className="pt-2 space-y-2 bg-purple-50/90 p-3.5 rounded-xl border-2 border-purple-300">
-                            <span className="block text-xs font-black text-purple-950 uppercase">
-                              Đáp án / Hướng dẫn chấm tự luận:
-                            </span>
-                            <textarea
-                              rows={3}
-                              value={q.essayAnswer ?? q.explanation ?? ''}
-                              onChange={(e) =>
-                                handleUpdateEssayAnswerPart4(q.id, e.target.value)
-                              }
-                              style={{
-                                fontFamily: "'Times New Roman', Times, serif",
-                                fontSize: '12pt',
-                              }}
-                              placeholder="Nhập đáp án / hướng dẫn chấm tự luận..."
-                              className="w-full px-3 py-2 text-left text-slate-900 bg-white border-2 border-purple-300 rounded-xl focus:outline-none focus:border-purple-600 leading-relaxed"
-                            />
+                            )}
                           </div>
-                        )}
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Chân trang đề thi chuẩn */}
+                  <div className="pt-4 border-t border-slate-300 text-center space-y-1">
+                    <div className="font-bold">
+                      -------------------- HẾT --------------------
+                    </div>
+                    <div className="text-center italic text-[11pt] text-slate-700">
+                      (Thí sinh không được sử dụng tài liệu. Cán bộ coi thi không giải thích gì thêm)
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -4603,7 +4564,7 @@ export default function App() {
                             </div>
                             <p className="text-left text-slate-800">
                               <strong>Câu {origQ.displayIndex}. </strong>
-                              {origQ.stemText}
+                              <ScientificContentRenderer text={origQ.stemText} inline />
                             </p>
                           </div>
 
@@ -4614,7 +4575,7 @@ export default function App() {
                             </div>
                             <p className="text-left text-slate-950 font-medium">
                               <strong>Câu {cq.displayIndex}. </strong>
-                              {cq.stemText}
+                              <ScientificContentRenderer text={cq.stemText} inline />
                             </p>
 
                             {cq.part === 'PART_1' && cq.options && (
@@ -4629,7 +4590,7 @@ export default function App() {
                                     }`}
                                   >
                                     <strong>{o.currentLabel}. </strong>
-                                    {o.text}
+                                    <ScientificContentRenderer text={o.text} inline />
                                   </div>
                                 ))}
                               </div>
@@ -4647,7 +4608,7 @@ export default function App() {
                                     }
                                   >
                                     <strong>{s.currentLabel}) </strong>
-                                    {s.text} ({s.isTrue ? 'Đúng' : 'Sai'})
+                                    <ScientificContentRenderer text={s.text} inline /> ({s.isTrue ? 'Đúng' : 'Sai'})
                                   </div>
                                 ))}
                               </div>
