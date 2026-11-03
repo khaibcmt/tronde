@@ -2480,16 +2480,18 @@ export default function App() {
                 <span>4. Đáp Án &amp; Mã QR</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleDownloadZipBundle}
-                disabled={isProcessing || questions.length === 0}
-                className="px-3.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center gap-1.5 whitespace-nowrap cursor-pointer btn-3d-rose shadow-sm"
-                title="Tải về 1 file .ZIP duy nhất tích hợp: Đề gốc & Các mã đề trộn chuẩn Word Equation + Bảng đáp án chung (có tên GV) + Ma trận CV 7991 + 3 Mã QR + 3 File Excel"
-              >
-                <FileArchive className="w-4 h-4 shrink-0" />
-                <span>Tải Về .ZIP ({config.numVariants} Đề + Đáp Án + Ma Trận)</span>
-              </button>
+              {shuffledVariants.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleDownloadZipBundle}
+                  disabled={isProcessing || questions.length === 0}
+                  className="px-3.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center gap-1.5 whitespace-nowrap cursor-pointer btn-3d-rose shadow-sm"
+                  title="Tải về .ZIP"
+                >
+                  <FileArchive className="w-4 h-4 shrink-0" />
+                  <span>Tải Về .ZIP</span>
+                </button>
+              )}
             </nav>
 
             {/* Cụm nút Hệ thống (Bảo Mật AI + Chọn Mô hình + Hướng Dẫn + Thu Gọn) */}
@@ -3256,44 +3258,21 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Hàng 3 (Luôn sẵn sàng): Tải trọn bộ ZIP tích hợp tất cả & Bảng Đáp Án */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleDownloadZipBundle}
-                    disabled={isProcessing || questions.length === 0}
-                    className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                    title="Tải về trọn bộ .ZIP gồm: Đề gốc & Các mã đề chuẩn Word Equation <m:oMath> + Bảng đáp án chung (có tên GV) + Ma trận CV 7991 + 3 Mã QR + 3 File Excel (.xlsx)"
-                  >
-                    <FileArchive className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      Tải Bộ {shuffledVariants.length || config.numVariants} Đề + &lt;m:oMath&gt; (.zip)
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={
-                      shuffledVariants.length > 0
-                        ? handleDownloadMasterAnswerSheetDocx
-                        : handleExportWordEquationOmathDocx
-                    }
-                    disabled={isProcessing || questions.length === 0}
-                    className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                    title={
-                      shuffledVariants.length > 0
-                        ? 'Tải Bảng Đáp Án Khảo Thí (.docx)'
-                        : 'Tải Đề Gốc Chuẩn Word Equation <m:oMath> (.docx)'
-                    }
-                  >
-                    <Download className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      {shuffledVariants.length > 0
-                        ? 'Bảng Đáp Án (.docx)'
-                        : 'Xuất Word <m:oMath> (.docx)'}
-                    </span>
-                  </button>
-                </div>
+                {/* Hàng 3 (Chỉ hiện sau khi bấm Trộn Đề): Nút Tải Về .ZIP gọn gàng */}
+                {shuffledVariants.length > 0 && (
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      onClick={handleDownloadZipBundle}
+                      disabled={isProcessing || questions.length === 0}
+                      className="w-full px-3 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer shadow-sm"
+                      title="Tải về .ZIP"
+                    >
+                      <FileArchive className="w-4 h-4 shrink-0" />
+                      <span>Tải Về .ZIP</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Nhóm 2: Chuyển nhanh các Phần của đề & Chế độ hiển thị */}
@@ -5240,12 +5219,10 @@ export default function App() {
                           onClick={handleDownloadZipBundle}
                           disabled={isProcessing}
                           className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-rose flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer shadow-sm"
-                          title="Tải trọn bộ file .ZIP gồm: Đề gốc & Các mã đề chuẩn Word Equation <m:oMath> + Bảng đáp án chung + Ma trận CV 7991 + 3 Mã QR + 3 File Excel"
+                          title="Tải về .ZIP"
                         >
                           <FileArchive className="w-4 h-4" />
-                          <span>
-                            Tải Về Trọn Bộ ({shuffledVariants.length} Đề + Đáp Án + Ma Trận + &lt;m:oMath&gt;) .ZIP
-                          </span>
+                          <span>Tải Về .ZIP</span>
                         </button>
 
                         <button
