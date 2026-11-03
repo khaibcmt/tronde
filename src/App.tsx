@@ -175,6 +175,16 @@ export default function App() {
     gradeLevel: 'Lớp 12',
     schoolYear: `Năm học ${new Date().getFullYear()} - ${new Date().getFullYear() + 1}`,
     durationMinutes: 45,
+    teacherName: (() => {
+      try {
+        const raw = localStorage.getItem('tronde_current_user');
+        if (!raw) return '';
+        const parsed = JSON.parse(raw);
+        return parsed?.name ? String(parsed.name) : '';
+      } catch {
+        return '';
+      }
+    })(),
   });
   const [isConfigCollapsed, setIsConfigCollapsed] = useState<boolean>(false);
   const [showCustomCodeEditor, setShowCustomCodeEditor] = useState<boolean>(false);
@@ -1908,12 +1918,30 @@ export default function App() {
         </div>
       )}
 
-      {/* Chữ ký cuối đáp án */}
-      <div className="flex justify-end pt-2 pr-6 text-center text-slate-900">
-        <div>
-          <div className="font-bold text-sm">Người ra đề</div>
-          <div className="text-xs italic text-slate-600 pt-0.5">( Ký và ghi rõ họ và tên)</div>
-          <div className="h-10" />
+      {/* Chữ ký cuối đáp án + Ô điền họ tên Giáo viên ra đề */}
+      <div className="flex justify-end pt-3 pr-6 text-center text-slate-900">
+        <div
+          style={{ fontFamily: "'Times New Roman', Times, serif" }}
+          className="min-w-[260px] p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2 shadow-2xs"
+        >
+          <div className="font-bold text-base text-slate-950">Người ra đề</div>
+          <div className="text-xs italic text-slate-600">( Ký và ghi rõ họ và tên)</div>
+          <div className="h-8" />
+          {config.teacherName?.trim() ? (
+            <div className="font-bold text-base text-slate-950 pb-1">
+              {config.teacherName}
+            </div>
+          ) : null}
+          <input
+            type="text"
+            value={config.teacherName || ''}
+            onChange={(e) =>
+              setConfig((prev) => ({ ...prev, teacherName: e.target.value }))
+            }
+            placeholder="Nhập họ và tên giáo viên ra đề..."
+            className="w-full px-3 py-1.5 text-xs font-sans font-bold text-center text-blue-950 bg-white border-2 border-sky-300 rounded-xl focus:outline-none focus:border-blue-600 shadow-2xs"
+            title="Điền họ và tên giáo viên hiển thị ở cuối trang đáp án và trong file Word xuất ra"
+          />
         </div>
       </div>
     </div>
@@ -2243,12 +2271,38 @@ export default function App() {
           </div>
         )}
 
-        {/* Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) */}
-        <div className="flex justify-end p-4 border-2 border-slate-300 rounded-2xl text-center text-slate-800 bg-white shadow-xs pr-12">
-          <div>
-            <div className="font-bold text-sm">Người ra đề</div>
-            <div className="text-xs italic text-slate-600 pt-1">( Ký và ghi rõ họ và tên)</div>
-            <div className="h-12" />
+        {/* Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) + Ô điền tên Giáo viên */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-2 border-sky-300 rounded-2xl text-slate-800 bg-white shadow-xs px-6">
+          <div className="text-xs text-slate-600 font-semibold text-left space-y-1 max-w-md">
+            <div className="font-extrabold text-sky-950 uppercase flex items-center gap-1.5">
+              <Edit3 className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+              <span>Điền tên Giáo viên ra đề vào cuối trang đáp án:</span>
+            </div>
+            <p className="text-[11px] text-slate-500">
+              Họ và tên giáo viên nhập tại đây sẽ tự động hiển thị ở cuối trang Bảng Đáp Án (trên web và khi tải file Word <code>.docx</code> nộp Khảo thí).
+            </p>
+          </div>
+          <div
+            style={{ fontFamily: "'Times New Roman', Times, serif" }}
+            className="min-w-[270px] sm:min-w-[300px] p-3.5 rounded-2xl bg-sky-50/60 border border-sky-200 text-center space-y-1.5"
+          >
+            <div className="font-bold text-base text-slate-950">Người ra đề</div>
+            <div className="text-xs italic text-slate-600">( Ký và ghi rõ họ và tên)</div>
+            <div className="h-8" />
+            {config.teacherName?.trim() ? (
+              <div className="font-bold text-base text-slate-950 pb-1">
+                {config.teacherName}
+              </div>
+            ) : null}
+            <input
+              type="text"
+              value={config.teacherName || ''}
+              onChange={(e) =>
+                setConfig((prev) => ({ ...prev, teacherName: e.target.value }))
+              }
+              placeholder="Nhập họ và tên giáo viên ra đề..."
+              className="w-full px-3 py-1.5 text-xs font-sans font-bold text-center text-blue-950 bg-white border-2 border-sky-400 rounded-xl focus:outline-none focus:border-blue-600 shadow-2xs"
+            />
           </div>
         </div>
       </div>
@@ -2760,6 +2814,24 @@ export default function App() {
                     className="px-2 py-0.5 text-[11px] font-bold text-blue-950 bg-blue-50/60 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-500 w-44 sm:w-48"
                     title="Giáo viên có thể tự gõ tên kỳ kiểm tra tùy ý tại đây"
                   />
+                </div>
+
+                {/* Ô điền Họ và tên Giáo viên ra đề (Hiển thị cuối trang đáp án) */}
+                <div className="pt-1 px-1">
+                  <div className="flex items-center gap-2 bg-emerald-50/80 border border-emerald-300 rounded-xl px-2.5 py-1.5">
+                    <label className="text-[11px] font-extrabold text-emerald-950 whitespace-nowrap shrink-0">
+                      9. GV ra đề (Cuối đáp án):
+                    </label>
+                    <input
+                      type="text"
+                      value={config.teacherName || ''}
+                      onChange={(e) =>
+                        setConfig((prev) => ({ ...prev, teacherName: e.target.value }))
+                      }
+                      placeholder="Nhập họ tên giáo viên ký cuối trang đáp án..."
+                      className="w-full px-2 py-1 text-xs font-bold text-slate-900 bg-white border border-emerald-300 rounded-lg focus:outline-none focus:border-emerald-600"
+                    />
+                  </div>
                 </div>
 
                 {/* Khung mở rộng khi bấm [Sửa mã]: Cho phép sửa từng mã đề 101, 102... và tùy chỉnh Dàn trang / QR */}
@@ -4945,7 +5017,7 @@ export default function App() {
                     {questions.length} câu
                   </div>
                   <div className="text-[11px] font-bold text-slate-600 font-mono">
-                    Phần I: {part1Count}c · Phần II: {part2Count}c · Phần III: {part3Count}c
+                    Phần I: {part1Count}c · Phần II: {part2Count}c · Phần III: {part3Count}c{part4Count > 0 ? ` · Phần IV: ${part4Count}c` : ''}
                   </div>
                 </div>
               </div>
@@ -4971,7 +5043,7 @@ export default function App() {
                         <th rowSpan={3} className="py-2.5 px-2 border border-sky-700 w-10">TT</th>
                         <th rowSpan={3} className="py-2.5 px-3 border border-sky-700 w-36 text-left">Chủ đề</th>
                         <th rowSpan={3} className="py-2.5 px-3 border border-sky-700 w-44 text-left">Đơn vị kiến thức</th>
-                        <th colSpan={9} className="py-2 px-2 border border-sky-700">Mức độ đánh giá (Số lượng câu)</th>
+                        <th colSpan={part4Count > 0 ? 12 : 9} className="py-2 px-2 border border-sky-700">Mức độ đánh giá (Số lượng câu / lệnh)</th>
                         <th rowSpan={3} className="py-2.5 px-2 border border-sky-700 w-16">Tổng số</th>
                         <th rowSpan={3} className="py-2.5 px-2 border border-sky-700 w-16">Tỉ lệ %</th>
                       </tr>
@@ -4979,6 +5051,9 @@ export default function App() {
                         <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần I (Nhiều LC)</th>
                         <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần II (Đúng/Sai)</th>
                         <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần III (Trả lời ngắn)</th>
+                        {part4Count > 0 && (
+                          <th colSpan={3} className="py-1 px-1 border border-sky-700">Phần IV (Tự luận)</th>
+                        )}
                       </tr>
                       <tr className="bg-sky-700 text-sky-100 font-bold text-[10px]">
                         <th className="py-1 px-1 border border-sky-600">NB</th>
@@ -4990,6 +5065,13 @@ export default function App() {
                         <th className="py-1 px-1 border border-sky-600">NB</th>
                         <th className="py-1 px-1 border border-sky-600">TH</th>
                         <th className="py-1 px-1 border border-sky-600">VD</th>
+                        {part4Count > 0 && (
+                          <>
+                            <th className="py-1 px-1 border border-sky-600">NB</th>
+                            <th className="py-1 px-1 border border-sky-600">TH</th>
+                            <th className="py-1 px-1 border border-sky-600">VD</th>
+                          </>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-sky-100">
@@ -5007,6 +5089,13 @@ export default function App() {
                           <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-blue-900">{row.p3NhanBiet || '—'}</td>
                           <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-emerald-900">{row.p3ThongHieu || '—'}</td>
                           <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-amber-900">{row.p3VanDung || '—'}</td>
+                          {part4Count > 0 && (
+                            <>
+                              <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-blue-900">{row.p4NhanBiet || '—'}</td>
+                              <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-emerald-900">{row.p4ThongHieu || '—'}</td>
+                              <td className="py-2 px-1 border border-sky-200 font-mono font-semibold text-amber-900">{row.p4VanDung || '—'}</td>
+                            </>
+                          )}
                           <td className="py-2 px-2 border border-sky-200 font-mono font-black text-rose-700">{row.totalQuestionsOrCommands}</td>
                           <td className="py-2 px-2 border border-sky-200 font-mono font-bold text-sky-950">{row.ratioPct}%</td>
                         </tr>
@@ -5043,6 +5132,19 @@ export default function App() {
                         <td className="py-2 px-1 border border-sky-300 font-mono text-amber-900">
                           {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p3VanDung, 0)}
                         </td>
+                        {part4Count > 0 && (
+                          <>
+                            <td className="py-2 px-1 border border-sky-300 font-mono text-blue-900">
+                              {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p4NhanBiet, 0)}
+                            </td>
+                            <td className="py-2 px-1 border border-sky-300 font-mono text-emerald-900">
+                              {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p4ThongHieu, 0)}
+                            </td>
+                            <td className="py-2 px-1 border border-sky-300 font-mono text-amber-900">
+                              {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.p4VanDung, 0)}
+                            </td>
+                          </>
+                        )}
                         <td className="py-2 px-2 border border-sky-300 font-mono text-rose-700">
                           {matrixCv7991Data.matrixRows.reduce((a, b) => a + b.totalQuestionsOrCommands, 0)}
                         </td>
@@ -5109,6 +5211,8 @@ export default function App() {
                             {spec.p1Count > 0 && <div>Phần I: {spec.p1Count} câu</div>}
                             {spec.p2CommandCount > 0 && <div>Phần II: {spec.p2CommandCount} lệnh</div>}
                             {spec.p3Count > 0 && <div>Phần III: {spec.p3Count} câu</div>}
+                            {spec.p4Count > 0 && <div>Phần IV: {spec.p4Count} câu</div>}
+                            {spec.p1Count === 0 && spec.p2CommandCount === 0 && spec.p3Count === 0 && spec.p4Count === 0 && <div>—</div>}
                           </td>
                           <td className="py-2.5 px-3 border border-emerald-200 text-center align-top font-mono font-bold text-rose-700">
                             {spec.cognitiveLevel}
@@ -5140,14 +5244,31 @@ export default function App() {
                   </div>
                   <div className="h-16" />
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="font-bold text-xs uppercase text-slate-900">
                     GIÁO VIÊN RA ĐỀ
                   </div>
                   <div className="text-[11px] italic text-slate-500">
                     (Ký và ghi rõ họ tên)
                   </div>
-                  <div className="h-16" />
+                  <div className="h-8" />
+                  {config.teacherName?.trim() ? (
+                    <div
+                      style={{ fontFamily: "'Times New Roman', Times, serif" }}
+                      className="font-bold text-sm text-slate-950"
+                    >
+                      {config.teacherName}
+                    </div>
+                  ) : null}
+                  <input
+                    type="text"
+                    value={config.teacherName || ''}
+                    onChange={(e) =>
+                      setConfig((prev) => ({ ...prev, teacherName: e.target.value }))
+                    }
+                    placeholder="Nhập họ và tên giáo viên ra đề..."
+                    className="w-full max-w-[240px] mx-auto px-2.5 py-1 text-xs font-bold text-center text-blue-950 bg-sky-50 border border-sky-300 rounded-lg focus:outline-none focus:border-blue-600 focus:bg-white"
+                  />
                 </div>
               </div>
             </div>
@@ -5566,15 +5687,42 @@ export default function App() {
                           </tbody>
                         </table>
 
-                        {/* Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) */}
-                        <div className="flex justify-end p-4 border-t-2 border-sky-300 text-center text-slate-800 bg-slate-50/70 pr-12">
-                          <div>
-                            <div className="font-bold text-sm">
+                        {/* Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) + Ô điền tên Giáo viên */}
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t-2 border-sky-300 text-slate-800 bg-slate-50/70 px-6">
+                          <div className="text-xs font-sans text-slate-600 font-semibold text-left space-y-1 max-w-md">
+                            <div className="font-extrabold text-sky-950 uppercase flex items-center gap-1.5">
+                              <Edit3 className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                              <span>Điền tên Giáo viên ra đề vào cuối trang đáp án:</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500">
+                              Họ và tên giáo viên nhập tại đây sẽ tự động in đậm ở phần chữ ký cuối trang đáp án khi xuất file Word.
+                            </p>
+                          </div>
+                          <div className="min-w-[270px] sm:min-w-[300px] p-3.5 rounded-2xl bg-white border border-sky-200 text-center space-y-1.5 shadow-2xs">
+                            <div className="font-bold text-base text-slate-950">
                               Người ra đề
                             </div>
-                            <div className="text-xs italic text-slate-600 pt-1">
+                            <div className="text-xs italic text-slate-600">
                               ( Ký và ghi rõ họ và tên)
                             </div>
+                            <div className="h-8" />
+                            {config.teacherName?.trim() ? (
+                              <div className="font-bold text-base text-slate-950 pb-1">
+                                {config.teacherName}
+                              </div>
+                            ) : null}
+                            <input
+                              type="text"
+                              value={config.teacherName || ''}
+                              onChange={(e) =>
+                                setConfig((prev) => ({
+                                  ...prev,
+                                  teacherName: e.target.value,
+                                }))
+                              }
+                              placeholder="Nhập họ và tên giáo viên ra đề..."
+                              className="w-full px-3 py-1.5 text-xs font-sans font-bold text-center text-blue-950 bg-sky-50/70 border-2 border-sky-400 rounded-xl focus:outline-none focus:border-blue-600 focus:bg-white"
+                            />
                           </div>
                         </div>
                       </div>
@@ -6376,14 +6524,15 @@ export default function App() {
         onAuthenticated={(user) => {
           setCurrentTeacherUser(user);
           setIsAuthGateModalOpen(false);
-          if (user.school) {
-            setConfig((prev) => ({
-              ...prev,
-              schoolName: user.school.toUpperCase().startsWith('TRƯỜNG')
+          setConfig((prev) => ({
+            ...prev,
+            schoolName: user.school
+              ? user.school.toUpperCase().startsWith('TRƯỜNG')
                 ? user.school.toUpperCase()
-                : `TRƯỜNG ${user.school.toUpperCase()}`,
-            }));
-          }
+                : `TRƯỜNG ${user.school.toUpperCase()}`
+              : prev.schoolName,
+            teacherName: prev.teacherName?.trim() ? prev.teacherName : user.name,
+          }));
           setStatusBanner({
             type: 'SUCCESS',
             text: `Chào mừng Thầy/Cô ${user.name} (${user.school}) đã đăng nhập hệ thống EduMix Pro2025!`,

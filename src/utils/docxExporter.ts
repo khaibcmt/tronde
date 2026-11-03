@@ -2011,11 +2011,13 @@ function buildQuestionsBodyXml(
  */
 function buildFooterXml(
   config: ShuffleConfig,
-  examCodeText: string
+  examCodeText: string,
+  isLandscape: boolean = false
 ): string {
   const subjectLabel = formatPedagogicalSubject(config.subjectName);
   const cleanCode = examCodeText.replace(/^MÃ\s*ĐỀ[:\s]*/i, '').trim() || examCodeText;
   const gradeLabel = (config.gradeLevel || '12').replace(/^lớp\s+/i, '').trim() || '12';
+  const rightTabPos = isLandscape ? '14570' : '9638';
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -2025,7 +2027,7 @@ function buildFooterXml(
         <w:top w:val="single" w:sz="6" w:space="4" w:color="64748B"/>
       </w:pBdr>
       <w:tabs>
-        <w:tab w:val="right" w:pos="9638"/>
+        <w:tab w:val="right" w:pos="${rightTabPos}"/>
       </w:tabs>
       <w:spacing w:before="40" w:after="0" w:line="240" w:lineRule="auto"/>
     </w:pPr>
@@ -2109,7 +2111,8 @@ async function packOpenXmlDocx(
   config: ShuffleConfig,
   footerExamCodeLabel: string,
   embeddedQrDataUrl?: string,
-  embeddedImages?: Array<{ relId: string; dataUrl: string; fileName: string }>
+  embeddedImages?: Array<{ relId: string; dataUrl: string; fileName: string }>,
+  isLandscape: boolean = false
 ): Promise<Blob> {
   const zip = new JSZip();
   const hasQrImage = Boolean(embeddedQrDataUrl);
@@ -2188,7 +2191,11 @@ async function packOpenXmlDocx(
   );
 
   zip.file('word/styles.xml', defaultStylesXml);
-  zip.file('word/footer1.xml', buildFooterXml(config, footerExamCodeLabel));
+  zip.file('word/footer1.xml', buildFooterXml(config, footerExamCodeLabel, isLandscape));
+
+  const pgSzXml = isLandscape
+    ? `<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>`
+    : `<w:pgSz w:w="11906" w:h="16838"/>`;
 
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -2201,7 +2208,7 @@ async function packOpenXmlDocx(
     ${documentBodyInnerXml}
     <w:sectPr>
       <w:footerReference w:type="default" r:id="rIdFooter1"/>
-      <w:pgSz w:w="11906" w:h="16838"/>
+      ${pgSzXml}
       <w:pgMar w:top="850" w:right="1134" w:bottom="680" w:left="1134" w:header="425" w:footer="425" w:gutter="0"/>
     </w:sectPr>
   </w:body>
@@ -2424,6 +2431,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
     p1RowsXml.push(`<w:tr>
       <w:tc>
         <w:tcPr>
+          <w:tcW w:w="5000" w:type="pct"/>
           <w:gridSpan w:val="${numCols}"/>
           <w:shd w:val="clear" w:color="auto" w:fill="E0F2FE"/>
         </w:tcPr>
@@ -2460,7 +2468,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
             </w:tcPr>
             <w:p>
               <w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="30"/></w:pPr>
-              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="DC2626"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${ans}</w:t></w:r>
+              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="DC2626"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t>${escapeXml(String(ans))}</w:t></w:r>
             </w:p>
           </w:tc>`;
         }),
@@ -2476,6 +2484,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
     p2RowsXml.push(`<w:tr>
       <w:tc>
         <w:tcPr>
+          <w:tcW w:w="5000" w:type="pct"/>
           <w:gridSpan w:val="${numCols}"/>
           <w:shd w:val="clear" w:color="auto" w:fill="ECFDF5"/>
         </w:tcPr>
@@ -2512,7 +2521,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
             </w:tcPr>
             <w:p>
               <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
-              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="047857"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${seq}</w:t></w:r>
+              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="047857"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(String(seq))}</w:t></w:r>
             </w:p>
           </w:tc>`;
         }),
@@ -2528,6 +2537,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
     p3RowsXml.push(`<w:tr>
       <w:tc>
         <w:tcPr>
+          <w:tcW w:w="5000" w:type="pct"/>
           <w:gridSpan w:val="${numCols}"/>
           <w:shd w:val="clear" w:color="auto" w:fill="FFFBEB"/>
         </w:tcPr>
@@ -2564,7 +2574,7 @@ function buildCrossReferencingAnswerMatrixXml(variants: ShuffledVariant[]): stri
             </w:tcPr>
             <w:p>
               <w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="40"/></w:pPr>
-              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="B45309"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${ans}</w:t></w:r>
+              <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="B45309"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${escapeXml(String(ans))}</w:t></w:r>
             </w:p>
           </w:tc>`;
         }),
@@ -2736,7 +2746,22 @@ export async function exportMasterAnswerSheetDocx(
         </w:p>`
       : '';
 
-  // 4. Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên)
+  // 4. Phần cuối đáp án ghi: Người ra đề ( Ký và ghi rõ họ và tên) + Họ tên Giáo viên ra đề
+  const teacherFullName = (config.teacherName || '').trim();
+  const teacherNameParagraphXml = teacherFullName
+    ? `<w:p>
+          <w:pPr><w:jc w:val="center"/><w:spacing w:before="560" w:after="20"/></w:pPr>
+          <w:r>
+            <w:rPr>
+              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+              <w:b/>
+              <w:sz w:val="24"/><w:szCs w:val="24"/>
+            </w:rPr>
+            <w:t>${escapeXml(teacherFullName)}</w:t>
+          </w:r>
+        </w:p>`
+    : `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="560" w:after="20"/></w:pPr></w:p>`;
+
   const signatureTableXml = `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
@@ -2774,7 +2799,7 @@ export async function exportMasterAnswerSheetDocx(
           </w:r>
         </w:p>
         <w:p>
-          <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="200"/></w:pPr>
+          <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="40"/></w:pPr>
           <w:r>
             <w:rPr>
               <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
@@ -2785,6 +2810,7 @@ export async function exportMasterAnswerSheetDocx(
             <w:t>( Ký và ghi rõ họ và tên)</w:t>
           </w:r>
         </w:p>
+        ${teacherNameParagraphXml}
       </w:tc>
     </w:tr>
   </w:tbl>`;
@@ -2814,14 +2840,14 @@ export async function exportMatrixAndSpecificationDocx(
 
   const headerXml = buildExamNationalHeaderTableXml(
     config,
-    'MA TRẬN & BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ (CV 7991/BGDĐT-GDTrH)'
+    'MA TRẬN VÀ BẢN ĐẶC TẢ ĐỀ KIỂM TRA ĐỊNH KỲ (CV 7991/BGDĐT-GDTrH)'
   );
 
   const docTitleXml = `<w:p>
     <w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="40"/></w:pPr>
     <w:r>
       <w:rPr>
-        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
         <w:b/>
         <w:color w:val="1E3A8A"/>
         <w:sz w:val="26"/><w:szCs w:val="26"/>
@@ -2833,22 +2859,22 @@ export async function exportMatrixAndSpecificationDocx(
     <w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="100"/></w:pPr>
     <w:r>
       <w:rPr>
-        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
         <w:i/>
         <w:color w:val="334155"/>
         <w:sz w:val="22"/><w:szCs w:val="22"/>
       </w:rPr>
-      <w:t>Môn: ${escapeXml(config.subjectName)} — ${escapeXml(config.gradeLevel || 'Lớp 12')} — Thời gian làm bài: ${config.durationMinutes} phút</w:t>
+      <w:t>${escapeXml(`Môn: ${config.subjectName} — ${config.gradeLevel || 'Lớp 12'} — Thời gian làm bài: ${config.durationMinutes} phút`)}</w:t>
     </w:r>
     <w:r><w:br/></w:r>
     <w:r>
       <w:rPr>
-        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
         <w:i/>
         <w:color w:val="64748B"/>
         <w:sz w:val="20"/><w:szCs w:val="20"/>
       </w:rPr>
-      <w:t>(Xây dựng theo chuẩn Công văn số 7991/BGDĐT-GDTrH ngày 20/12/2024 của Bộ GD&ĐT)</w:t>
+      <w:t>${escapeXml('(Xây dựng theo chuẩn Công văn số 7991/BGDĐT-GDTrH ngày 20/12/2024 của Bộ GD&ĐT)')}</w:t>
     </w:r>
   </w:p>`;
 
@@ -2856,46 +2882,94 @@ export async function exportMatrixAndSpecificationDocx(
   const sec1Heading = `<w:p>
     <w:pPr><w:jc w:val="left"/><w:spacing w:before="120" w:after="60"/></w:pPr>
     <w:r>
-      <w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="0369A1"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>
+      <w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:b/><w:color w:val="0369A1"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>
       <w:t>I. KHUNG MA TRẬN ĐỀ KIỂM TRA ĐỊNH KỲ (PHỤ LỤC 1 — CV 7991)</w:t>
     </w:r>
   </w:p>`;
 
-  // Bảng Khung Ma trận
   const tnrFontXml = `<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>`;
+  const hasPart4 = summary.totalP4 > 0;
+
+  // Độ rộng cột chuẩn theo tỉ lệ 5000 pct (100% khổ ngang A4 Landscape = 14570 dxa)
+  // Khi không có Phần IV: [220, 880, 1200, 620, 620, 620, 280, 280, 280] = 5000
+  // Khi có Phần IV:       [200, 780, 1080, 530, 530, 530, 530, 280, 270, 270] = 5000
+  const mColWidths = hasPart4
+    ? [200, 780, 1080, 530, 530, 530, 530, 280, 270, 270]
+    : [220, 880, 1200, 620, 620, 620, 280, 280, 280];
+
+  const buildTwoLineHeaderCell = (wPct: number, line1: string, line2: string, fillHex: string = '0284C7') => `<w:tc>
+    <w:tcPr><w:tcW w:w="${wPct}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fillHex}"/><w:vAlign w:val="center"/></w:tcPr>
+    <w:p>
+      <w:pPr><w:jc w:val="center"/><w:spacing w:before="20" w:after="20"/></w:pPr>
+      <w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(line1)}</w:t></w:r>
+      <w:r><w:br/></w:r>
+      <w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="E0F2FE"/><w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr><w:t>${escapeXml(line2)}</w:t></w:r>
+    </w:p>
+  </w:tc>`;
+
+  const buildHeaderCell = (wPct: number, text: string, fillHex: string = '0284C7') => `<w:tc>
+    <w:tcPr><w:tcW w:w="${wPct}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fillHex}"/><w:vAlign w:val="center"/></w:tcPr>
+    <w:p>
+      <w:pPr><w:jc w:val="center"/><w:spacing w:before="20" w:after="20"/></w:pPr>
+      <w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r>
+    </w:p>
+  </w:tc>`;
+
   const matrixHeaderRow = `<w:tr>
     <w:trPr><w:tblHeader/></w:trPr>
-    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>TT</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="1200" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Chủ đề / Đơn vị kiến thức</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Phần I (Nhiều LC)\nNB - TH - VD</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Phần II (Đúng/Sai)\nNB - TH - VD</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="900" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Phần III (Trả lời ngắn)\nNB - TH - VD</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="400" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Tổng câu</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="400" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="0284C7"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Điểm số</w:t></w:r></w:p></w:tc>
+    ${buildHeaderCell(mColWidths[0], 'TT')}
+    ${buildHeaderCell(mColWidths[1], 'Chủ đề / Chương')}
+    ${buildHeaderCell(mColWidths[2], 'Đơn vị kiến thức / Kĩ năng')}
+    ${buildTwoLineHeaderCell(mColWidths[3], 'Phần I (Nhiều LC)', 'NB - TH - VD')}
+    ${buildTwoLineHeaderCell(mColWidths[4], 'Phần II (Đúng/Sai)', 'NB - TH - VD (Ý)')}
+    ${buildTwoLineHeaderCell(mColWidths[5], 'Phần III (TL Ngắn)', 'NB - TH - VD')}
+    ${hasPart4 ? buildTwoLineHeaderCell(mColWidths[6], 'Phần IV (Tự luận)', 'NB - TH - VD') : ''}
+    ${buildHeaderCell(mColWidths[hasPart4 ? 7 : 6], 'Tổng số')}
+    ${buildHeaderCell(mColWidths[hasPart4 ? 8 : 7], 'Điểm số')}
+    ${buildHeaderCell(mColWidths[hasPart4 ? 9 : 8], 'Tỉ lệ %')}
   </w:tr>`;
 
   const matrixBodyRows = matrixRows
-    .map(
-      (r, idx) => `<w:tr>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.tt}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(r.unit)}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p1NhanBiet} - ${r.p1ThongHieu} - ${r.p1VanDung}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p2NhanBiet} - ${r.p2ThongHieu} - ${r.p2VanDung}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p3NhanBiet} - ${r.p3ThongHieu} - ${r.p3VanDung}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.totalQuestionsOrCommands}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="DC2626"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.totalScore} đ</w:t></w:r></w:p></w:tc>
-      </w:tr>`
-    )
+    .map((r, idx) => {
+      const fill = idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF';
+      return `<w:tr>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[0]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.tt}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[1]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(r.topic)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[2]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(r.unit)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[3]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p1NhanBiet} - ${r.p1ThongHieu} - ${r.p1VanDung}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[4]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p2NhanBiet} - ${r.p2ThongHieu} - ${r.p2VanDung}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[5]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p3NhanBiet} - ${r.p3ThongHieu} - ${r.p3VanDung}</w:t></w:r></w:p></w:tc>
+        ${
+          hasPart4
+            ? `<w:tc><w:tcPr><w:tcW w:w="${mColWidths[6]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p4NhanBiet} - ${r.p4ThongHieu} - ${r.p4VanDung}</w:t></w:r></w:p></w:tc>`
+            : ''
+        }
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[hasPart4 ? 7 : 6]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.totalQuestionsOrCommands}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[hasPart4 ? 8 : 7]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="DC2626"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.totalScore} đ</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[hasPart4 ? 9 : 8]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="0369A1"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.ratioPct}%</w:t></w:r></w:p></w:tc>
+      </w:tr>`;
+    })
     .join('\n');
 
+  const span3Width = mColWidths[0] + mColWidths[1] + mColWidths[2];
   const matrixTotalRow = `<w:tr>
-    <w:tc><w:tcPr><w:gridSpan w:val="2"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>TỔNG CỘNG TOÀN ĐỀ</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP1} câu (4.5đ)</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP2Questions} câu (${summary.totalP2Commands} ý - 4.0đ)</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP3} câu (1.5đ)</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${questions.length}</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="DC2626"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>10.0 đ</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="${span3Width}" w:type="pct"/><w:gridSpan w:val="3"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>TỔNG CỘNG TOÀN ĐỀ (NB: ${summary.nhanBietPct}% — TH: ${summary.thongHieuPct}% — VD: ${summary.vanDungPct}%)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="${mColWidths[3]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP1} câu (${summary.p1TotalScore}đ)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="${mColWidths[4]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP2Questions} câu (${summary.totalP2Commands} ý - ${summary.p2TotalScore}đ)</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="${mColWidths[5]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP3} câu (${summary.p3TotalScore}đ)</w:t></w:r></w:p></w:tc>
+    ${
+      hasPart4
+        ? `<w:tc><w:tcPr><w:tcW w:w="${mColWidths[6]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${summary.totalP4} câu (${summary.p4TotalScore}đ)</w:t></w:r></w:p></w:tc>`
+        : ''
+    }
+    <w:tc><w:tcPr><w:tcW w:w="${mColWidths[hasPart4 ? 7 : 6]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${questions.length}</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="${mColWidths[hasPart4 ? 8 : 7]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="DC2626"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${summary.totalScore} đ</w:t></w:r></w:p></w:tc>
+    <w:tc><w:tcPr><w:tcW w:w="${mColWidths[hasPart4 ? 9 : 8]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="E2E8F0"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="0369A1"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>100%</w:t></w:r></w:p></w:tc>
   </w:tr>`;
+
+  const matrixGridColsXml = mColWidths
+    .map((wPct) => `<w:gridCol w:w="${Math.round((wPct / 5000) * 14570)}"/>`)
+    .join('');
 
   const matrixTableXml = `<w:tbl>
     <w:tblPr>
@@ -2908,8 +2982,9 @@ export async function exportMatrixAndSpecificationDocx(
         <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
         <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
       </w:tblBorders>
-      <w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>
+      <w:tblCellMar><w:top w:w="50" w:type="dxa"/><w:left w:w="70" w:type="dxa"/><w:bottom w:w="50" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar>
     </w:tblPr>
+    <w:tblGrid>${matrixGridColsXml}</w:tblGrid>
     ${matrixHeaderRow}
     ${matrixBodyRows}
     ${matrixTotalRow}
@@ -2924,30 +2999,53 @@ export async function exportMatrixAndSpecificationDocx(
     </w:r>
   </w:p>`;
 
+  const sColWidths = hasPart4
+    ? [200, 750, 950, 480, 1660, 240, 240, 240, 240]
+    : [220, 820, 1020, 500, 1690, 250, 250, 250];
+
   const specHeaderRow = `<w:tr>
     <w:trPr><w:tblHeader/></w:trPr>
-    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>TT</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="1100" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Đơn vị kiến thức / Kĩ năng</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="600" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Mức độ</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="2100" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>Yêu cầu cần đạt (chuẩn GDPT 2018)</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>P.I</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>P.II</w:t></w:r></w:p></w:tc>
-    <w:tc><w:tcPr><w:tcW w:w="300" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="065F46"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="FFFFFF"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>P.III</w:t></w:r></w:p></w:tc>
+    ${buildHeaderCell(sColWidths[0], 'TT', '065F46')}
+    ${buildHeaderCell(sColWidths[1], 'Chủ đề / Chương', '065F46')}
+    ${buildHeaderCell(sColWidths[2], 'Đơn vị kiến thức / Kĩ năng', '065F46')}
+    ${buildHeaderCell(sColWidths[3], 'Mức độ', '065F46')}
+    ${buildHeaderCell(sColWidths[4], 'Yêu cầu cần đạt (Chuẩn GDPT 2018)', '065F46')}
+    ${buildHeaderCell(sColWidths[5], 'Phần I', '065F46')}
+    ${buildHeaderCell(sColWidths[6], 'Phần II (Ý)', '065F46')}
+    ${buildHeaderCell(sColWidths[7], 'Phần III', '065F46')}
+    ${hasPart4 ? buildHeaderCell(sColWidths[8], 'Phần IV', '065F46') : ''}
   </w:tr>`;
 
   const specBodyRows = specRows
-    .map(
-      (s, idx) => `<w:tr>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.tt}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.unit)}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="${s.cognitiveLevel === 'Nhận biết' ? '0284C7' : s.cognitiveLevel === 'Thông hiểu' ? '059669' : 'D97706'}"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.cognitiveLevel}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.learningOutcomes.join(' '))}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p1Count || '—'}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p2CommandCount || '—'}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="${idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF'}"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p3Count || '—'}</w:t></w:r></w:p></w:tc>
-      </w:tr>`
-    )
+    .map((s, idx) => {
+      const fill = idx % 2 === 0 ? 'F0FDF4' : 'FFFFFF';
+      const levelColor =
+        s.cognitiveLevel === 'Nhận biết'
+          ? '0284C7'
+          : s.cognitiveLevel === 'Thông hiểu'
+          ? '059669'
+          : 'D97706';
+      return `<w:tr>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[0]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.tt}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[1]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.topic)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[2]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.unit)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[3]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="${levelColor}"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.cognitiveLevel)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[4]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.learningOutcomes.join(' '))}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[5]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p1Count || '—'}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[6]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p2CommandCount || '—'}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[7]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p3Count || '—'}</w:t></w:r></w:p></w:tc>
+        ${
+          hasPart4
+            ? `<w:tc><w:tcPr><w:tcW w:w="${sColWidths[8]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p4Count || '—'}</w:t></w:r></w:p></w:tc>`
+            : ''
+        }
+      </w:tr>`;
+    })
     .join('\n');
+
+  const specGridColsXml = sColWidths
+    .map((wPct) => `<w:gridCol w:w="${Math.round((wPct / 5000) * 14570)}"/>`)
+    .join('');
 
   const specTableXml = `<w:tbl>
     <w:tblPr>
@@ -2960,13 +3058,17 @@ export async function exportMatrixAndSpecificationDocx(
         <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
         <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CBD5E1"/>
       </w:tblBorders>
-      <w:tblCellMar><w:top w:w="40" w:type="dxa"/><w:left w:w="60" w:type="dxa"/><w:bottom w:w="40" w:type="dxa"/><w:right w:w="60" w:type="dxa"/></w:tblCellMar>
+      <w:tblCellMar><w:top w:w="50" w:type="dxa"/><w:left w:w="70" w:type="dxa"/><w:bottom w:w="50" w:type="dxa"/><w:right w:w="70" w:type="dxa"/></w:tblCellMar>
     </w:tblPr>
+    <w:tblGrid>${specGridColsXml}</w:tblGrid>
     ${specHeaderRow}
     ${specBodyRows}
   </w:tbl>`;
 
   // 3. Khung chữ ký phê duyệt 3 bên: BGH duyệt / Tổ trưởng chuyên môn / Giáo viên ra đề
+  const teacherSignLineXml = (config.teacherName || '').trim()
+    ? `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="560" w:after="20"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${escapeXml((config.teacherName || '').trim())}</w:t></w:r></w:p>`
+    : '';
   const signXml = `<w:tbl>
     <w:tblPr>
       <w:tblW w:w="5000" w:type="pct"/>
@@ -2995,6 +3097,7 @@ export async function exportMatrixAndSpecificationDocx(
         <w:tcPr><w:tcW w:w="1650" w:type="pct"/></w:tcPr>
         <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>GIÁO VIÊN RA ĐỀ</w:t></w:r></w:p>
         <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:i/><w:color w:val="64748B"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>(Ký và ghi rõ họ tên)</w:t></w:r></w:p>
+        ${teacherSignLineXml}
       </w:tc>
     </w:tr>
   </w:tbl>`;
@@ -3004,7 +3107,10 @@ export async function exportMatrixAndSpecificationDocx(
   return packOpenXmlDocx(
     fullInnerXml,
     config,
-    'Ma trận & Bản đặc tả CV 7991'
+    'Ma trận và Bản đặc tả CV 7991',
+    undefined,
+    undefined,
+    true
   );
 }
 
@@ -3058,7 +3164,7 @@ export async function exportAllVariantsZipBundle(
 
   // Cấu trúc tệp .zip gồm đúng 2 thư mục theo yêu cầu:
   // 1. Thư mục các mã đề: gồm đề gốc (giữ nguyên gạch chân, tô đỏ đáp án đúng để đối chiếu) và các đề trộn
-  // 2. Thư mục đáp án: gồm các file liên quan đến đáp án (Bảng đáp án Word, Mã QR Chung tích hợp các mã đề, File Excel/CSV)
+  // 2. Thư mục đáp án: gồm các file liên quan đến đáp án (Bảng đáp án Word, Ma trận CV 7991, Mã QR Chung tích hợp các mã đề, File Excel/CSV)
   const thuMucCacMaDe = bundleZip.folder('Thư mục các mã đề');
   const thuMucDapAn = bundleZip.folder('Thư mục đáp án');
 
@@ -3077,11 +3183,17 @@ export async function exportAllVariantsZipBundle(
     );
   }
 
-  // 2. Lưu các file liên quan đến đáp án vào "Thư mục đáp án"
+  // 2. Lưu các file liên quan đến đáp án & ma trận vào "Thư mục đáp án"
   const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
   thuMucDapAn?.file(
     buildStandardExportFileName(config, 'docx', 'Bảng đáp án chung'),
     masterAnswerDocxBlob
+  );
+
+  const matrixSpecDocxBlob = await exportMatrixAndSpecificationDocx(masterQuestions, config);
+  thuMucDapAn?.file(
+    buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991'),
+    matrixSpecDocxBlob
   );
 
   // Xuất Mã QR Chung tích hợp các mã đề (tối đa 8 mã đề / 1 Mã QR Chung để quét 1 lần lên hết các mã đề)

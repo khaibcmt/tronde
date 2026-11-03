@@ -16,6 +16,10 @@ export interface MatrixRowCV7991 {
   p3NhanBiet: number;
   p3ThongHieu: number;
   p3VanDung: number;
+  // Phần IV: Tự luận (Số câu)
+  p4NhanBiet: number;
+  p4ThongHieu: number;
+  p4VanDung: number;
   totalQuestionsOrCommands: number;
   totalScore: number;
   ratioPct: number;
@@ -30,6 +34,7 @@ export interface SpecificationRowCV7991 {
   p1Count: number; // Số câu trắc nghiệm nhiều lựa chọn
   p2CommandCount: number; // Số lệnh hỏi trắc nghiệm đúng sai
   p3Count: number; // Số câu trắc nghiệm trả lời ngắn
+  p4Count: number; // Số câu tự luận
 }
 
 export interface ExamMatrixSpecBundle {
@@ -40,6 +45,11 @@ export interface ExamMatrixSpecBundle {
     totalP2Questions: number;
     totalP2Commands: number;
     totalP3: number;
+    totalP4: number;
+    p1TotalScore: number;
+    p2TotalScore: number;
+    p3TotalScore: number;
+    p4TotalScore: number;
     nhanBietScore: number;
     thongHieuScore: number;
     vanDungScore: number;
@@ -251,7 +261,6 @@ export function detectQuestionTopicAndUnit(q: ExamQuestion): {
     text.includes('lặp đoạn') ||
     text.includes('đảo đoạn')
   ) {
-    // Kiểm tra nếu là quy luật liên kết giới tính hoặc hoán vị thì ưu tiên sang Chủ đề 2
     if (
       !text.includes('ruồi giấm') &&
       !text.includes('tần số hoán vị') &&
@@ -286,7 +295,7 @@ export function detectQuestionTopicAndUnit(q: ExamQuestion): {
   ) {
     return {
       topic: 'Chủ đề 2: Tính quy luật của hiện tượng di truyền',
-      unit: 'Quy luật Mendel, Tương tác gene, Hoán vị gene, Liên kết giới tính & Di truyền ngoài nhân',
+      unit: 'Quy luật Mendel, Tương tác gene, Hoán vị gene, Liên kết giới tính và Di truyền ngoài nhân',
       defaultOutcomes: [
         'Nhận biết thí nghiệm của Mendel, Morgan, Correns và các quy luật phân li, phân li độc lập, liên kết gene, di truyền ngoài nhân.',
         'Giải thích được cơ sở tế bào học của quy luật phân li độc lập, hoán vị gene và sự di truyền chéo/thẳng của gene trên NST giới tính X, Y.',
@@ -312,7 +321,7 @@ export function detectQuestionTopicAndUnit(q: ExamQuestion): {
   ) {
     return {
       topic: 'Chủ đề 1: Di truyền phân tử và Di truyền nhiễm sắc thể',
-      unit: 'Cấu trúc & Tái bản DNA, Phiên mã RNA, Dịch mã Protein, Điều hòa Operon Lac & Đột biến gene',
+      unit: 'Cấu trúc và Tái bản DNA, Phiên mã RNA, Dịch mã Protein, Điều hòa Operon Lac và Đột biến gene',
       defaultOutcomes: [
         'Nhận biết cấu trúc hóa học của DNA, các loại RNA, mã di truyền và các thành phần của Operon Lac ở vi khuẩn E. coli.',
         'Phân tích được cơ chế tái bản DNA, phiên mã, dịch mã và ảnh hưởng của các dạng đột biến điểm đến chuỗi polypeptide.',
@@ -339,6 +348,8 @@ export function detectQuestionTopicAndUnit(q: ExamQuestion): {
 export function buildCV7991MatrixAndSpecification(
   questions: ExamQuestion[]
 ): ExamMatrixSpecBundle {
+  const safeQuestions = Array.isArray(questions) ? questions : [];
+
   // Nhóm câu hỏi theo Chủ đề & Đơn vị kiến thức
   const groups = new Map<
     string,
@@ -350,7 +361,7 @@ export function buildCV7991MatrixAndSpecification(
     }
   >();
 
-  questions.forEach((q) => {
+  safeQuestions.forEach((q) => {
     const { topic, unit, defaultOutcomes } = detectQuestionTopicAndUnit(q);
     const key = `${topic}__${unit}`;
     if (!groups.has(key)) {
@@ -358,6 +369,20 @@ export function buildCV7991MatrixAndSpecification(
     }
     groups.get(key)!.questions.push(q);
   });
+
+  // Nếu đề trống, tạo 1 dòng mặc định để ma trận không bao giờ rỗng hoặc chia cho 0
+  if (groups.size === 0) {
+    groups.set('default__empty', {
+      topic: 'Kiến thức cốt lõi Chương trình GDPT 2018',
+      unit: 'Các chuyên đề trọng tâm theo định dạng đánh giá năng lực',
+      questions: [],
+      defaultOutcomes: [
+        'Nhận biết các khái niệm, quy tắc, định lí và công thức cơ bản.',
+        'Hiểu và vận dụng trực tiếp các phương pháp giải bài tập vào tình huống cụ thể.',
+        'Vận dụng linh hoạt kiến thức giải quyết vấn đề thực tiễn liên môn.',
+      ],
+    });
+  }
 
   const matrixRows: MatrixRowCV7991[] = [];
   const specRows: SpecificationRowCV7991[] = [];
@@ -377,6 +402,10 @@ export function buildCV7991MatrixAndSpecification(
     let p3TH = 0;
     let p3VD = 0;
 
+    let p4NB = 0;
+    let p4TH = 0;
+    let p4VD = 0;
+
     group.questions.forEach((q) => {
       const level = q.bloomLevel || 'NHAN_BIET';
       if (q.part === 'PART_1') {
@@ -385,7 +414,6 @@ export function buildCV7991MatrixAndSpecification(
         else p1VD++;
       } else if (q.part === 'PART_2') {
         // Trong Phần II: Mỗi câu gồm 4 lệnh hỏi a, b, c, d
-        // Theo chuẩn CV 7991: Đếm số lệnh hỏi tương ứng từng mức độ
         if (level === 'NHAN_BIET') {
           p2NB += 2;
           p2TH += 2;
@@ -401,19 +429,29 @@ export function buildCV7991MatrixAndSpecification(
         if (level === 'NHAN_BIET') p3NB++;
         else if (level === 'THONG_HIEU') p3TH++;
         else p3VD++;
+      } else if (q.part === 'PART_4') {
+        if (level === 'NHAN_BIET') p4NB++;
+        else if (level === 'THONG_HIEU') p4TH++;
+        else p4VD++;
       }
     });
 
     const totalP1InGroup = p1NB + p1TH + p1VD;
     const totalP2CommandsInGroup = p2NB + p2TH + p2VD;
     const totalP3InGroup = p3NB + p3TH + p3VD;
-    const totalItems = totalP1InGroup + totalP2CommandsInGroup / 4 + totalP3InGroup;
+    const totalP4InGroup = p4NB + p4TH + p4VD;
+    const totalItems =
+      totalP1InGroup +
+      totalP2CommandsInGroup / 4 +
+      totalP3InGroup +
+      totalP4InGroup;
 
-    // Điểm số theo chuẩn đề thi 2025: Phần I: 0.25đ/câu; Phần II: 1đ/câu; Phần III: 0.25đ/câu
+    // Điểm số theo chuẩn đề thi 2025: Phần I: 0.25đ/câu; Phần II: 1.0đ/câu; Phần III: 0.25đ/câu; Phần IV (Tự luận): 1.0đ/câu
     const scoreP1 = totalP1InGroup * 0.25;
     const scoreP2 = (totalP2CommandsInGroup / 4) * 1.0;
     const scoreP3 = totalP3InGroup * 0.25;
-    const totalScore = Math.round((scoreP1 + scoreP2 + scoreP3) * 100) / 100;
+    const scoreP4 = totalP4InGroup * 1.0;
+    const totalScore = Math.round((scoreP1 + scoreP2 + scoreP3 + scoreP4) * 100) / 100;
     const ratioPct = Math.round((totalScore / 10) * 100);
 
     matrixRows.push({
@@ -429,6 +467,9 @@ export function buildCV7991MatrixAndSpecification(
       p3NhanBiet: p3NB,
       p3ThongHieu: p3TH,
       p3VanDung: p3VD,
+      p4NhanBiet: p4NB,
+      p4ThongHieu: p4TH,
+      p4VanDung: p4VD,
       totalQuestionsOrCommands: Math.round(totalItems),
       totalScore,
       ratioPct,
@@ -445,8 +486,9 @@ export function buildCV7991MatrixAndSpecification(
       const p1C = lvl === 'Nhận biết' ? p1NB : lvl === 'Thông hiểu' ? p1TH : p1VD;
       const p2CmdC = lvl === 'Nhận biết' ? p2NB : lvl === 'Thông hiểu' ? p2TH : p2VD;
       const p3C = lvl === 'Nhận biết' ? p3NB : lvl === 'Thông hiểu' ? p3TH : p3VD;
+      const p4C = lvl === 'Nhận biết' ? p4NB : lvl === 'Thông hiểu' ? p4TH : p4VD;
 
-      if (p1C > 0 || p2CmdC > 0 || p3C > 0) {
+      if (p1C > 0 || p2CmdC > 0 || p3C > 0 || p4C > 0) {
         specRows.push({
           tt: rowCounter,
           topic: group.topic,
@@ -459,6 +501,7 @@ export function buildCV7991MatrixAndSpecification(
           p1Count: p1C,
           p2CommandCount: p2CmdC,
           p3Count: p3C,
+          p4Count: p4C,
         });
       }
     });
@@ -470,6 +513,7 @@ export function buildCV7991MatrixAndSpecification(
   let totalP1 = 0;
   let totalP2Commands = 0;
   let totalP3 = 0;
+  let totalP4 = 0;
 
   let nhanBietScore = 0;
   let thongHieuScore = 0;
@@ -479,16 +523,36 @@ export function buildCV7991MatrixAndSpecification(
     totalP1 += r.p1NhanBiet + r.p1ThongHieu + r.p1VanDung;
     totalP2Commands += r.p2NhanBiet + r.p2ThongHieu + r.p2VanDung;
     totalP3 += r.p3NhanBiet + r.p3ThongHieu + r.p3VanDung;
+    totalP4 += r.p4NhanBiet + r.p4ThongHieu + r.p4VanDung;
 
-    nhanBietScore += r.p1NhanBiet * 0.25 + (r.p2NhanBiet / 4) * 1.0 + r.p3NhanBiet * 0.25;
-    thongHieuScore += r.p1ThongHieu * 0.25 + (r.p2ThongHieu / 4) * 1.0 + r.p3ThongHieu * 0.25;
-    vanDungScore += r.p1VanDung * 0.25 + (r.p2VanDung / 4) * 1.0 + r.p3VanDung * 0.25;
+    nhanBietScore +=
+      r.p1NhanBiet * 0.25 +
+      (r.p2NhanBiet / 4) * 1.0 +
+      r.p3NhanBiet * 0.25 +
+      r.p4NhanBiet * 1.0;
+    thongHieuScore +=
+      r.p1ThongHieu * 0.25 +
+      (r.p2ThongHieu / 4) * 1.0 +
+      r.p3ThongHieu * 0.25 +
+      r.p4ThongHieu * 1.0;
+    vanDungScore +=
+      r.p1VanDung * 0.25 +
+      (r.p2VanDung / 4) * 1.0 +
+      r.p3VanDung * 0.25 +
+      r.p4VanDung * 1.0;
   });
 
-  const totalScore = Math.round((nhanBietScore + thongHieuScore + vanDungScore) * 10) / 10 || 10;
-  const nhanBietPct = Math.round((nhanBietScore / totalScore) * 100);
-  const thongHieuPct = Math.round((thongHieuScore / totalScore) * 100);
-  const vanDungPct = 100 - nhanBietPct - thongHieuPct;
+  const rawTotalScore = Math.round((nhanBietScore + thongHieuScore + vanDungScore) * 100) / 100;
+  const safeDenominator = rawTotalScore > 0 ? rawTotalScore : 10;
+
+  // Cập nhật lại ratioPct của từng dòng theo tổng điểm thực tế của toàn đề
+  matrixRows.forEach((r) => {
+    r.ratioPct = Math.round((r.totalScore / safeDenominator) * 100);
+  });
+
+  const nhanBietPct = rawTotalScore > 0 ? Math.round((nhanBietScore / safeDenominator) * 100) : 40;
+  const thongHieuPct = rawTotalScore > 0 ? Math.round((thongHieuScore / safeDenominator) * 100) : 30;
+  const vanDungPct = Math.max(0, 100 - nhanBietPct - thongHieuPct);
 
   return {
     matrixRows,
@@ -498,10 +562,15 @@ export function buildCV7991MatrixAndSpecification(
       totalP2Questions: Math.round(totalP2Commands / 4),
       totalP2Commands,
       totalP3,
-      nhanBietScore: Math.round(nhanBietScore * 10) / 10,
-      thongHieuScore: Math.round(thongHieuScore * 10) / 10,
-      vanDungScore: Math.round(vanDungScore * 10) / 10,
-      totalScore,
+      totalP4,
+      p1TotalScore: Math.round(totalP1 * 0.25 * 100) / 100,
+      p2TotalScore: Math.round((totalP2Commands / 4) * 1.0 * 100) / 100,
+      p3TotalScore: Math.round(totalP3 * 0.25 * 100) / 100,
+      p4TotalScore: Math.round(totalP4 * 1.0 * 100) / 100,
+      nhanBietScore: Math.round(nhanBietScore * 100) / 100,
+      thongHieuScore: Math.round(thongHieuScore * 100) / 100,
+      vanDungScore: Math.round(vanDungScore * 100) / 100,
+      totalScore: rawTotalScore > 0 ? rawTotalScore : 10,
       nhanBietPct,
       thongHieuPct,
       vanDungPct,

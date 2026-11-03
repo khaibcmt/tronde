@@ -166,6 +166,7 @@ export interface ShuffleConfig {
   gradeLevel?: string;    // VD: Lớp 12
   schoolYear: string;     // VD: Năm 2026 - 2027
   durationMinutes: number; // VD: 45
+  teacherName?: string;   // Họ và tên Giáo viên ra đề (hiển thị ở cuối trang đáp án)
 }
 
 export interface SingleQrItem {
