@@ -1647,12 +1647,54 @@ export default function App() {
   };
 
   const handleDownloadZipBundle = async () => {
-    if (shuffledVariants.length === 0) return;
+    if (questions.length === 0) return;
     setIsProcessing(true);
     try {
+      let baseQuestions = questions;
+      if (
+        editorViewMode === 'WORD_A4_PAGE' &&
+        lastEditSourceRef.current === 'WORD_A4_PAGE' &&
+        hasUnsavedChanges
+      ) {
+        const rawFromWord = parseRawTextToExamQuestions(
+          wordRawDocumentText,
+          config.resetNumberingPerPart
+        );
+        if (rawFromWord.length > 0) {
+          baseQuestions = mergeRichMetadataFromExistingQuestions(
+            rawFromWord,
+            questions
+          );
+        }
+      }
+
+      const normalizedQuestions = normalizeAllQuestionsStrictFourOptions(
+        baseQuestions,
+        config.resetNumberingPerPart
+      );
+
+      let targetVariants = shuffledVariants;
+      if (targetVariants.length === 0 || hasUnsavedChanges) {
+        targetVariants = await generateShuffledVariants(normalizedQuestions, config);
+        setShuffledVariants(targetVariants);
+        setQuestions(normalizedQuestions);
+        setWordRawDocumentText(serializeQuestionsToWordRawText(normalizedQuestions));
+        setHasUnsavedChanges(false);
+        setUnsavedQuestionIds([]);
+        try {
+          const multiQr = await generateMasterMultiQrCode(targetVariants, config);
+          setMasterMultiQr(multiQr);
+        } catch (err) {
+          console.warn('Lỗi tạo Master Multi QR:', err);
+        }
+        if (targetVariants.length > 0 && !selectedVariantCode) {
+          setSelectedVariantCode(targetVariants[0].examCode);
+        }
+      }
+
       const blob = await exportAllVariantsZipBundle(
-        shuffledVariants,
-        questions,
+        targetVariants,
+        normalizedQuestions,
         config
       );
       triggerBrowserDownload(
@@ -1660,7 +1702,7 @@ export default function App() {
         buildStandardExportFileName(config, 'zip')
       );
       await executePostDownloadZeroTracePurge(
-        `Trọn Bộ ${shuffledVariants.length} Đề Thi & Đáp Án (.zip)`
+        `Trọn Bộ ${targetVariants.length} Đề Thi (Chuẩn Word Equation <m:oMath>) + Đáp Án + Ma Trận CV 7991 + 3 Mã QR + 3 File Excel (.zip)`
       );
     } finally {
       setIsProcessing(false);
@@ -2437,6 +2479,17 @@ export default function App() {
                 <QrCode className="w-4 h-4 shrink-0" />
                 <span>4. Đáp Án &amp; Mã QR</span>
               </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadZipBundle}
+                disabled={isProcessing || questions.length === 0}
+                className="px-3.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale flex items-center gap-1.5 whitespace-nowrap cursor-pointer btn-3d-rose shadow-sm"
+                title="Tải về 1 file .ZIP duy nhất tích hợp: Đề gốc & Các mã đề trộn chuẩn Word Equation + Bảng đáp án chung (có tên GV) + Ma trận CV 7991 + 3 Mã QR + 3 File Excel"
+              >
+                <FileArchive className="w-4 h-4 shrink-0" />
+                <span>Tải Về .ZIP ({config.numVariants} Đề + Đáp Án + Ma Trận)</span>
+              </button>
             </nav>
 
             {/* Cụm nút Hệ thống (Bảo Mật AI + Chọn Mô hình + Hướng Dẫn + Thu Gọn) */}
@@ -3203,30 +3256,44 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Hàng 3 (Tự động xuất hiện sau khi đã trộn đề): Tải trọn bộ ZIP & Bảng Đáp Án */}
-                {shuffledVariants.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleDownloadZipBundle}
-                      disabled={isProcessing}
-                      className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                    >
-                      <FileArchive className="w-3.5 h-3.5 shrink-0" />
-                      <span>Tải Bộ {shuffledVariants.length} Đề (.zip)</span>
-                    </button>
+                {/* Hàng 3 (Luôn sẵn sàng): Tải trọn bộ ZIP tích hợp tất cả & Bảng Đáp Án */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleDownloadZipBundle}
+                    disabled={isProcessing || questions.length === 0}
+                    className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-purple flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    title="Tải về trọn bộ .ZIP gồm: Đề gốc & Các mã đề chuẩn Word Equation <m:oMath> + Bảng đáp án chung (có tên GV) + Ma trận CV 7991 + 3 Mã QR + 3 File Excel (.xlsx)"
+                  >
+                    <FileArchive className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      Tải Bộ {shuffledVariants.length || config.numVariants} Đề + &lt;m:oMath&gt; (.zip)
+                    </span>
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={handleDownloadMasterAnswerSheetDocx}
-                      disabled={isProcessing}
-                      className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5 shrink-0" />
-                      <span>Bảng Đáp Án (.docx)</span>
-                    </button>
-                  </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={
+                      shuffledVariants.length > 0
+                        ? handleDownloadMasterAnswerSheetDocx
+                        : handleExportWordEquationOmathDocx
+                    }
+                    disabled={isProcessing || questions.length === 0}
+                    className="px-2.5 py-2 rounded-xl font-black text-white btn-auto-scale btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    title={
+                      shuffledVariants.length > 0
+                        ? 'Tải Bảng Đáp Án Khảo Thí (.docx)'
+                        : 'Tải Đề Gốc Chuẩn Word Equation <m:oMath> (.docx)'
+                    }
+                  >
+                    <Download className="w-3.5 h-3.5 shrink-0" />
+                    <span>
+                      {shuffledVariants.length > 0
+                        ? 'Bảng Đáp Án (.docx)'
+                        : 'Xuất Word <m:oMath> (.docx)'}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Nhóm 2: Chuyển nhanh các Phần của đề & Chế độ hiển thị */}
@@ -3513,16 +3580,6 @@ export default function App() {
                     <option value={13}>Times 13pt</option>
                     <option value={14}>Times 14pt</option>
                   </select>
-                  <button
-                    type="button"
-                    onClick={handleExportWordEquationOmathDocx}
-                    disabled={isProcessing || questions.length === 0}
-                    className="px-2 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[11px] font-mono font-bold flex items-center gap-1 shadow-2xs cursor-pointer transition-colors"
-                    title="Tải ngay file Word (.docx) nhúng trực tiếp công thức <m:oMath> chuẩn Cambria Math UTF-8 (Không bị ô vuông)"
-                  >
-                    <Download className="w-3 h-3 shrink-0" />
-                    <span>Xuất Word Equation &lt;m:oMath&gt;</span>
-                  </button>
                 </div>
 
                 <div className="flex items-center gap-1 flex-wrap">
@@ -3605,56 +3662,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* Thanh Công Cụ Lưu Toàn Bộ Chỉnh Sửa Cố Định Phía Trên Danh Sách Câu Hỏi */}
-              <div className="sticky top-2 z-30 p-3 rounded-2xl bg-white/95 backdrop-blur-md border-2 border-indigo-300 shadow-lg flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-1 rounded-lg bg-indigo-700 text-white text-xs font-black flex items-center gap-1.5">
-                    <Save className="w-3.5 h-3.5 shrink-0" />
-                    <span>CHẾ ĐỘ BẢO TOÀN CHỈNH SỬA TỪNG CÂU</span>
-                  </span>
-                  <span className="text-xs font-bold text-slate-700">
-                    {unsavedQuestionIds.length > 0
-                      ? `Đang có ${unsavedQuestionIds.length} câu vừa sửa chưa bấm lưu cố định`
-                      : editedQuestionIds.length > 0
-                      ? `Đã lưu cố định ${editedQuestionIds.length} câu đã chỉnh sửa (Lúc ${lastSavedAt})`
-                      : 'Mọi chỉnh sửa ở từng câu đều được giữ nguyên khi chuyển sang câu khác'}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={handleSaveAllEditsOnly}
-                    disabled={isProcessing}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1.5 cursor-pointer shadow-sm ${
-                      unsavedQuestionIds.length > 0
-                        ? 'btn-3d-amber ring-2 ring-amber-300'
-                        : 'btn-3d-indigo'
-                    }`}
-                    title="Lưu cố định toàn bộ chỉnh sửa của tất cả các câu (Giữ nguyên vị trí hiện tại để tiếp tục xem/chuyển sang câu khác)"
-                  >
-                    <Save className="w-3.5 h-3.5 shrink-0" />
-                    <span>
-                      {unsavedQuestionIds.length > 0
-                        ? `Lưu Toàn Bộ Chỉnh Sửa (${unsavedQuestionIds.length} câu)*`
-                        : 'Lưu Toàn Bộ Chỉnh Sửa'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSaveEdits}
-                    disabled={isProcessing}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 cursor-pointer shadow-sm"
-                    title="Lưu toàn bộ chỉnh sửa và bắt đầu trộn đề ngay"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                    <span>Lưu Toàn Bộ &amp; Trộn Đề Ngay</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Danh sách câu hỏi trực quan trên các khung thẻ 3D */}
+              {/* Danh sách câu hỏi trực quan */}
               <div className="space-y-4">
                 {filteredQuestions.map((q, idx) => {
                   const prevQ = idx > 0 ? filteredQuestions[idx - 1] : null;
@@ -3673,7 +3681,7 @@ export default function App() {
                     <React.Fragment key={q.id}>
                       {showPartHeader && (
                         <div
-                          className={`px-5 py-3.5 text-white rounded-2xl flex items-center justify-between shadow-lg ${
+                          className={`px-5 py-3 text-white rounded-2xl flex items-center justify-between shadow-lg ${
                             q.part === 'PART_1'
                               ? 'bg-gradient-to-r from-blue-700 via-indigo-700 to-cyan-600'
                               : q.part === 'PART_2'
@@ -3683,38 +3691,25 @@ export default function App() {
                               : 'bg-gradient-to-r from-purple-700 via-violet-700 to-indigo-700'
                           }`}
                         >
-                          <div>
-                            <h3 className="text-sm font-black tracking-wide uppercase">
-                              {q.part === 'PART_1' &&
-                                'PHẦN I. Trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)'}
-                              {q.part === 'PART_2' &&
-                                'PHẦN II. Trắc nghiệm Đúng / Sai (4 ý a, b, c, d mỗi câu — Nhận diện Tô đỏ hoặc Gạch chân)'}
-                              {q.part === 'PART_3' &&
-                                'PHẦN III. Trắc nghiệm Trả lời ngắn (Điền đáp số)'}
-                              {q.part === 'PART_4' &&
-                                `${essayRomanLabel}. Tự luận (Giữ nguyên thứ tự câu hỏi đưa lên — Không trộn câu hỏi)`}
-                            </h3>
-                            <p className="text-xs text-white/90 font-medium">
-                              {q.part === 'PART_4'
-                                ? part3Count === 0
-                                  ? 'Đề gốc không có Phần III trả lời ngắn → Khi xuất đề tự động trình bày theo thứ tự: PHẦN I, PHẦN II, PHẦN III. Tự luận'
-                                  : 'Đề gốc có đủ Phần I, II, III → Khi xuất đề trình bày là PHẦN IV. Tự luận (Giữ nguyên thứ tự các câu tự luận)'
-                                : config.resetNumberingPerPart
-                                ? 'Đang bật chế độ: Đánh số lại từ Câu 1 ở đầu mỗi phần · Times New Roman 12pt · Canh trái tự động co dãn'
-                                : 'Đang bật chế độ: Đánh số câu liên tục từ đầu đến cuối đề'}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono font-bold bg-black/20 px-3 py-1 rounded-lg">
-                              {q.part === 'PART_1'
-                                ? `${part1Count} câu`
-                                : q.part === 'PART_2'
-                                ? `${part2Count} câu`
-                                : q.part === 'PART_3'
-                                ? `${part3Count} câu`
-                                : `${part4Count} câu`}
-                            </span>
-                          </div>
+                          <h3 className="text-sm font-black tracking-wide uppercase">
+                            {q.part === 'PART_1' &&
+                              'PHẦN I. Trắc nghiệm nhiều phương án lựa chọn (A, B, C, D)'}
+                            {q.part === 'PART_2' &&
+                              'PHẦN II. Trắc nghiệm Đúng / Sai (a, b, c, d)'}
+                            {q.part === 'PART_3' &&
+                              'PHẦN III. Trắc nghiệm Trả lời ngắn'}
+                            {q.part === 'PART_4' &&
+                              `${essayRomanLabel}. Tự luận`}
+                          </h3>
+                          <span className="text-xs font-mono font-bold bg-black/20 px-3 py-1 rounded-lg shrink-0">
+                            {q.part === 'PART_1'
+                              ? `${part1Count} câu`
+                              : q.part === 'PART_2'
+                              ? `${part2Count} câu`
+                              : q.part === 'PART_3'
+                              ? `${part3Count} câu`
+                              : `${part4Count} câu`}
+                          </span>
                         </div>
                       )}
 
@@ -3735,29 +3730,6 @@ export default function App() {
                             <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-black font-mono shadow-xs">
                               Câu {q.displayIndex}
                             </span>
-                            {editedQuestionIds.includes(q.id) && (
-                              <span
-                                className={`px-2 py-0.5 rounded-md text-[11px] font-black border flex items-center gap-1 ${
-                                  unsavedQuestionIds.includes(q.id)
-                                    ? 'bg-amber-100 border-amber-400 text-amber-900'
-                                    : 'bg-emerald-100 border-emerald-400 text-emerald-900'
-                                }`}
-                              >
-                                <CheckCircle2 className="w-3 h-3 shrink-0" />
-                                <span>
-                                  {unsavedQuestionIds.includes(q.id)
-                                    ? `Đang sửa Câu ${q.displayIndex} (Chưa bấm lưu câu này)`
-                                    : `Đã lưu cố định Câu ${q.displayIndex} (${
-                                        savedQuestionTimestamps[q.id] || lastSavedAt
-                                      }) ✓`}
-                                </span>
-                              </span>
-                            )}
-                            {q.isAiCloned && (
-                              <span className="px-2 py-0.5 rounded-md bg-purple-100 border border-purple-300 text-purple-900 text-[11px] font-extrabold">
-                                AI Nhân Bản Tương Đương
-                              </span>
-                            )}
                             <select
                               value={q.bloomLevel || 'NHAN_BIET'}
                               onChange={(e) =>
@@ -3773,76 +3745,36 @@ export default function App() {
                               <option value="VAN_DUNG">Mức độ: Vận dụng</option>
                               <option value="VAN_DUNG_CAO">Mức độ: Vận dụng cao</option>
                             </select>
-
-                            {q.part === 'PART_1' && (
-                              <span className="text-xs text-sky-800 font-mono font-semibold">
-                                · Canh trái co dãn:{' '}
-                                {effectiveLayout === '1_ROW_4_COL'
-                                  ? '1 dòng (4 cột 25%)'
-                                  : effectiveLayout === '2_ROW_2_COL'
-                                  ? '2 dòng (2 cột 50%)'
-                                  : '4 dòng (1 cột 100%)'}
-                              </span>
-                            )}
                           </div>
 
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {questionIssues.length > 0 ? (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {questionIssues.length > 0 && (
                               <div className="flex items-center gap-1 text-xs font-extrabold text-rose-700 bg-rose-100/90 px-2.5 py-1 rounded-lg border border-rose-300">
                                 <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                                 <span>{questionIssues[0].message}</span>
                               </div>
-                            ) : (
-                              <span className="text-xs font-extrabold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-200">
-                                <CheckCircle2 className="w-3.5 h-3.5" />
-                                <span>
-                                  {editedQuestionIds.includes(q.id)
-                                    ? 'Đã chỉnh sửa hợp lệ'
-                                    : 'Đạt chuẩn 2025'}
-                                </span>
-                              </span>
                             )}
 
-                            {/* Nút Lưu riêng từng câu ngay trên thanh tiêu đề của câu */}
-                            <button
-                              type="button"
-                              onClick={() => handleSaveSingleQuestion(q.id, false)}
-                              disabled={isProcessing}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-black text-white flex items-center gap-1 cursor-pointer shadow-xs ${
-                                unsavedQuestionIds.includes(q.id)
-                                  ? 'btn-3d-amber ring-2 ring-amber-300'
-                                  : 'btn-3d-sky'
-                              }`}
-                              title={`Lưu cố định chỉnh sửa của riêng Câu ${q.displayIndex} (Chuyển sang câu khác không bị thay đổi)`}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id={`upload-img-${q.id}`}
+                              onChange={(e) => handleAddImageToQuestion(q.id, e)}
+                              className="hidden"
+                            />
+                            <label
+                              htmlFor={`upload-img-${q.id}`}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-sky-800 bg-sky-50 hover:bg-sky-100 border border-sky-200 flex items-center gap-1 cursor-pointer transition-colors"
+                              title="Thêm hình ảnh / sơ đồ minh họa cho câu hỏi"
                             >
-                              <Save className="w-3.5 h-3.5 shrink-0" />
-                              <span>
-                                {unsavedQuestionIds.includes(q.id)
-                                  ? `Lưu Câu ${q.displayIndex}*`
-                                  : savedQuestionTimestamps[q.id]
-                                  ? `Đã Lưu Câu ${q.displayIndex} ✓`
-                                  : `Lưu Câu ${q.displayIndex}`}
-                              </span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={handleSaveAllEditsOnly}
-                              disabled={isProcessing}
-                              className="px-2.5 py-1 rounded-lg text-xs font-black text-white btn-3d-indigo flex items-center gap-1 cursor-pointer shadow-xs"
-                              title="Lưu cố định toàn bộ các câu đã chỉnh sửa trong đề"
-                            >
-                              <Save className="w-3.5 h-3.5 shrink-0" />
-                              <span>Lưu Toàn Bộ</span>
-                            </button>
+                              <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                              <span>+ Thêm ảnh</span>
+                            </label>
                           </div>
                         </div>
 
-                        {/* Ô biên tập trực tiếp thân câu hỏi (Times New Roman 12pt, canh trái) */}
+                        {/* Ô biên tập trực tiếp thân câu hỏi */}
                         <div className="mb-3">
-                          <label className="block text-[11px] font-bold text-sky-900 mb-1">
-                            Nội dung câu dẫn (Times New Roman 12pt — Canh trái tự động co dãn):
-                          </label>
                           <textarea
                             rows={2}
                             value={q.stemText}
@@ -3857,7 +3789,7 @@ export default function App() {
                             className="w-full px-3.5 py-2 text-left text-slate-900 bg-white border-2 border-sky-200 rounded-xl focus:outline-none focus:border-blue-600 leading-relaxed shadow-inner"
                           />
 
-                          {/* ================= XEM TRƯỚC TRỰC QUAN CÔNG THỨC TOÁN - LÝ - HÓA - SINH ================= */}
+                          {/* Xem trước trực quan công thức Toán - Lý - Hóa - Sinh */}
                           {(q.stemText.includes('$') ||
                             q.stemText.includes('\\') ||
                             q.hasFormula ||
@@ -3868,62 +3800,15 @@ export default function App() {
                             q.stemText.includes('⇌') ||
                             q.stemText.includes('->') ||
                             q.stemText.includes('<=>')) && (
-                            <div className="mt-2 p-2.5 rounded-xl bg-gradient-to-r from-blue-50/90 via-indigo-50/80 to-sky-50/90 border border-blue-200/90 text-slate-900 shadow-2xs">
-                              <div className="flex items-center justify-between mb-1.5 text-[10px] font-bold uppercase tracking-wider text-blue-800">
-                                <span className="flex items-center gap-1.5">
-                                  <Sigma className="w-3.5 h-3.5 text-blue-600" />
-                                  <span>Định dạng công thức trực quan (Auto-Heal KaTeX / MathJax 3 — Toán · Lý · Hóa · Sinh):</span>
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={handleExportWordEquationOmathDocx}
-                                  disabled={isProcessing}
-                                  className="text-[10px] font-mono font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-600 hover:text-white px-2.5 py-0.5 rounded-lg border border-emerald-300 shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
-                                  title="Bấm để tải ngay file Word (.docx) với công thức chuyển từ LaTeX -> MathML (KaTeX) -> OMML <m:oMath> chuẩn font Cambria Math UTF-8"
-                                >
-                                  <Download className="w-3 h-3 shrink-0" />
-                                  <span>Xuất Word Equation &lt;m:oMath&gt;</span>
-                                </button>
-                              </div>
+                            <div className="mt-2 px-3 py-2 rounded-xl bg-blue-50/60 border border-blue-200/80 text-slate-900">
                               <ScientificContentRenderer text={q.stemText} formulaLatex={q.formulaLatex} hasFormula={q.hasFormula} />
                             </div>
                           )}
                         </div>
 
-                        {/* ================= CÔNG THỨC TOÁN / LÝ / HÓA / SINH NHẬN DIỆN ĐƯỢC ================= */}
-                        {q.hasFormula && (
-                          <div className="mb-3 px-3 py-2 rounded-xl bg-indigo-50/90 border border-indigo-200 flex flex-wrap items-center justify-between gap-2 text-xs text-indigo-950">
-                            <div className="flex items-center gap-1.5 font-medium">
-                              <Sigma className="w-4 h-4 text-indigo-600 shrink-0" />
-                              <span className="font-bold">Công thức Toán / Lý / Hóa:</span>
-                              <span className="font-mono bg-white px-2 py-0.5 rounded border border-indigo-200 font-bold text-indigo-700">
-                                {q.formulaLatex || 'Chuẩn LaTeX / Office Math Markup (OMML)'}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleExportWordEquationOmathDocx}
-                              disabled={isProcessing}
-                              className="text-[11px] font-bold text-indigo-700 hover:text-white bg-white hover:bg-indigo-600 px-2.5 py-0.5 rounded-lg border border-indigo-300 transition-colors flex items-center gap-1 cursor-pointer"
-                              title="Tải file Word (.docx) nhúng trực tiếp <m:oMath> chuẩn Cambria Math"
-                            >
-                              <Download className="w-3 h-3 shrink-0" />
-                              <span>Xuất Word Equation &lt;m:oMath&gt;</span>
-                            </button>
-                          </div>
-                        )}
-
-                        {/* ================= BẢNG DỮ LIỆU / BẢNG GHÉP ĐÔI (CỘT A - CỘT B) CỦA CÂU HỎI ================= */}
+                        {/* Bảng dữ liệu trong câu hỏi */}
                         {q.stemTables && q.stemTables.length > 0 && (
                           <div className="mb-3 space-y-2">
-                            <div className="text-[11px] font-bold text-sky-900 flex items-center justify-between">
-                              <span>
-                                Bảng dữ liệu / Bảng ghép đôi trong câu hỏi ({q.stemTables.length} bảng — Bảo toàn cấu trúc Word Table):
-                              </span>
-                              <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                Giữ nguyên ô gộp &amp; căn lề khi xuất .docx
-                              </span>
-                            </div>
                             {q.stemTables.map((tbl) => (
                               <div
                                 key={tbl.id}
@@ -3966,101 +3851,59 @@ export default function App() {
                           </div>
                         )}
 
-                        {/* ================= HÌNH ẢNH / SƠ ĐỒ / PHẢ HỆ / ĐỒ THỊ ĐÍNH KÈM CỦA CÂU HỎI ================= */}
-                        <div className="mb-3 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <label className="text-[11px] font-bold text-sky-900 flex items-center gap-1.5">
-                              <ImageIcon className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                              <span>
-                                Sơ đồ, Phả hệ, Đồ thị câu hỏi ({q.images?.length || 0} — Auto-Heal Spatial Ownership &amp; In Line căn giữa):
-                              </span>
-                            </label>
-
-                            <div>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                id={`upload-img-${q.id}`}
-                                onChange={(e) => handleAddImageToQuestion(q.id, e)}
-                                className="hidden"
-                              />
-                              <label
-                                htmlFor={`upload-img-${q.id}`}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-bold text-white btn-3d-cyan flex items-center gap-1 cursor-pointer transition-transform hover:scale-102"
-                                title="Thêm sơ đồ / phả hệ / đồ thị minh họa (Tự động khử nhiễu nền, giữ tỷ lệ gốc 300 DPI & gắn thẻ [HINH_ANH_CAU_X])"
-                              >
-                                <Plus className="w-3.5 h-3.5" />
-                                <span>Thêm ảnh / sơ đồ</span>
-                              </label>
-                            </div>
-                          </div>
-
-                          {q.images && q.images.length > 0 && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                              {q.images.map((img, imgIdx) => {
-                                const displayTag =
-                                  img.tagId ||
-                                  `[HINH_ANH_CAU_${q.displayIndex}${
-                                    (q.images?.length || 0) > 1 ? `_${imgIdx + 1}` : ''
-                                  }]`;
-                                return (
-                                  <div
-                                    key={img.id}
-                                    className="exam-pedigree-block relative group p-2 rounded-xl bg-white border-2 border-sky-200 shadow-xs flex flex-col items-center"
-                                  >
-                                    <div className="w-full flex items-center justify-between gap-1 mb-1 px-1">
-                                      <span className="text-[10px] font-mono font-black text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-                                        {displayTag}
-                                      </span>
-                                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                                        In Line · {img.dpi || 300} DPI
-                                      </span>
-                                    </div>
-                                    <img
-                                      src={img.dataUrl}
-                                      alt={img.caption || displayTag}
-                                      className="max-h-36 object-contain rounded-lg border border-slate-100 cursor-pointer transition-transform group-hover:scale-102"
+                        {/* Hình ảnh đính kèm của câu hỏi */}
+                        {q.images && q.images.length > 0 && (
+                          <div className="mb-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                            {q.images.map((img, imgIdx) => {
+                              const displayTag =
+                                img.tagId ||
+                                `Câu ${q.displayIndex}${
+                                  (q.images?.length || 0) > 1 ? ` (${imgIdx + 1})` : ''
+                                }`;
+                              return (
+                                <div
+                                  key={img.id}
+                                  className="exam-pedigree-block relative group p-2 rounded-xl bg-white border border-sky-200 shadow-xs flex flex-col items-center"
+                                >
+                                  <img
+                                    src={img.dataUrl}
+                                    alt={img.caption || displayTag}
+                                    className="max-h-40 object-contain rounded-lg cursor-pointer transition-transform group-hover:scale-102"
+                                    onClick={() =>
+                                      setPreviewModalImage({
+                                        src: img.dataUrl,
+                                        caption: `Hình minh họa — Câu ${q.displayIndex}`,
+                                      })
+                                    }
+                                  />
+                                  <div className="mt-1 flex items-center justify-end gap-1 w-full px-1">
+                                    <button
+                                      type="button"
                                       onClick={() =>
                                         setPreviewModalImage({
                                           src: img.dataUrl,
-                                          caption: `${displayTag} — Câu ${q.displayIndex}`,
+                                          caption: `Hình minh họa — Câu ${q.displayIndex}`,
                                         })
                                       }
-                                    />
-                                    <div className="mt-1.5 flex items-center justify-between w-full px-1 text-[11px] text-slate-500 font-mono">
-                                      <span className="truncate max-w-[120px]" title={img.fileName}>
-                                        {img.fileName || 'diagram.png'}
-                                      </span>
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setPreviewModalImage({
-                                              src: img.dataUrl,
-                                              caption: `${displayTag} — Câu ${q.displayIndex}`,
-                                            })
-                                          }
-                                          className="p-1 hover:text-blue-600 rounded cursor-pointer"
-                                          title="Phóng to xem chi tiết"
-                                        >
-                                          <Maximize2 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleRemoveImageFromQuestion(q.id, img.id)}
-                                          className="p-1 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
-                                          title="Xóa hình ảnh này"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </div>
+                                      className="p-1 text-slate-500 hover:text-blue-600 rounded cursor-pointer"
+                                      title="Phóng to xem chi tiết"
+                                    >
+                                      <Maximize2 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveImageFromQuestion(q.id, img.id)}
+                                      className="p-1 text-rose-500 hover:text-rose-700 rounded cursor-pointer"
+                                      title="Xóa hình ảnh này"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
 
                         {/* ================= NỘI DUNG PHẦN I: 4 PHƯƠNG ÁN A, B, C, D ================= */}
                         {q.part === 'PART_1' && q.options && (
@@ -4203,47 +4046,19 @@ export default function App() {
                         {/* ================= NỘI DUNG PHẦN II: 4 Ý CON a), b), c), d) ĐÚNG / SAI ================= */}
                         {q.part === 'PART_2' && q.subItems && (() => {
                           const p2TrueCount = q.subItems.filter((s) => s.isTrue).length;
-                          const p2FalseCount = q.subItems.length - p2TrueCount;
                           const isAllTrueOrAllFalse = p2TrueCount === 4 || p2TrueCount === 0;
                           return (
                             <div className="space-y-2.5">
-                              {/* Thanh trạng thái kiểm tra 4 Đúng / 4 Sai Phần II */}
-                              <div
-                                className={`px-3 py-2 rounded-xl border-2 flex flex-wrap items-center justify-between gap-2 text-xs font-black ${
-                                  isAllTrueOrAllFalse
-                                    ? 'bg-rose-100 border-rose-500 text-rose-900'
-                                    : 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {isAllTrueOrAllFalse ? (
-                                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 animate-bounce" />
-                                  ) : (
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                  )}
+                              {isAllTrueOrAllFalse && (
+                                <div className="px-3 py-2 rounded-xl border-2 bg-rose-100 border-rose-500 text-rose-900 flex items-center gap-2 text-xs font-black">
+                                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                                   <span>
                                     {p2TrueCount === 4
-                                      ? 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là ĐÚNG (4 Đúng — 0 Sai). Giáo viên vui lòng kiểm tra và chỉnh sửa lại!'
-                                      : p2TrueCount === 0
-                                      ? 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là SAI (4 Sai — 0 Đúng / Hoặc chưa đánh dấu đáp án). Giáo viên vui lòng kiểm tra và chỉnh sửa lại!'
-                                      : `Phân bố Đúng/Sai hợp lệ: ${p2TrueCount} ý Đúng (Đ) — ${p2FalseCount} ý Sai (S)`}
+                                      ? 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là ĐÚNG (4 Đúng — 0 Sai). Giáo viên vui lòng kiểm tra lại!'
+                                      : 'CẢNH BÁO PHẦN II: Cả 4 ý a, b, c, d đều đang là SAI (4 Sai — 0 Đúng). Giáo viên vui lòng kiểm tra lại!'}
                                   </span>
                                 </div>
-                                <div className="flex items-center gap-1.5">
-                                  {q.subItems.map((s) => (
-                                    <span
-                                      key={`badge-${s.id}`}
-                                      className={`px-2 py-0.5 rounded font-mono text-[11px] font-black border ${
-                                        s.isTrue
-                                          ? 'bg-emerald-600 text-white border-emerald-700'
-                                          : 'bg-rose-600 text-white border-rose-700'
-                                      }`}
-                                    >
-                                      {s.currentLabel}:{s.isTrue ? 'Đ' : 'S'}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
+                              )}
 
                               <div className="space-y-2.5">
                                 {q.subItems.map((sub) => (
@@ -4333,9 +4148,7 @@ export default function App() {
                           const isInvalidFormat =
                             !isMissingAns && !/^-?\d+([.,]\d+)?$/.test(rawShortAns);
                           const hasP3Error = isMissingAns || isExceedsMax4 || isInvalidFormat;
-                          const omrBoxes = [0, 1, 2, 3].map((idx) => rawShortAns[idx] || '');
 
-                          // Gợi ý làm tròn chuẩn 4 ký tự nếu số thập phân dài hơn 4 ký tự
                           let suggested4Char = '';
                           if (isExceedsMax4 && /^-?\d+([.,]\d+)?$/.test(rawShortAns)) {
                             const useComma = rawShortAns.includes(',');
@@ -4362,82 +4175,47 @@ export default function App() {
                                   : 'bg-amber-50/90 border-amber-300'
                               }`}
                             >
-                              <div className="flex flex-wrap items-center justify-between gap-4">
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <span className="text-xs font-black text-amber-950 uppercase">
-                                    Đáp số chuẩn (Phần III — Tối đa 4 ký tự):
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="text"
-                                      value={q.shortAnswer || ''}
-                                      onChange={(e) =>
-                                        handleUpdateShortAnswerPart3(q.id, e.target.value)
-                                      }
-                                      placeholder="Nhập đáp số (VD: -2,5 hoặc 375)"
-                                      className={`w-48 px-3 py-1.5 text-sm font-mono font-extrabold underline bg-white border-2 rounded-xl focus:outline-none focus:border-blue-600 ${
-                                        hasP3Error
-                                          ? 'text-rose-700 border-rose-500 ring-2 ring-rose-200'
-                                          : 'text-rose-600 border-amber-400'
-                                      }`}
-                                    />
-                                    <span
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black border ${
-                                        hasP3Error
-                                          ? 'bg-rose-600 text-white border-rose-700'
-                                          : 'bg-emerald-600 text-white border-emerald-700'
-                                      }`}
-                                    >
-                                      {charLen}/4 ký tự
-                                    </span>
-                                  </div>
-
-                                  {/* Mô phỏng 4 ô tô phiếu trả lời trắc nghiệm OMR 2025 */}
-                                  <div
-                                    className="flex items-center gap-1 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-2xs"
-                                    title="4 ô phiếu trả lời trắc nghiệm chuẩn Bộ GD&ĐT (Mỗi dấu '-' hoặc ',' chiếm 1 ô)"
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="text-xs font-black text-amber-950 uppercase">
+                                  Đáp số (Tối đa 4 ký tự):
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={q.shortAnswer || ''}
+                                    onChange={(e) =>
+                                      handleUpdateShortAnswerPart3(q.id, e.target.value)
+                                    }
+                                    placeholder="Nhập đáp số (VD: -2,5 hoặc 375)"
+                                    className={`w-48 px-3 py-1.5 text-sm font-mono font-extrabold underline bg-white border-2 rounded-xl focus:outline-none focus:border-blue-600 ${
+                                      hasP3Error
+                                        ? 'text-rose-700 border-rose-500 ring-2 ring-rose-200'
+                                        : 'text-rose-600 border-amber-400'
+                                    }`}
+                                  />
+                                  <span
+                                    className={`px-2.5 py-1 rounded-lg text-xs font-mono font-black border ${
+                                      hasP3Error
+                                        ? 'bg-rose-600 text-white border-rose-700'
+                                        : 'bg-emerald-600 text-white border-emerald-700'
+                                    }`}
                                   >
-                                    <span className="text-[11px] font-black text-slate-600 mr-1">
-                                      4 ô OMR:
-                                    </span>
-                                    {omrBoxes.map((ch, idx) => (
-                                      <span
-                                        key={`omr-box-${q.id}-${idx}`}
-                                        className={`w-6 h-6 rounded border text-xs font-mono font-black flex items-center justify-center ${
-                                          ch
-                                            ? 'bg-amber-100 border-amber-500 text-slate-950'
-                                            : 'bg-slate-50 border-slate-300 text-slate-400'
-                                        }`}
-                                      >
-                                        {ch || '·'}
-                                      </span>
-                                    ))}
-                                  </div>
-
-                                  {suggested4Char && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleUpdateShortAnswerPart3(q.id, suggested4Char)
-                                      }
-                                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer shadow-2xs"
-                                      title={`Làm tròn đáp số "${rawShortAns}" thành "${suggested4Char}" (đúng 4 ký tự)`}
-                                    >
-                                      Làm tròn thành &quot;{suggested4Char}&quot; (4 ký tự)
-                                    </button>
-                                  )}
+                                    {charLen}/4 ký tự
+                                  </span>
                                 </div>
 
-                                <span className="text-xs text-amber-900 font-mono font-bold">
-                                  Nguồn nhận diện:{' '}
-                                  {q.shortAnswerDetectedBy === 'KEYWORD'
-                                    ? 'Từ khóa "Đáp án:" / Bảng đáp án'
-                                    : q.shortAnswerDetectedBy === 'UNDERLINE_RED'
-                                    ? 'Gạch chân / Tô đỏ cuối câu'
-                                    : q.shortAnswerDetectedBy === 'MANUAL'
-                                    ? 'Giáo viên nhập trực tiếp'
-                                    : 'Chưa có đáp số (Cần giáo viên bổ sung)'}
-                                </span>
+                                {suggested4Char && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleUpdateShortAnswerPart3(q.id, suggested4Char)
+                                    }
+                                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-black cursor-pointer shadow-2xs"
+                                    title={`Làm tròn đáp số "${rawShortAns}" thành "${suggested4Char}" (đúng 4 ký tự)`}
+                                  >
+                                    Làm tròn thành &quot;{suggested4Char}&quot;
+                                  </button>
+                                )}
                               </div>
 
                               {hasP3Error && (
@@ -4445,10 +4223,10 @@ export default function App() {
                                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
                                   <span>
                                     {isMissingAns
-                                      ? 'CHƯA CÓ ĐÁP SỐ PHẦN III (Hệ thống tuyệt đối không tự bịa đáp án): Giáo viên vui lòng nhập đáp số (tối đa 4 ký tự kể cả dấu "-" và dấu ",")!'
+                                      ? 'CHƯA CÓ ĐÁP SỐ PHẦN III: Giáo viên vui lòng nhập đáp số (tối đa 4 ký tự kể cả dấu "-" và dấu ",")!'
                                       : isExceedsMax4
-                                      ? `VƯỢT QUÁ 4 KÝ TỰ: Đáp số "${rawShortAns}" đang có ${charLen} ký tự. Bắt buộc tối đa 4 ký tự kể cả dấu "-" và dấu "," (VD: -2,5 hoặc 28,1). Vui lòng làm tròn hoặc chỉnh sửa!`
-                                      : `SAI ĐỊNH DẠNG ĐÁP SỐ TRẢ LỜI NGẮN: "${rawShortAns}" chứa ký tự không hợp lệ. Chỉ được phép dùng chữ số 0–9, dấu trừ "-" và dấu phẩy "," (tối đa 4 ký tự)!`}
+                                      ? `VƯỢT QUÁ 4 KÝ TỰ: Đáp số "${rawShortAns}" đang có ${charLen} ký tự. Vui lòng làm tròn hoặc chỉnh sửa tối đa 4 ký tự!`
+                                      : `SAI ĐỊNH DẠNG ĐÁP SỐ: "${rawShortAns}" chỉ được phép dùng chữ số 0–9, dấu trừ "-" và dấu phẩy ","!`}
                                   </span>
                                 </div>
                               )}
@@ -4459,16 +4237,9 @@ export default function App() {
                         {/* ================= NỘI DUNG PHẦN IV (HOẶC PHẦN III): TỰ LUẬN (KHÔNG TRỘN) ================= */}
                         {q.part === 'PART_4' && (
                           <div className="pt-2 space-y-2 bg-purple-50/90 p-3.5 rounded-xl border-2 border-purple-300">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <span className="text-xs font-black text-purple-950 uppercase">
-                                Đáp án / Hướng dẫn chấm tự luận ({essayRomanLabel}. Tự luận — Tùy chọn):
-                              </span>
-                              <span className="text-[11px] font-bold text-purple-800 bg-purple-100 px-2.5 py-0.5 rounded-lg border border-purple-300">
-                                {(q.essayAnswer || q.explanation || '').trim()
-                                  ? 'Đã có đáp án → Tự động tích hợp vào Bảng đáp án'
-                                  : 'Chưa nhập đáp án → Phần đáp án sẽ giữ nguyên câu hỏi tự luận'}
-                              </span>
-                            </div>
+                            <span className="block text-xs font-black text-purple-950 uppercase">
+                              Đáp án / Hướng dẫn chấm tự luận:
+                            </span>
                             <textarea
                               rows={3}
                               value={q.essayAnswer ?? q.explanation ?? ''}
@@ -4479,86 +4250,11 @@ export default function App() {
                                 fontFamily: "'Times New Roman', Times, serif",
                                 fontSize: '12pt',
                               }}
-                              placeholder="Nhập đáp án / hướng dẫn chấm tự luận (Nếu để trống, khi xuất Bảng đáp án hệ thống vẫn đưa nguyên vẹn câu hỏi tự luận vào để giáo viên chấm và chỉnh sửa)..."
+                              placeholder="Nhập đáp án / hướng dẫn chấm tự luận..."
                               className="w-full px-3 py-2 text-left text-slate-900 bg-white border-2 border-purple-300 rounded-xl focus:outline-none focus:border-purple-600 leading-relaxed"
                             />
                           </div>
                         )}
-
-                        {/* Thanh Lưu Chỉnh Sửa Cuối Thẻ Câu Hỏi (Lưu riêng câu này / Lưu & Sang câu tiếp / Lưu toàn bộ chỉnh sửa) */}
-                        <div className="mt-4 pt-3 border-t border-sky-200/90 flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                            {unsavedQuestionIds.includes(q.id) ? (
-                              <span className="text-amber-800 bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-300 font-black">
-                                ● Câu {q.displayIndex} có thay đổi mới — Hãy bấm &quot;Lưu Câu {q.displayIndex}&quot; hoặc &quot;Lưu Toàn Bộ&quot; để khóa cố định
-                              </span>
-                            ) : savedQuestionTimestamps[q.id] ? (
-                              <span className="text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-300 font-black">
-                                ✓ Đã lưu cố định Câu {q.displayIndex} (lúc {savedQuestionTimestamps[q.id]}) — Chuyển câu khác không bị thay đổi
-                              </span>
-                            ) : (
-                              <span className="text-slate-600">
-                                Chỉnh sửa trực tiếp Câu {q.displayIndex} (Mọi thay đổi được giữ nguyên khi chuyển sang câu khác)
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <button
-                              type="button"
-                              onClick={() => handleSaveSingleQuestion(q.id, false)}
-                              disabled={isProcessing}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                                unsavedQuestionIds.includes(q.id)
-                                  ? 'btn-3d-amber ring-2 ring-amber-300'
-                                  : 'btn-3d-sky'
-                              }`}
-                              title={`Lưu cố định riêng Câu ${q.displayIndex}`}
-                            >
-                              <Save className="w-3.5 h-3.5 shrink-0" />
-                              <span>
-                                {unsavedQuestionIds.includes(q.id)
-                                  ? `Lưu Câu ${q.displayIndex} Này*`
-                                  : `Lưu Câu ${q.displayIndex} Này`}
-                              </span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => handleSaveSingleQuestion(q.id, true)}
-                              disabled={isProcessing}
-                              className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-cyan flex items-center gap-1.5 cursor-pointer shadow-xs"
-                              title={`Lưu cố định Câu ${q.displayIndex} và chuyển sang câu tiếp theo mà không làm thay đổi Câu ${q.displayIndex}`}
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                              <span>Lưu Câu {q.displayIndex} &amp; Sang Câu Tiếp</span>
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={handleSaveAllEditsOnly}
-                              disabled={isProcessing}
-                              className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-xs"
-                              title="Lưu cố định toàn bộ chỉnh sửa của tất cả các câu trong đề"
-                            >
-                              <Save className="w-3.5 h-3.5 shrink-0" />
-                              <span>Lưu Toàn Bộ Chỉnh Sửa</span>
-                            </button>
-
-                            {validationIssues.length === 0 && (
-                              <button
-                                type="button"
-                                onClick={handleSaveEdits}
-                                disabled={isProcessing}
-                                className="px-3 py-1.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                title="Lưu toàn bộ chỉnh sửa và bắt đầu trộn đề ngay"
-                              >
-                                <Shuffle className="w-3.5 h-3.5 shrink-0" />
-                                <span>Lưu &amp; Trộn Đề Ngay</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
                       </div>
                     </React.Fragment>
                   );
@@ -5579,6 +5275,19 @@ export default function App() {
                         </div>
 
                         <button
+                          type="button"
+                          onClick={handleDownloadZipBundle}
+                          disabled={isProcessing}
+                          className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-rose flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer shadow-sm"
+                          title="Tải trọn bộ file .ZIP gồm: Đề gốc & Các mã đề chuẩn Word Equation <m:oMath> + Bảng đáp án chung + Ma trận CV 7991 + 3 Mã QR + 3 File Excel"
+                        >
+                          <FileArchive className="w-4 h-4" />
+                          <span>
+                            Tải Về Trọn Bộ ({shuffledVariants.length} Đề + Đáp Án + Ma Trận + &lt;m:oMath&gt;) .ZIP
+                          </span>
+                        </button>
+
+                        <button
                           onClick={handleDownloadMasterAnswerSheetDocx}
                           className="px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                           title="Tải về tệp Word bảng đáp án chuẩn trên 1 trang A4 để nộp khảo thí"
@@ -5820,20 +5529,12 @@ export default function App() {
 
                   {activeVariant && (
                     <>
-                      {/* Xem trước nội dung Đề thi đã hoán vị (Times New Roman 12pt, Canh trái đều, có Tiêu đề Quốc ngữ & Footer Số trang + Mã đề) */}
+                      {/* Xem trước nội dung Đề thi đã hoán vị */}
                       <div className="p-6 rounded-2xl card-3d-panel space-y-5">
                         <div className="flex items-center justify-between border-b-2 border-sky-200 pb-3 flex-wrap gap-2">
-                          <div>
-                            <h3 className="text-sm font-black text-sky-950 uppercase">
-                              Bản Xem Trước Trang Giấy Word — Mã Đề {activeVariant.examCode}
-                            </h3>
-                            <p className="text-xs text-slate-600 font-medium">
-                              Font <strong>Times New Roman 12pt</strong> · Canh trái các câu tự động co dãn đều · Có đánh số trang & số mã đề
-                            </p>
-                          </div>
-                          <span className="text-xs font-mono font-bold text-sky-800 bg-sky-100 px-2.5 py-1 rounded-lg">
-                            Times New Roman · 12pt · Left Auto-Stretch
-                          </span>
+                          <h3 className="text-sm font-black text-sky-950 uppercase">
+                            Xem Trước Đề Thi — Mã Đề {activeVariant.examCode}
+                          </h3>
                         </div>
 
                         <div
@@ -5871,18 +5572,8 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-200">
-                            {config.embedPhieuQM2025 !== false ? (
-                              <div className="text-xs font-sans font-bold text-emerald-800 flex items-center gap-1.5 min-w-0 flex-1">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                <span className="truncate sm:whitespace-normal">
-                                  Đã nhúng <strong>{activePhieuQMInfo.standardFileName}</strong> ({activePhieuQMInfo.groupName}: {activePhieuQMInfo.structureDesc}) — Kích thước in: {activePhieuQMInfo.sizeLabel || '16.5cm × 8.2cm'}
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="flex-1" />
-                            )}
-                            <div className="px-3 py-0.5 border-2 border-slate-900 font-bold shrink-0 whitespace-nowrap ml-auto">
+                          <div className="flex items-center justify-end gap-3 py-1.5 border-b border-slate-200">
+                            <div className="px-3 py-0.5 border-2 border-slate-900 font-bold shrink-0 whitespace-nowrap">
                               MÃ ĐỀ THI: {activeVariant.examCode}
                             </div>
                           </div>
@@ -5897,13 +5588,10 @@ export default function App() {
                                 onClick={() =>
                                   setPreviewModalImage({
                                     src: resolvedPhieuPreviewUrl,
-                                    caption: `Phiếu trả lời (${activePhieuQMInfo.standardFileName}) — ${activePhieuQMInfo.groupName} (${activePhieuQMInfo.structureDesc}) — Kích thước in Word: ${activePhieuQMInfo.sizeLabel || '16.5cm × 8.2cm'}`,
+                                    caption: `Phiếu trả lời (${activePhieuQMInfo.standardFileName}) — ${activePhieuQMInfo.groupName}`,
                                   })
                                 }
                               />
-                              <span className="mt-1.5 text-[11px] font-sans font-semibold text-slate-500 text-center">
-                                ▲ Ảnh Phiếu Trả Lời ({activePhieuQMInfo.groupName} · {activePhieuQMInfo.sizeLabel || '16.5cm × 8.2cm'}) được chèn tự động ngay dưới Header Trang 1 trong mọi file De_{activeVariant.examCode}.docx (Bấm vào ảnh để phóng to)
-                              </span>
                             </div>
                           )}
 
@@ -5940,7 +5628,7 @@ export default function App() {
                                       <ScientificContentRenderer text={vq.stemText} inline />
                                     </p>
 
-                                    {/* Bảng dữ liệu / bảng ghép đôi thuộc phần dẫn câu hỏi */}
+                                    {/* Bảng dữ liệu thuộc phần dẫn câu hỏi */}
                                     {vq.stemTables && vq.stemTables.length > 0 && (
                                       <div className="my-2 space-y-2">
                                         {vq.stemTables.map((tbl) => (
@@ -5985,45 +5673,23 @@ export default function App() {
                                       </div>
                                     )}
 
-                                    {/* Hình ảnh / sơ đồ / phả hệ / đồ thị đính kèm (In Line with Text, căn giữa, có thẻ định danh) */}
+                                    {/* Hình ảnh đính kèm */}
                                     {vq.images && vq.images.length > 0 && (
                                       <div className="my-3 flex flex-col items-center justify-center gap-2">
-                                        {vq.images.map((img, imgIdx) => {
-                                          const displayTag =
-                                            img.tagId ||
-                                            `[HINH_ANH_CAU_${vq.displayIndex}${
-                                              vq.images && vq.images.length > 1 ? `_${imgIdx + 1}` : ''
-                                            }]`;
-                                          return (
-                                            <div
-                                              key={img.id || `${vq.id}-img-${imgIdx}`}
-                                              className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 border border-slate-200 shadow-xs max-w-full"
-                                            >
-                                              <div className="w-full flex items-center justify-between gap-2 mb-1 px-1">
-                                                <span className="text-[10px] font-mono font-bold text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                                                  {displayTag}
-                                                </span>
-                                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                                  In Line with Text · {img.dpi || 300} DPI
-                                                </span>
-                                              </div>
-                                              <img
-                                                src={img.dataUrl}
-                                                alt={img.caption || displayTag}
-                                                className="max-h-56 max-w-full object-contain rounded-lg border border-slate-200 cursor-pointer hover:shadow-md transition-shadow bg-white"
-                                                onClick={() =>
-                                                  setPreviewModalImage({
-                                                    src: img.dataUrl,
-                                                    caption: `${displayTag} — Mã đề ${activeVariant.examCode} — Câu ${vq.displayIndex}`,
-                                                  })
-                                                }
-                                              />
-                                              <div className="mt-1 text-center font-mono text-[11px] text-slate-600 font-semibold">
-                                                {img.caption || displayTag}
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
+                                        {vq.images.map((img, imgIdx) => (
+                                          <img
+                                            key={img.id || `${vq.id}-img-${imgIdx}`}
+                                            src={img.dataUrl}
+                                            alt={img.caption || `Hình minh họa câu ${vq.displayIndex}`}
+                                            className="max-h-56 max-w-full object-contain rounded-lg cursor-pointer hover:shadow-md transition-shadow bg-white"
+                                            onClick={() =>
+                                              setPreviewModalImage({
+                                                src: img.dataUrl,
+                                                caption: `Mã đề ${activeVariant.examCode} — Câu ${vq.displayIndex}`,
+                                              })
+                                            }
+                                          />
+                                        ))}
                                       </div>
                                     )}
 

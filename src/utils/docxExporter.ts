@@ -1437,7 +1437,10 @@ function buildEssayGradingAndRubricTablesXml(
         </w:tc>
         <w:tc>
           <w:tcPr><w:tcW w:w="1150" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/><w:vAlign w:val="center"/></w:tcPr>
-          <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="30" w:after="30"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="22"/><w:szCs w:val="22"/></w:rPr><w:t>${escapeXml(coreAnswerSummary)}</w:t></w:r></w:p>
+          <w:p><w:pPr><w:jc w:val="left"/><w:spacing w:before="30" w:after="30"/></w:pPr>${buildRichScientificRunsAndMathXml(
+            coreAnswerSummary,
+            { fontSizeHalfPt: 22 }
+          )}</w:p>
         </w:tc>
         <w:tc>
           <w:tcPr><w:tcW w:w="1050" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${rowFill}"/><w:vAlign w:val="center"/></w:tcPr>
@@ -2985,8 +2988,14 @@ export async function exportMatrixAndSpecificationDocx(
       const fill = idx % 2 === 0 ? 'F8FAFC' : 'FFFFFF';
       return `<w:tr>
         <w:tc><w:tcPr><w:tcW w:w="${mColWidths[0]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.tt}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[1]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(r.topic)}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[2]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(r.unit)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[1]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr>${buildRichScientificRunsAndMathXml(
+          r.topic,
+          { bold: true, fontSizeHalfPt: 20 }
+        )}</w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${mColWidths[2]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr>${buildRichScientificRunsAndMathXml(
+          r.unit,
+          { fontSizeHalfPt: 20 }
+        )}</w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${mColWidths[3]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p1NhanBiet} - ${r.p1ThongHieu} - ${r.p1VanDung}</w:t></w:r></w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${mColWidths[4]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p2NhanBiet} - ${r.p2ThongHieu} - ${r.p2VanDung}</w:t></w:r></w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${mColWidths[5]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${r.p3NhanBiet} - ${r.p3ThongHieu} - ${r.p3VanDung}</w:t></w:r></w:p></w:tc>
@@ -3078,10 +3087,19 @@ export async function exportMatrixAndSpecificationDocx(
           : 'D97706';
       return `<w:tr>
         <w:tc><w:tcPr><w:tcW w:w="${sColWidths[0]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.tt}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[1]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.topic)}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[2]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.unit)}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[1]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr>${buildRichScientificRunsAndMathXml(
+          s.topic,
+          { bold: true, fontSizeHalfPt: 20 }
+        )}</w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[2]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="left"/></w:pPr>${buildRichScientificRunsAndMathXml(
+          s.unit,
+          { fontSizeHalfPt: 20 }
+        )}</w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${sColWidths[3]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:color w:val="${levelColor}"/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.cognitiveLevel)}</w:t></w:r></w:p></w:tc>
-        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[4]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${escapeXml(s.learningOutcomes.join(' '))}</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:tcW w:w="${sColWidths[4]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="both"/></w:pPr>${buildRichScientificRunsAndMathXml(
+          s.learningOutcomes.join(' '),
+          { fontSizeHalfPt: 20 }
+        )}</w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${sColWidths[5]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p1Count || '—'}</w:t></w:r></w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${sColWidths[6]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p2CommandCount || '—'}</w:t></w:r></w:p></w:tc>
         <w:tc><w:tcPr><w:tcW w:w="${sColWidths[7]}" w:type="pct"/><w:shd w:val="clear" w:color="auto" w:fill="${fill}"/><w:vAlign w:val="center"/></w:tcPr><w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr>${tnrFontXml}<w:b/><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t>${s.p3Count || '—'}</w:t></w:r></w:p></w:tc>
@@ -3212,18 +3230,33 @@ export async function exportAllVariantsZipBundle(
   config: ShuffleConfig
 ): Promise<Blob> {
   const bundleZip = new JSZip();
+  const utf8Encoder = new TextEncoder();
 
-  // Cấu trúc tệp .zip gồm đúng 2 thư mục theo yêu cầu:
-  // 1. Thư mục các mã đề: gồm đề gốc (giữ nguyên gạch chân, tô đỏ đáp án đúng để đối chiếu) và các đề trộn
-  // 2. Thư mục đáp án: gồm các file liên quan đến đáp án (Bảng đáp án Word, Ma trận CV 7991, Mã QR Chung tích hợp các mã đề, File Excel/CSV)
+  // Cấu trúc tệp .zip gồm đúng 2 thư mục tích hợp đầy đủ tất cả tính năng:
+  // 1. Thư mục các mã đề:
+  //    - Đề gốc chuẩn Word Equation <m:oMath> (giữ nguyên gạch chân, tô đỏ đáp án đúng để đối chiếu)
+  //    - Đề gốc có lời giải chi tiết chuẩn Word Equation <m:oMath>
+  //    - Toàn bộ các Mã đề hoán vị (Mã đề 101, 102...) nhúng công thức <m:oMath> Cambria Math UTF-8, ảnh 300 DPI và Phiếu trả lời trắc nghiệm
+  // 2. Thư mục đáp án:
+  //    - Bảng đáp án chung (.docx) kèm tên Giáo viên ra đề ở cuối trang & Bộ 3 Mã QR
+  //    - Ma trận và Bản đặc tả CV 7991 (.docx) khổ A4 Ngang chuẩn Bộ GD&ĐT kèm chữ ký Giáo viên ra đề
+  //    - Bộ 3 ảnh Mã QR Chung (.png) + Payload (.txt) + Bộ 3 File Excel (.xlsx) cho QM 2025, TNMaker, Azota + Bảng đáp án tổng hợp (.csv)
   const thuMucCacMaDe = bundleZip.folder('Thư mục các mã đề');
   const thuMucDapAn = bundleZip.folder('Thư mục đáp án');
 
-  // 1. Lưu Đề gốc (có gạch chân & tô đỏ đáp án đúng để đối chiếu) và các Đề trộn vào "Thư mục các mã đề"
-  const masterCleanBlob = await exportCleanedMasterDocx(masterQuestions, config, false);
+  // 1. Lưu Đề gốc chuẩn Word Equation <m:oMath> (có gạch chân & tô đỏ đáp án đúng) + Đề gốc có lời giải + Các Mã đề trộn
+  const [masterCleanBlob, masterSolutionsBlob] = await Promise.all([
+    exportCleanedMasterDocx(masterQuestions, config, false),
+    exportMasterExamWithSolutionsDocx(masterQuestions, config),
+  ]);
+
   thuMucCacMaDe?.file(
-    buildStandardExportFileName(config, 'docx', 'Đề gốc'),
+    buildStandardExportFileName(config, 'docx', 'Đề gốc chuẩn Word Equation oMath'),
     masterCleanBlob
+  );
+  thuMucCacMaDe?.file(
+    buildStandardExportFileName(config, 'docx', 'Đề gốc có lời giải chi tiết'),
+    masterSolutionsBlob
   );
 
   for (const v of variants) {
@@ -3234,21 +3267,25 @@ export async function exportAllVariantsZipBundle(
     );
   }
 
-  // 2. Lưu các file liên quan đến đáp án & ma trận vào "Thư mục đáp án"
-  const masterAnswerDocxBlob = await exportMasterAnswerSheetDocx(variants, config);
+  // 2. Lưu các file liên quan đến Đáp án (có tên Giáo viên ra đề) & Ma trận CV 7991 vào "Thư mục đáp án"
+  const [masterAnswerDocxBlob, matrixSpecDocxBlob] = await Promise.all([
+    exportMasterAnswerSheetDocx(variants, config),
+    exportMatrixAndSpecificationDocx(masterQuestions, config),
+  ]);
+
   thuMucDapAn?.file(
     buildStandardExportFileName(config, 'docx', 'Bảng đáp án chung'),
     masterAnswerDocxBlob
   );
 
-  const matrixSpecDocxBlob = await exportMatrixAndSpecificationDocx(masterQuestions, config);
   thuMucDapAn?.file(
     buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991'),
     matrixSpecDocxBlob
   );
 
-  // Xuất Mã QR Chung tích hợp các mã đề (tối đa 8 mã đề / 1 Mã QR Chung để quét 1 lần lên hết các mã đề)
+  // Xuất Mã QR Chung tích hợp các mã đề (tối đa 8 mã đề / 1 Mã QR Chung) + Payload TXT + 3 File Excel chuẩn
   try {
+    const qrPayloadLines: string[] = [];
     const totalBatches = Math.ceil(variants.length / MAX_CODES_PER_SINGLE_QR);
     for (let bIdx = 0; bIdx < totalBatches; bIdx++) {
       const batch = variants.slice(
@@ -3270,11 +3307,17 @@ export async function exportAllVariantsZipBundle(
           buildStandardExportFileName(config, 'png', `${batchPrefix} - 1 - App QM 2025`),
           dataUrlToUint8Array(batchTripleQr.qm2025.qrDataUrl)
         );
+        qrPayloadLines.push(
+          `=== 1. PAYLOAD CHUNG (${codeRangeLabel}) APP QM 2025 ===\n${batchTripleQr.qm2025.qrPayload}\n`
+        );
       }
       if (batchTripleQr.tnmaker.qrDataUrl) {
         thuMucDapAn?.file(
           buildStandardExportFileName(config, 'png', `${batchPrefix} - 2 - App TNMaker`),
           dataUrlToUint8Array(batchTripleQr.tnmaker.qrDataUrl)
+        );
+        qrPayloadLines.push(
+          `=== 2. PAYLOAD CHUNG (${codeRangeLabel}) APP TNMAKER 2025 ===\n${batchTripleQr.tnmaker.qrPayload}\n`
         );
       }
       if (batchTripleQr.azota.qrDataUrl) {
@@ -3282,7 +3325,17 @@ export async function exportAllVariantsZipBundle(
           buildStandardExportFileName(config, 'png', `${batchPrefix} - 3 - App Azota`),
           dataUrlToUint8Array(batchTripleQr.azota.qrDataUrl)
         );
+        qrPayloadLines.push(
+          `=== 3. PAYLOAD CHUNG (${codeRangeLabel}) APP AZOTA 2025 ===\n${batchTripleQr.azota.qrPayload}\n`
+        );
       }
+    }
+
+    if (qrPayloadLines.length > 0) {
+      thuMucDapAn?.file(
+        buildStandardExportFileName(config, 'txt', 'Payload-3-Phan-Mem-QR'),
+        utf8Encoder.encode(qrPayloadLines.join('\n').normalize('NFC'))
+      );
     }
 
     const [xlsxQm, xlsxTn, xlsxAz] = await Promise.all([
@@ -3307,8 +3360,9 @@ export async function exportAllVariantsZipBundle(
   }
 
   const csvLines: string[] = [
-    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,QR_Payload_Chung_QM2025,QR_Payload_Chung_TNMaker,QR_Payload_Chung_Azota',
+    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,Nguoi_Ra_De,QR_Payload_Chung_QM2025,QR_Payload_Chung_TNMaker,QR_Payload_Chung_Azota',
   ];
+  const teacherStr = (config.teacherName || '').trim().replace(/"/g, '""');
   for (const v of variants) {
     const p1 = v.answerKey.part1.map((x) => `${x.questionNumber}${x.answer}`).join(' ');
     const p2 = v.answerKey.part2.map((x) => `${x.questionNumber}:${x.dsString}(${x.tfString})`).join(' ');
@@ -3316,11 +3370,13 @@ export async function exportAllVariantsZipBundle(
     const qmStr = (v.tripleQr?.qm2025.qrPayload || v.qrPayload).replace(/"/g, '""');
     const tnStr = (v.tripleQr?.tnmaker.qrPayload || '').replace(/"/g, '""');
     const azStr = (v.tripleQr?.azota.qrPayload || '').replace(/"/g, '""');
-    csvLines.push(`"${v.examCode}","${p1}","${p2}","${p3}","${qmStr}","${tnStr}","${azStr}"`);
+    csvLines.push(
+      `"${v.examCode}","${p1}","${p2}","${p3}","${teacherStr}","${qmStr}","${tnStr}","${azStr}"`
+    );
   }
   thuMucDapAn?.file(
     buildStandardExportFileName(config, 'csv', 'Bảng đáp án tổng hợp'),
-    '\uFEFF' + csvLines.join('\n')
+    utf8Encoder.encode(('\uFEFF' + csvLines.join('\n')).normalize('NFC'))
   );
 
   return bundleZip.generateAsync({ type: 'blob' });
