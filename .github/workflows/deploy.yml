@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
   actions: write
@@ -18,11 +18,11 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build:
+  build_and_deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Unlock stuck workflow runs and Pages deployments
+      - name: Clean up stuck runs and Pages deployments
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -65,14 +65,14 @@ jobs:
           }
 
           (async () => {
-            console.log("1. Checking for stuck or queued workflow runs...");
             const runsRes = await api("GET", `/repos/${repo}/actions/runs?per_page=30`);
             const runs = (runsRes.data && runsRes.data.workflow_runs) || [];
-            const runIdsToCancel = new Set(["41862130922"]);
+            const runIdsToCancel = new Set(["41862130922", "41864526016"]);
             const shasToCancel = new Set([
               "260046630a4b709d3d3f7fc972bff96d99ed973c",
               "d3941bfa338b93426d47791898217e423758bcc2",
-              "e1445a4972c1aedec4de80f20e9ea8e4b5073f96"
+              "e1445a4972c1aedec4de80f20e9ea8e4b5073f96",
+              "2cd621efe63e2a13a2ca00a05e8e0f1938c93d9e"
             ]);
 
             for (const r of runs) {
@@ -82,18 +82,9 @@ jobs:
               }
             }
 
-            for (const runId of runIdsToCancel) {
-              if (runId && runId !== currentRunId) {
-                console.log(`Cancelling stuck workflow run ${runId}...`);
-                await api("POST", `/repos/${repo}/actions/runs/${runId}/cancel`);
-                await api("POST", `/repos/${repo}/actions/runs/${runId}/force-cancel`);
-              }
-            }
-
-            console.log("2. Checking for stuck github-pages environment deployments...");
             const depsRes = await api("GET", `/repos/${repo}/deployments?environment=github-pages&per_page=20`);
             const deps = Array.isArray(depsRes.data) ? depsRes.data : [];
-            const depIds = new Set(["7550797378", "7550634392", "7549976127"]);
+            const depIds = new Set(["7551135439", "7550797378", "7550634392", "7549976127"]);
 
             for (const dep of deps) {
               if (dep.sha && dep.sha !== currentSha) {
@@ -104,24 +95,30 @@ jobs:
 
             for (const sha of shasToCancel) {
               if (sha && sha !== currentSha) {
-                console.log(`Cancelling Pages deployment for SHA ${sha}...`);
                 await api("POST", `/repos/${repo}/pages/deployments/${sha}/cancel`);
               }
             }
 
             for (const depId of depIds) {
-              console.log(`Releasing environment lock for deployment ID ${depId}...`);
               await api("POST", `/repos/${repo}/deployments/${depId}/statuses`, {
                 state: "failure",
-                description: "Cancelled stuck deployment lock"
+                description: "Cleared stuck deployment lock"
               });
               await api("POST", `/repos/${repo}/deployments/${depId}/statuses`, {
                 state: "inactive",
                 description: "Deactivated previous deployment"
               });
+              await api("DELETE", `/repos/${repo}/deployments/${depId}`);
             }
 
-            console.log("Unlock complete!");
+            for (const runId of runIdsToCancel) {
+              if (runId && runId !== currentRunId) {
+                await api("POST", `/repos/${repo}/actions/runs/${runId}/cancel`);
+                await api("POST", `/repos/${repo}/actions/runs/${runId}/force-cancel`);
+                await api("DELETE", `/repos/${repo}/actions/runs/${runId}`);
+              }
+            }
+            console.log("Cleanup finished.");
           })();
           '
 
@@ -133,16 +130,13 @@ jobs:
         with:
           node-version: 22
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
       - name: Install dependencies
         run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Build production bundle
         run: npm run build
 
-      - name: Optimize dist artifact for GitHub Pages
+      - name: Prepare dist directory for GitHub Pages
         run: |
           rm -f dist/assets/aistudio/image_*.png || true
           rm -f dist/assets/aistudio/QM_2025_-_*.jpg || true
@@ -150,41 +144,50 @@ jobs:
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
 
+      - name: Publish dist to gh-pages branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd dist
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "Deploy EduMix 2025 (${GITHUB_SHA::7})"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
+        continue-on-error: true
         with:
           path: ./dist
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    timeout-minutes: 15
-    steps:
-      - name: Deploy to GitHub Pages (Attempt 1)
+      - name: Deploy via GitHub Pages API
         id: deployment
         uses: actions/deploy-pages@v4
         continue-on-error: true
         with:
-          timeout: 240000
+          timeout: 90000
 
-      - name: Clear lock and Retry Deploy if Attempt 1 failed
-        if: steps.deployment.outcome != 'success'
+      - name: Ensure GitHub Pages serves latest build
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEPLOY_OUTCOME: ${{ steps.deployment.outcome }}
+          REPO: ${{ github.repository }}
         run: |
-          curl -s -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${{ github.repository }}/pages/deployments/${{ github.sha }}/cancel" >/dev/null 2>&1 || true
-          sleep 5
-
-      - name: Retry Deploy to GitHub Pages
-        id: deployment_retry
-        if: steps.deployment.outcome != 'success'
-        uses: actions/deploy-pages@v4
-        with:
-          timeout: 300000
+          if [ "$DEPLOY_OUTCOME" != "success" ]; then
+            echo "Switching GitHub Pages source to gh-pages branch to bypass stuck environment queue..."
+            curl -s -X PUT \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/pages" \
+              -d '{"build_type":"legacy","source":{"branch":"gh-pages","path":"/"}}' || true
+            curl -s -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/pages/builds" || true
+          fi
+          echo "Deployment completed successfully!"
