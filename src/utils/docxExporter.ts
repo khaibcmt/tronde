@@ -228,6 +228,70 @@ export const ALL_PHIEU_QM_2025_TEMPLATES: PhieuQM2025Info[] = [
     widthEmu: 5943600,
     heightEmu: 8390000,
   },
+  {
+    groupCode: 'UNT_18_4_6',
+    groupName: 'Phiếu UnT 18.4.6 (KHTN & Địa - 2 Forms/A4)',
+    subjectsLabel: 'UnT Labs - Môn Sinh, Lý, Hóa, Địa (18 câu P1 + 4 câu P2 + 6 câu P3)',
+    structureDesc: 'Phần I: 18 câu | Phần II: 4 câu | Phần III: 6 câu (2 phiếu/A4)',
+    standardFileName: 'phieu_unt_18_4_6.png',
+    assetPath: '/assets/aistudio/UnT_18.4.6_ABCD_2_Forms_ca4ec7d4.pdf',
+    publicUrl: '/assets/aistudio/UnT_18.4.6_ABCD_2_Forms_ca4ec7d4.pdf',
+    fallbackUrl: PHIEU_KHTN_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×11.6cm (A5 ngang)',
+    widthPx: 624,
+    heightPx: 440,
+    widthEmu: 5943600,
+    heightEmu: 4180000,
+  },
+  {
+    groupCode: 'UNT_30_6_8',
+    groupName: 'Phiếu UnT 30.6.8 (Đề Đa Năng - 1 Form/A4)',
+    subjectsLabel: 'UnT Labs - Đề kiểm tra mở rộng (30 câu P1 + 6 câu P2 + 8 câu P3)',
+    structureDesc: 'Phần I: 30 câu | Phần II: 6 câu | Phần III: 8 câu (Chuẩn UnT A4)',
+    standardFileName: 'phieu_unt_30_6_8.png',
+    assetPath: '/assets/aistudio/UnT_30.6.8_ABCD_1_Form_cc12e462.pdf',
+    publicUrl: '/assets/aistudio/UnT_30.6.8_ABCD_1_Form_cc12e462.pdf',
+    fallbackUrl: PHIEU_KHTN_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×23.3cm (A4)',
+    widthPx: 624,
+    heightPx: 880,
+    widthEmu: 5943600,
+    heightEmu: 8390000,
+  },
+  {
+    groupCode: 'UNT_30_8_0',
+    groupName: 'Phiếu UnT 30.8.0 (Trắc Nghiệm & Đúng Sai - 2 Forms/A4)',
+    subjectsLabel: 'UnT Labs - Không có câu trả lời ngắn (30 câu P1 + 8 câu P2)',
+    structureDesc: 'Phần I: 30 câu | Phần II: 8 câu (2 phiếu tiết kiệm giấy/A4)',
+    standardFileName: 'phieu_unt_30_8_0.png',
+    assetPath: '/assets/aistudio/UnT_30.8.0_ABCD_2_Forms_712d41b2.pdf',
+    publicUrl: '/assets/aistudio/UnT_30.8.0_ABCD_2_Forms_712d41b2.pdf',
+    fallbackUrl: PHIEU_KHXH_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×11.6cm (A5 ngang)',
+    widthPx: 624,
+    heightPx: 440,
+    widthEmu: 5943600,
+    heightEmu: 4180000,
+  },
+  {
+    groupCode: 'UNT_40_8_6',
+    groupName: 'Phiếu UnT 40.8.6 (THPT 2025 - 4 Số Báo Danh)',
+    subjectsLabel: 'UnT Labs - Cấu trúc THPT 2025 chuẩn Bộ (40 câu P1 + 8 câu P2 + 6 câu P3)',
+    structureDesc: 'Phần I: 40 câu | Phần II: 8 câu | Phần III: 6 câu (Mã đề 4 số)',
+    standardFileName: 'phieu_unt_40_8_6.png',
+    assetPath: '/assets/aistudio/UnT_40.8.6_ABCD_4_DIGITS_1_Form_5461f856.pdf',
+    publicUrl: '/assets/aistudio/UnT_40.8.6_ABCD_4_DIGITS_1_Form_5461f856.pdf',
+    fallbackUrl: PHIEU_KHTN_BASE64,
+    isPdfSource: true,
+    sizeLabel: '16.5×23.3cm (A4)',
+    widthPx: 624,
+    heightPx: 880,
+    widthEmu: 5943600,
+    heightEmu: 8390000,
+  },
 ];
 
 // Bộ nhớ đệm DataURL của các mẫu phiếu PDF/JPG để chỉ cần giải mã 1 lần duy nhất
@@ -2709,7 +2773,7 @@ export async function exportMasterAnswerSheetDocx(
   // 1. Tạo bảng ma trận đối chiếu đa mã đề (Cross-Referencing Matrix)
   const matrixTableXml = buildCrossReferencingAnswerMatrixXml(variants);
 
-  // 2. Tạo Bộ 3 Mã QR Tổng Hợp Tất Cả Mã Đề (1. QM 2025 — 2. TNMaker — 3. Azota)
+  // 2. Tạo Bộ 4 Mã QR Tổng Hợp Tất Cả Mã Đề (1. QM 2025 — 2. TNMaker — 3. Azota — 4. UnT)
   const { tripleQr } = await generateMasterMultiQrCode(variants, config);
   const qrImagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }> = [];
 
@@ -2734,10 +2798,17 @@ export async function exportMasterAnswerSheetDocx(
       fileName: 'qr_master_azota.png',
     });
   }
+  if (tripleQr.unt?.qrDataUrl) {
+    qrImagesToEmbed.push({
+      relId: 'rIdQrUnt',
+      dataUrl: tripleQr.unt.qrDataUrl,
+      fileName: 'qr_master_unt.png',
+    });
+  }
 
-  // 3. Khung bảng 3 cột nhúng đồng thời 3 Mã QR Chấm Thi (QM 2025, TNMaker, Azota)
+  // 3. Khung bảng nhúng đồng thời 4 Mã QR Chấm Thi (QM 2025, TNMaker, Azota, UnT)
   const qrSectionXml =
-    qrImagesToEmbed.length === 3
+    qrImagesToEmbed.length >= 3
       ? `<w:p>
           <w:pPr>
             <w:spacing w:before="100" w:after="40"/>
@@ -2750,7 +2821,7 @@ export async function exportMasterAnswerSheetDocx(
               <w:color w:val="0F172A"/>
               <w:sz w:val="22"/><w:szCs w:val="22"/>
             </w:rPr>
-            <w:t>BỘ 3 MÃ QR CHẤM THI TỔNG HỢP (${variants.length} MÃ ĐỀ — QUÉT 1 LẦN NẠP ĐỦ KEY)</w:t>
+            <w:t>BỘ 4 MÃ QR CHẤM THI TỔNG HỢP (${variants.length} MÃ ĐỀ — QUÉT 1 LẦN NẠP ĐỦ KEY)</w:t>
           </w:r>
         </w:p>
         <w:tbl>
@@ -2767,19 +2838,24 @@ export async function exportMasterAnswerSheetDocx(
           </w:tblPr>
           <w:tr>
             <w:tc>
-              <w:tcPr><w:tcW w:w="1666" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
-              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="92400E"/><w:sz w:val="20"/></w:rPr><w:t>1. APP QM 2025</w:t></w:r></w:p>
+              <w:tcPr><w:tcW w:w="1250" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="15"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="92400E"/><w:sz w:val="18"/></w:rPr><w:t>1. QM 2025</w:t></w:r></w:p>
               ${buildEmbeddedQrDrawingXml('rIdQrQm2025', 'QM2025_MASTER')}
             </w:tc>
             <w:tc>
-              <w:tcPr><w:tcW w:w="1667" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
-              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E40AF"/><w:sz w:val="20"/></w:rPr><w:t>2. APP TNMAKER</w:t></w:r></w:p>
+              <w:tcPr><w:tcW w:w="1250" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="15"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="1E40AF"/><w:sz w:val="18"/></w:rPr><w:t>2. TNMAKER</w:t></w:r></w:p>
               ${buildEmbeddedQrDrawingXml('rIdQrTnMaker', 'TNMAKER_MASTER')}
             </w:tc>
             <w:tc>
-              <w:tcPr><w:tcW w:w="1667" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
-              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="20"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="065F46"/><w:sz w:val="20"/></w:rPr><w:t>3. HỆ SINH THÁI AZOTA</w:t></w:r></w:p>
+              <w:tcPr><w:tcW w:w="1250" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="15"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="065F46"/><w:sz w:val="18"/></w:rPr><w:t>3. AZOTA</w:t></w:r></w:p>
               ${buildEmbeddedQrDrawingXml('rIdQrAzota', 'AZOTA_MASTER')}
+            </w:tc>
+            <w:tc>
+              <w:tcPr><w:tcW w:w="1250" w:type="pct"/><w:vAlign w:val="center"/></w:tcPr>
+              <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="30" w:after="15"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:color w:val="7E22CE"/><w:sz w:val="18"/></w:rPr><w:t>4. UNT DẠY HỌC</w:t></w:r></w:p>
+              ${buildEmbeddedQrDrawingXml('rIdQrUnt', 'UNT_MASTER')}
             </w:tc>
           </w:tr>
         </w:tbl>
@@ -2795,7 +2871,7 @@ export async function exportMasterAnswerSheetDocx(
               <w:color w:val="475569"/>
               <w:sz w:val="20"/><w:szCs w:val="20"/>
             </w:rPr>
-            <w:t>(Giáo viên mở phần mềm QM 2025, TNMaker hoặc Azota tương ứng trên điện thoại và quét đúng mã QR của phần mềm đó)</w:t>
+            <w:t>(Giáo viên mở phần mềm QM 2025, TNMaker, Azota hoặc UnT Dạy Học tương ứng trên điện thoại và quét đúng mã QR của phần mềm đó)</w:t>
           </w:r>
         </w:p>`
       : '';
@@ -3329,19 +3405,29 @@ export async function exportAllVariantsZipBundle(
           `=== 3. PAYLOAD CHUNG (${codeRangeLabel}) APP AZOTA 2025 ===\n${batchTripleQr.azota.qrPayload}\n`
         );
       }
+      if (batchTripleQr.unt.qrDataUrl) {
+        thuMucDapAn?.file(
+          buildStandardExportFileName(config, 'png', `${batchPrefix} - 4 - App UnT Day Hoc`),
+          dataUrlToUint8Array(batchTripleQr.unt.qrDataUrl)
+        );
+        qrPayloadLines.push(
+          `=== 4. PAYLOAD CHUNG (${codeRangeLabel}) APP UNT DẠY HỌC 2025 ===\n${batchTripleQr.unt.qrPayload}\n`
+        );
+      }
     }
 
     if (qrPayloadLines.length > 0) {
       thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'txt', 'Payload-3-Phan-Mem-QR'),
+        buildStandardExportFileName(config, 'txt', 'Payload-4-Phan-Mem-QR'),
         utf8Encoder.encode(qrPayloadLines.join('\n').normalize('NFC'))
       );
     }
 
-    const [xlsxQm, xlsxTn, xlsxAz] = await Promise.all([
+    const [xlsxQm, xlsxTn, xlsxAz, xlsxUnt] = await Promise.all([
       exportGradingExcelXlsx(variants, 'QM2025'),
       exportGradingExcelXlsx(variants, 'TNMAKER'),
       exportGradingExcelXlsx(variants, 'AZOTA'),
+      exportGradingExcelXlsx(variants, 'UNT'),
     ]);
     thuMucDapAn?.file(
       buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn QM 2025'),
@@ -3355,12 +3441,16 @@ export async function exportAllVariantsZipBundle(
       buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn Azota 2025'),
       xlsxAz
     );
+    thuMucDapAn?.file(
+      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn UnT Dạy Học 2025'),
+      xlsxUnt
+    );
   } catch (err) {
-    console.warn('Không thể lưu bộ 3 ảnh QR chung & Excel vào zip:', err);
+    console.warn('Không thể lưu bộ 4 ảnh QR chung & Excel vào zip:', err);
   }
 
   const csvLines: string[] = [
-    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,Nguoi_Ra_De,QR_Payload_Chung_QM2025,QR_Payload_Chung_TNMaker,QR_Payload_Chung_Azota',
+    'Ma_De,Phan_I_ABCD,Phan_II_DungSai,Phan_III_TraLoiNgan,Nguoi_Ra_De,QR_Payload_Chung_QM2025,QR_Payload_Chung_TNMaker,QR_Payload_Chung_Azota,QR_Payload_Chung_UnTDayHoc',
   ];
   const teacherStr = (config.teacherName || '').trim().replace(/"/g, '""');
   for (const v of variants) {
@@ -3370,8 +3460,9 @@ export async function exportAllVariantsZipBundle(
     const qmStr = (v.tripleQr?.qm2025.qrPayload || v.qrPayload).replace(/"/g, '""');
     const tnStr = (v.tripleQr?.tnmaker.qrPayload || '').replace(/"/g, '""');
     const azStr = (v.tripleQr?.azota.qrPayload || '').replace(/"/g, '""');
+    const untStr = (v.tripleQr?.unt.qrPayload || '').replace(/"/g, '""');
     csvLines.push(
-      `"${v.examCode}","${p1}","${p2}","${p3}","${teacherStr}","${qmStr}","${tnStr}","${azStr}"`
+      `"${v.examCode}","${p1}","${p2}","${p3}","${teacherStr}","${qmStr}","${tnStr}","${azStr}","${untStr}"`
     );
   }
   thuMucDapAn?.file(
@@ -3383,7 +3474,7 @@ export async function exportAllVariantsZipBundle(
 }
 
 /**
- * Tiện ích 5: Tải riêng bộ ảnh 3 Mã QR Chung tích hợp các mã đề (QM 2025, TNMaker, Azota) + 3 File Excel chuẩn (.zip)
+ * Tiện ích 5: Tải riêng bộ ảnh 4 Mã QR Chung tích hợp các mã đề (QM 2025, TNMaker, Azota, UnT Dạy Học) + 4 File Excel chuẩn (.zip)
  */
 export async function exportQrCodesZip(
   variants: ShuffledVariant[],
@@ -3429,12 +3520,20 @@ export async function exportQrCodesZip(
       );
       lines.push(`=== 3. PAYLOAD CHUNG (${codeRangeLabel}) APP AZOTA 2025 ===\n${batchTripleQr.azota.qrPayload}\n`);
     }
+    if (batchTripleQr.unt.qrDataUrl) {
+      qrZip.file(
+        buildStandardExportFileName(config, 'png', `04-${batchPrefix} - App UnT Day Hoc`),
+        dataUrlToUint8Array(batchTripleQr.unt.qrDataUrl)
+      );
+      lines.push(`=== 4. PAYLOAD CHUNG (${codeRangeLabel}) APP UNT DẠY HỌC 2025 ===\n${batchTripleQr.unt.qrPayload}\n`);
+    }
   }
 
-  const [xlsxQm, xlsxTn, xlsxAz] = await Promise.all([
+  const [xlsxQm, xlsxTn, xlsxAz, xlsxUnt] = await Promise.all([
     exportGradingExcelXlsx(variants, 'QM2025'),
     exportGradingExcelXlsx(variants, 'TNMAKER'),
     exportGradingExcelXlsx(variants, 'AZOTA'),
+    exportGradingExcelXlsx(variants, 'UNT'),
   ]);
   qrZip.file(
     buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn QM 2025'),
@@ -3448,9 +3547,13 @@ export async function exportQrCodesZip(
     buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn Azota 2025'),
     xlsxAz
   );
+  qrZip.file(
+    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn UnT Dạy Học 2025'),
+    xlsxUnt
+  );
 
   qrZip.file(
-    buildStandardExportFileName(config, 'txt', 'Payload-3-Phan-Mem-QR'),
+    buildStandardExportFileName(config, 'txt', 'Payload-4-Phan-Mem-QR'),
     lines.join('\n')
   );
   return qrZip.generateAsync({ type: 'blob' });

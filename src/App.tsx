@@ -1778,7 +1778,7 @@ export default function App() {
         buildStandardExportFileName(config, 'zip')
       );
       await executePostDownloadZeroTracePurge(
-        `Trọn Bộ ${targetVariants.length} Đề Thi (Chuẩn Word Equation <m:oMath>) + Đáp Án + Ma Trận CV 7991 + 3 Mã QR + 3 File Excel (.zip)`
+        `Trọn Bộ ${targetVariants.length} Đề Thi (Chuẩn Word Equation <m:oMath>) + Đáp Án + Ma Trận CV 7991 + 4 Mã QR + 4 File Excel (.zip)`
       );
     } finally {
       setIsProcessing(false);
@@ -1795,7 +1795,7 @@ export default function App() {
         buildStandardExportFileName(config, 'zip', 'Bộ mã QR chấm thi')
       );
       await executePostDownloadZeroTracePurge(
-        `Bộ Mã QR Chấm Thi (${shuffledVariants.length} mã đề)`
+        `Bộ 4 Mã QR Chấm Thi (${shuffledVariants.length} mã đề) + 4 File Excel (.zip)`
       );
     } finally {
       setIsProcessing(false);
@@ -3116,9 +3116,10 @@ export default function App() {
                           }
                           className="w-full px-1.5 py-1 font-bold bg-white border border-sky-300 rounded-md"
                         >
-                          <option value="QM2025">QM2025 (Chuẩn)</option>
-                          <option value="TNMAKER">TNMaker</option>
-                          <option value="AZOTA">Azota 2025</option>
+                          <option value="QM2025">1. QM2025 (Chuẩn)</option>
+                          <option value="TNMAKER">2. TNMaker</option>
+                          <option value="AZOTA">3. Azota 2025</option>
+                          <option value="UNT">4. UnT Dạy Học (UnT Labs)</option>
                           <option value="STANDARD_2025">Standard 2025</option>
                         </select>
                       </div>
@@ -3126,7 +3127,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* ================= Ô TÙY CHỌN PHIẾU TRẢ LỜI TRẮC NGHIỆM NỔI BẬT (MẶC ĐỊNH THEO MÔN + 9 MẪU CHUẨN + TẢI PHIẾU RIÊNG) ================= */}
+                {/* ================= Ô TÙY CHỌN PHIẾU TRẢ LỜI TRẮC NGHIỆM NỔI BẬT (MẶC ĐỊNH THEO MÔN + 13 MẪU CHUẨN + TẢI PHIẾU RIÊNG) ================= */}
                 <input
                   ref={phieuUploadInputRef}
                   type="file"
@@ -3217,6 +3218,20 @@ export default function App() {
                           9. Phiếu QM 2025 - HSG / Chuyên đề (30 - 20 - 00 + Tự luận)
                         </option>
                       </optgroup>
+                      <optgroup label="── 4 Mẫu Phiếu Mới: UnT Labs (untedu.com / untclass.com) ──">
+                        <option value="UNT_18_4_6">
+                          10. Phiếu UnT 18.4.6 (KHTN &amp; Địa - 2 phiếu/A4) · UnT_18.4.6_ABCD_2_Forms.pdf
+                        </option>
+                        <option value="UNT_30_6_8">
+                          11. Phiếu UnT 30.6.8 (Đề Đa Năng - 1 phiếu/A4) · UnT_30.6.8_ABCD_1_Form.pdf
+                        </option>
+                        <option value="UNT_30_8_0">
+                          12. Phiếu UnT 30.8.0 (Trắc nghiệm &amp; Đúng Sai - 2 phiếu/A4) · UnT_30.8.0_ABCD_2_Forms.pdf
+                        </option>
+                        <option value="UNT_40_8_6">
+                          13. Phiếu UnT 40.8.6 (THPT 2025 - SBD 4 số) · UnT_40.8.6_ABCD_4_DIGITS_1_Form.pdf
+                        </option>
+                      </optgroup>
                       {config.customPhieuQMDataUrl && (
                         <optgroup label="── Phiếu Do Giáo Viên Tải Lên ──">
                           <option value="CUSTOM">
@@ -3226,16 +3241,16 @@ export default function App() {
                       )}
                     </select>
 
-                    {/* Cụm nút: Kho 9 Mẫu Phiếu & Tải Phiếu Riêng */}
+                    {/* Cụm nút: Kho 13 Mẫu Phiếu & Tải Phiếu Riêng */}
                     <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
                         onClick={() => setIsPhieuQmGalleryOpen(true)}
                         className="px-2.5 py-1.5 rounded-xl font-black text-white text-[11px] btn-3d-amber flex items-center justify-center gap-1 cursor-pointer"
-                        title="Mở kho 9 mẫu phiếu trả lời trắc nghiệm trực quan để xem và bấm chọn"
+                        title="Mở kho 13 mẫu phiếu trả lời trắc nghiệm trực quan để xem và bấm chọn"
                       >
                         <ImageIcon className="w-3.5 h-3.5 shrink-0" />
-                        <span>Kho 9 Mẫu Phiếu</span>
+                        <span>Kho 13 Mẫu Phiếu</span>
                       </button>
 
                       <button
@@ -5102,7 +5117,7 @@ export default function App() {
                 </div>
               ) : (
                 <>
-                  {/* BỘ 3 MÃ QR CHẤM THI TỔNG HỢP CHUẨN QUỐC GIA (1. QM 2025 — 2. TNMAKER — 3. AZOTA) */}
+                  {/* BỘ 4 MÃ QR CHẤM THI TỔNG HỢP CHUẨN QUỐC GIA (1. QM 2025 — 2. TNMAKER — 3. AZOTA — 4. UNT DẠY HỌC) */}
                   {masterMultiQr && masterMultiQr.tripleQr && (
                     <div className="p-5 rounded-3xl guide-card-3d-purple border-2 border-purple-300 space-y-4 shadow-md">
                       <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-purple-200">
@@ -5110,14 +5125,14 @@ export default function App() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <QrCode className="w-5 h-5 text-purple-700" />
                             <h4 className="text-base font-black text-purple-950 uppercase">
-                              BỘ 3 MÃ QR CHUNG TÍCH HỢP CÁC MÃ ĐỀ ({shuffledVariants.slice(0, 8).length} MÃ ĐỀ: {shuffledVariants.slice(0, 8).map((v) => v.examCode).join(', ')})
+                              BỘ 4 MÃ QR CHUNG TÍCH HỢP CÁC MÃ ĐỀ ({shuffledVariants.slice(0, 8).length} MÃ ĐỀ: {shuffledVariants.slice(0, 8).map((v) => v.examCode).join(', ')})
                             </h4>
                             <span className="text-[10px] font-black uppercase bg-emerald-700 text-white px-2.5 py-0.5 rounded-md">
                               Quét 1 Lần Lên Hết Tất Cả Mã Đề (Tối Đa 8 Mã / 1 QR)
                             </span>
                           </div>
                           <p className="text-xs text-slate-700 font-semibold">
-                            Toàn bộ các mã đề đã được <strong>tích hợp chung vào 1 Mã QR duy nhất</strong> (tối ưu tối đa <strong>8 mã đề / 1 mã QR</strong> để camera điện thoại lấy nét cực nhạy trong 0.2 giây) cho <strong>1. QM 2025</strong>, <strong>2. TNMaker</strong> và <strong>3. Azota</strong>. Thầy cô chỉ cần quét <strong>1 lần duy nhất</strong> là ứng dụng tự động nạp đầy đủ đáp án của tất cả các mã đề!
+                            Toàn bộ các mã đề đã được <strong>tích hợp chung vào 1 Mã QR duy nhất</strong> (tối ưu tối đa <strong>8 mã đề / 1 mã QR</strong> để camera điện thoại lấy nét cực nhạy trong 0.2 giây) cho <strong>1. QM 2025</strong>, <strong>2. TNMaker</strong>, <strong>3. Azota</strong> và <strong>4. UnT Dạy Học (untedu.com)</strong>. Thầy cô chỉ cần quét <strong>1 lần duy nhất</strong> là ứng dụng tự động nạp đầy đủ đáp án của tất cả các mã đề!
                           </p>
                         </div>
 
@@ -5128,13 +5143,13 @@ export default function App() {
                             className="px-3.5 py-2 rounded-xl text-xs font-black text-white btn-3d-purple flex items-center gap-1.5 cursor-pointer shadow-xs"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            <span>Tải Trọn Bộ 3 Mã QR + 3 File Excel (.zip)</span>
+                            <span>Tải Trọn Bộ 4 Mã QR + 4 File Excel (.zip)</span>
                           </button>
                         </div>
                       </div>
 
-                      {/* LƯỚI 3 CỘT: 1. QM 2025 | 2. TNMAKER | 3. AZOTA */}
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                      {/* LƯỚI 4 CỘT: 1. QM 2025 | 2. TNMAKER | 3. AZOTA | 4. UNT DẠY HỌC */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {[
                           {
                             item: masterMultiQr.tripleQr.qm2025,
@@ -5166,22 +5181,32 @@ export default function App() {
                             btnClass: 'btn-3d-emerald',
                             excelCode: 'AZOTA' as const,
                           },
+                          {
+                            item: masterMultiQr.tripleQr.unt,
+                            badgeText: '4. UNT DẠY HỌC',
+                            subTitle: 'Chuẩn App UnT Dạy Học (untedu.com)',
+                            formatDesc: 'Multi-line: [Mã đề]\\n[P1]\\n[P2]\\n[P3_1|P3_2]',
+                            borderClass: 'border-purple-400 bg-purple-50/70',
+                            headerBg: 'bg-purple-900 text-white',
+                            btnClass: 'btn-3d-purple',
+                            excelCode: 'UNT' as const,
+                          },
                         ].map((card) => (
                           <div
                             key={card.item.appId}
                             className={`rounded-2xl border-2 ${card.borderClass} overflow-hidden flex flex-col justify-between shadow-sm bg-white`}
                           >
-                            <div className={`${card.headerBg} px-3.5 py-2 flex items-center justify-between`}>
-                              <span className="font-black text-xs uppercase tracking-wide">
+                            <div className={`${card.headerBg} px-3 py-2 flex items-center justify-between`}>
+                              <span className="font-black text-xs uppercase tracking-wide truncate">
                                 {card.badgeText}
                               </span>
-                              <span className="text-[10px] font-mono bg-white/20 px-2 py-0.5 rounded font-bold">
+                              <span className="text-[10px] font-mono bg-white/20 px-2 py-0.5 rounded font-bold shrink-0 ml-1">
                                 {shuffledVariants.length} mã đề
                               </span>
                             </div>
 
-                            <div className="p-3.5 space-y-3 flex-1 flex flex-col items-center">
-                              <div className="text-[11px] font-bold text-slate-700 text-center">
+                            <div className="p-3 space-y-2.5 flex-1 flex flex-col items-center">
+                              <div className="text-[11px] font-bold text-slate-700 text-center truncate w-full">
                                 {card.subTitle}
                               </div>
 
@@ -5190,7 +5215,7 @@ export default function App() {
                                   src={card.item.qrDataUrl}
                                   alt={card.badgeText}
                                   referrerPolicy="no-referrer"
-                                  className="w-44 h-44 object-contain mx-auto"
+                                  className="w-40 h-40 object-contain mx-auto"
                                 />
                               </div>
 
@@ -5201,12 +5226,12 @@ export default function App() {
                                     {card.item.qrPayload.length} ký tự
                                   </span>
                                 </div>
-                                <div className="p-2 rounded-lg bg-slate-900 text-emerald-400 font-mono text-[10px] break-all leading-relaxed max-h-20 overflow-y-auto border border-slate-700">
+                                <div className="p-2 rounded-lg bg-slate-900 text-emerald-400 font-mono text-[10px] break-all leading-relaxed max-h-20 overflow-y-auto border border-slate-700 whitespace-pre-line">
                                   {card.item.qrPayload}
                                 </div>
                               </div>
 
-                              <div className="w-full grid grid-cols-3 gap-1.5 pt-1">
+                              <div className="w-full grid grid-cols-3 gap-1 pt-1">
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -5219,7 +5244,7 @@ export default function App() {
                                     );
                                     link.click();
                                   }}
-                                  className={`px-2 py-1.5 rounded-lg text-[11px] font-extrabold text-white ${card.btnClass} flex items-center justify-center gap-1 cursor-pointer`}
+                                  className={`px-1.5 py-1.5 rounded-lg text-[10px] font-extrabold text-white ${card.btnClass} flex items-center justify-center gap-1 cursor-pointer`}
                                   title="Tải ảnh PNG mã QR này"
                                 >
                                   <Download className="w-3 h-3 shrink-0" />
@@ -5246,11 +5271,11 @@ export default function App() {
                                       text: `Đã tải tệp Excel (.xlsx) đáp án chuẩn chính thức của ${card.badgeText}!`,
                                     });
                                   }}
-                                  className="px-2 py-1.5 rounded-lg text-[11px] font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center gap-1 cursor-pointer"
+                                  className="px-1.5 py-1.5 rounded-lg text-[10px] font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center gap-1 cursor-pointer"
                                   title="Tải file Excel (.xlsx) đáp án chuẩn của phần mềm này"
                                 >
                                   <FileText className="w-3 h-3 shrink-0 text-emerald-700" />
-                                  <span>File .xlsx</span>
+                                  <span>.xlsx</span>
                                 </button>
 
                                 <button
@@ -5262,8 +5287,8 @@ export default function App() {
                                       text: `Đã sao chép chuỗi mã hóa QR của ${card.badgeText}!`,
                                     });
                                   }}
-                                  className="px-2 py-1.5 rounded-lg text-[11px] font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center gap-1 cursor-pointer"
-                                  title="Sao chép chuỗi JSON payload"
+                                  className="px-1.5 py-1.5 rounded-lg text-[10px] font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 flex items-center justify-center gap-1 cursor-pointer"
+                                  title="Sao chép chuỗi payload"
                                 >
                                   <Key className="w-3 h-3 shrink-0 text-blue-700" />
                                   <span>Copy</span>
@@ -5275,7 +5300,7 @@ export default function App() {
                       </div>
 
                       <div className="text-[11px] text-slate-700 font-semibold bg-white/80 px-3.5 py-2 rounded-xl border border-purple-200">
-                        💡 <strong>Cam kết hoạt động 100%:</strong> Cả 3 mã QR trên đều được biên dịch đúng từng ký tự JSON theo thuật toán gốc của <strong>QM 2025</strong> (<code>[[101,"A",...,"D","S",...,28.125]]</code>), <strong>TNMaker</strong> (<code>{`{"101":"ABCD...#ĐSĐĐ_...#2700_...","success":true,"type":5}`}</code>) và <strong>Azota</strong> (<code>[["101","A",...,"Đ","S",...,"28,125"]]</code>), đồng thời đã được nhúng cả 3 mã vào trang cuối của tệp Word Bảng Đáp Án Khảo Thí A4!
+                        💡 <strong>Cam kết hoạt động 100%:</strong> Cả 4 mã QR trên đều được biên dịch đúng từng ký tự theo thuật toán gốc của <strong>QM 2025</strong> (<code>[[101,"A",...,"D","S",...,28.125]]</code>), <strong>TNMaker</strong> (<code>{`{"101":"ABCD...#ĐSĐĐ_...#2700_...","success":true,"type":5}`}</code>), <strong>Azota</strong> (<code>[["101","A",...,"Đ","S",...,"28,125"]]</code>) và <strong>UnT Dạy Học</strong> (<code>{`[Mã đề]\\n[Phần 1]\\n[Phần 2]\\n[Phần 3_val1|val2...]`}</code>), đồng thời đã được nhúng đầy đủ cả 4 mã vào trang cuối của tệp Word Bảng Đáp Án Khảo Thí A4!
                       </div>
                     </div>
                   )}
@@ -6057,7 +6082,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Modal Kho 9 Mẫu Phiếu Trả Lời Trắc Nghiệm QM 2025 & Tải Phiếu Tùy Chọn */}
+      {/* Modal Kho 13 Mẫu Phiếu Trả Lời Trắc Nghiệm QM 2025, UnT & Tải Phiếu Tùy Chọn */}
       {isPhieuQmGalleryOpen && (
         <div
           className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
@@ -6070,10 +6095,10 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-amber-200">
               <div>
                 <h3 className="text-base sm:text-lg font-black text-slate-900 uppercase">
-                  KHO 9 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM CHUẨN &amp; TÙY CHỌN NHÚNG VÀO ĐỀ TRỘN (.DOCX)
+                  KHO 13 MẪU PHIẾU TRẢ LỜI TRẮC NGHIỆM CHUẨN (BGD &amp; UNT LABS) &amp; TÙY CHỌN NHÚNG VÀO ĐỀ TRỘN (.DOCX)
                 </h3>
                 <p className="text-xs font-semibold text-slate-600">
-                  Mặc định tự động chọn theo môn học hoặc giáo viên bấm chọn bất kỳ mẫu phiếu nào bên dưới để đưa vào tất cả các đề trộn Word (.docx)
+                  Mặc định tự động chọn theo môn học hoặc giáo viên bấm chọn bất kỳ mẫu phiếu nào (kể cả 4 mẫu UnT Labs mới) bên dưới để đưa vào tất cả các đề trộn Word (.docx)
                 </p>
               </div>
               <div className="flex items-center gap-2">

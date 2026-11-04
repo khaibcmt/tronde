@@ -2,7 +2,7 @@ export type PartType = 'PART_1' | 'PART_2' | 'PART_3' | 'PART_4';
 
 export type LayoutMode = 'AUTO' | '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL';
 
-export type QRAppFormat = 'STANDARD_2025' | 'QM2025' | 'TNMAKER' | 'AZOTA';
+export type QRAppFormat = 'STANDARD_2025' | 'QM2025' | 'TNMAKER' | 'AZOTA' | 'UNT';
 
 export type GeminiModelTier =
   | '3.5-flash-lite'
@@ -135,6 +135,10 @@ export type PhieuQMSelectionCode =
   | 'QM_40_16_12'
   | 'QM_30_20_0'
   | 'QM_40_8_6'
+  | 'UNT_18_4_6'
+  | 'UNT_30_6_8'
+  | 'UNT_30_8_0'
+  | 'UNT_40_8_6'
   | 'CUSTOM';
 
 export interface ShuffleConfig {
@@ -170,7 +174,7 @@ export interface ShuffleConfig {
 }
 
 export interface SingleQrItem {
-  appId: 'QM2025' | 'TNMAKER' | 'AZOTA';
+  appId: 'QM2025' | 'TNMAKER' | 'AZOTA' | 'UNT';
   appName: string;
   qrPayload: string;
   qrDataUrl: string;
@@ -180,6 +184,7 @@ export interface TripleGradingQrSet {
   qm2025: SingleQrItem;
   tnmaker: SingleQrItem;
   azota: SingleQrItem;
+  unt: SingleQrItem;
 }
 
 export interface ShuffledVariant {

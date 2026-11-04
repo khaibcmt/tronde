@@ -236,6 +236,53 @@ export function buildAzota2025OfficialQrPayload(
 }
 
 /**
+ * 4. CHUẨN PAYLOAD CHÍNH THỨC CỦA ỨNG DỤNG UNT DẠY HỌC / UNT CHẤM BÀI 2025 (qr.untedu.com / untclass.com)
+ * - Cấu trúc Text nhiều dòng:
+ *   Mã_Đề_1
+ *   Chuỗi_Phần_1 (ví dụ ABCD...)
+ *   Chuỗi_Phần_2 (ví dụ ĐSĐSSĐĐS...)
+ *   Chuỗi_Phần_3_ngăn_cách_bởi_dấu_gạch_đứng (ví dụ 12.5|-3.14|28)
+ *   Mã_Đề_2
+ *   ...
+ * - Chuẩn 100% giải mã từ QR generator của hệ sinh thái UnT Labs (UnT Dạy Học / UnT Chấm Thi)
+ */
+export function buildUntOfficialQrPayload(
+  variants: Array<{ examCode: string; answerKey: ShuffledVariant['answerKey'] }>
+): string {
+  const parts: string[] = [];
+
+  for (const v of variants) {
+    const code = String(v.examCode).trim();
+    parts.push(code);
+
+    const p1Seq = [...v.answerKey.part1]
+      .sort((a, b) => a.questionNumber - b.questionNumber)
+      .map((item) => item.answer)
+      .join('');
+    if (p1Seq) parts.push(p1Seq);
+
+    const p2Seq = [...v.answerKey.part2]
+      .sort((a, b) => a.questionNumber - b.questionNumber)
+      .map((item) => item.answers.map((a) => (a === 'Đ' ? 'Đ' : 'S')).join(''))
+      .join('');
+    if (p2Seq) parts.push(p2Seq);
+
+    const p3Seq = [...v.answerKey.part3]
+      .sort((a, b) => a.questionNumber - b.questionNumber)
+      .map((item) =>
+        String(item.answer)
+          .trim()
+          .replace(/['" ]/g, '')
+          .replace(',', '.')
+      )
+      .join('|');
+    if (p3Seq) parts.push(p3Seq);
+  }
+
+  return parts.join('\n');
+}
+
+/**
  * Xây dựng chuỗi Payload QR theo định dạng được chọn (dùng cho cả 1 mã đề hoặc nhiều mã đề)
  */
 export function buildQrPayloadString(
@@ -252,6 +299,9 @@ export function buildQrPayloadString(
   }
   if (format === 'AZOTA') {
     return buildAzota2025OfficialQrPayload(singleList);
+  }
+  if (format === 'UNT') {
+    return buildUntOfficialQrPayload(singleList);
   }
   return buildQm2025OfficialQrPayload(singleList);
 }
@@ -302,7 +352,8 @@ async function addBottomCaptionToQrDataUrl(
 }
 
 /**
- * Sinh đồng thời Bộ 3 Mã QR Chấm Thi Chuẩn Quốc Gia (1. QM 2025 — 2. TNMaker — 3. Azota)
+ * Sinh đồng thời Bộ 4 Mã QR Chấm Thi Chuẩn Quốc Gia & Hệ Sinh Thái Giáo Dục:
+ * 1. QM 2025 — 2. TNMaker — 3. Azota — 4. UnT (UnT Dạy Học / UnT Chấm Bài - untedu.com / untclass.com)
  * cho danh sách các mã đề truyền vào (có thể là 1 mã đề hoặc toàn bộ 4+ mã đề)
  */
 export async function generateTripleGradingQrSet(
@@ -311,9 +362,10 @@ export async function generateTripleGradingQrSet(
   const qm2025Payload = buildQm2025OfficialQrPayload(variants);
   const tnmakerPayload = buildTnMaker2025OfficialQrPayload(variants);
   const azotaPayload = buildAzota2025OfficialQrPayload(variants);
+  const untPayload = buildUntOfficialQrPayload(variants);
 
-  const [rawQm2025Url, rawTnMakerUrl, rawAzotaUrl] = await Promise.all([
-    // 1. QM 2025: errorCorrectionLevel: 'L', margin: 1 giống hệt qrcode2025.youngmix.vn
+  const [rawQm2025Url, rawTnMakerUrl, rawAzotaUrl, rawUntUrl] = await Promise.all([
+    // 1. QM 2025: errorCorrectionLevel: 'L', margin: 2
     QRCode.toDataURL(qm2025Payload, {
       errorCorrectionLevel: 'L',
       margin: 2,
@@ -334,6 +386,13 @@ export async function generateTripleGradingQrSet(
       width: 380,
       color: { dark: '#000000', light: '#FFFFFF' },
     }),
+    // 4. UnT Labs: errorCorrectionLevel: 'L', margin: 2
+    QRCode.toDataURL(untPayload, {
+      errorCorrectionLevel: 'L',
+      margin: 2,
+      width: 380,
+      color: { dark: '#000000', light: '#FFFFFF' },
+    }),
   ]);
 
   const codeSuffix =
@@ -341,7 +400,7 @@ export async function generateTripleGradingQrSet(
       ? ` (Mã ${variants[0].examCode})`
       : ` (${variants.length} Mã đề)`;
 
-  const [qm2025DataUrl, tnmakerDataUrl, azotaDataUrl] = await Promise.all([
+  const [qm2025DataUrl, tnmakerDataUrl, azotaDataUrl, untDataUrl] = await Promise.all([
     addBottomCaptionToQrDataUrl(
       rawQm2025Url,
       `Chấm thi QM2025${codeSuffix}`,
@@ -356,6 +415,11 @@ export async function generateTripleGradingQrSet(
       rawAzotaUrl,
       `Azota 2025${codeSuffix}`,
       '#047857'
+    ),
+    addBottomCaptionToQrDataUrl(
+      rawUntUrl,
+      `UnT Dạy Học${codeSuffix}`,
+      '#9333ea'
     ),
   ]);
 
@@ -377,6 +441,12 @@ export async function generateTripleGradingQrSet(
       appName: '3. Hệ sinh thái Azota 2025',
       qrPayload: azotaPayload,
       qrDataUrl: azotaDataUrl,
+    },
+    unt: {
+      appId: 'UNT',
+      appName: '4. App UnT Dạy Học (UnT Labs)',
+      qrPayload: untPayload,
+      qrDataUrl: untDataUrl,
     },
   };
 }
@@ -595,6 +665,8 @@ export async function generateShuffledVariants(
         ? batchTripleQr.tnmaker
         : config.qrFormat === 'AZOTA'
         ? batchTripleQr.azota
+        : config.qrFormat === 'UNT'
+        ? batchTripleQr.unt
         : batchTripleQr.qm2025;
 
     for (const v of batch) {
@@ -610,10 +682,8 @@ export async function generateShuffledVariants(
 export const MAX_CODES_PER_SINGLE_QR = 8;
 
 /**
- * Sinh Bộ 3 Mã QR Chung Tích Hợp Đa Mã Đề (Master Multi-Exam QR Code)
- * - Tự động gom tối đa 8 mã đề chuẩn (ví dụ: 4, 6 hoặc 8 mã đề: 101..108) vào 1 Mã QR Chung duy nhất
- *   để đảm bảo mật độ điểm ảnh QR vừa vặn, quét 1 lần là lên hết toàn bộ các mã đề trên cả 3 App:
- *   1. QM 2025 — 2. TNMaker — 3. Azota
+ * Sinh Bộ 4 Mã QR Chung Tích Hợp Đa Mã Đề (Master Multi-Exam QR Code):
+ * 1. QM 2025 — 2. TNMaker — 3. Azota — 4. UnT (UnT Dạy Học / UnT Chấm Bài)
  */
 export async function generateMasterMultiQrCode(
   variants: ShuffledVariant[],
@@ -638,6 +708,7 @@ export async function generateMasterMultiQrCode(
         qm2025: { ...emptyItem, appId: 'QM2025' },
         tnmaker: { ...emptyItem, appId: 'TNMAKER' },
         azota: { ...emptyItem, appId: 'AZOTA' },
+        unt: { ...emptyItem, appId: 'UNT' },
       },
       integratedCodes: [],
     };
@@ -651,6 +722,8 @@ export async function generateMasterMultiQrCode(
       ? tripleQr.tnmaker
       : config.qrFormat === 'AZOTA'
       ? tripleQr.azota
+      : config.qrFormat === 'UNT'
+      ? tripleQr.unt
       : tripleQr.qm2025;
 
   return {
@@ -772,7 +845,7 @@ async function packRowsToXlsxBlob(
  */
 export async function exportGradingExcelXlsx(
   variants: ShuffledVariant[],
-  appFormat: 'QM2025' | 'TNMAKER' | 'AZOTA'
+  appFormat: 'QM2025' | 'TNMAKER' | 'AZOTA' | 'UNT'
 ): Promise<Blob> {
   if (!variants || variants.length === 0) {
     return packRowsToXlsxBlob([['Chưa có dữ liệu']]);
@@ -898,6 +971,53 @@ export async function exportGradingExcelXlsx(
         return item ? String(item.answer).trim().replace('.', ',') : '0';
       }),
     ]);
+  }
+
+  if (appFormat === 'UNT') {
+    // Chuẩn UnT Tinh Gọn (UnT_Mau-Dap-An-Tinh-Gon.xlsx) & UnT THPT 2025:
+    // Dòng 1: Header ["Câu", mã_đề_1, mã_đề_2...]
+    // Các dòng tiếp theo:
+    // Phần 1: Số câu 1..N (A, B, C, D)
+    // Phần 2: ĐSĐS
+    // Phần 3: Số thực (dùng dấu chấm thập phân, ví dụ: 12.5)
+    const headerRow: Array<string | number> = [
+      'Câu',
+      ...variants.map((v) => String(v.examCode).trim()),
+    ];
+    const rows: Array<Array<string | number>> = [headerRow];
+    let qCounter = 1;
+
+    for (let i = 1; i <= maxP1; i++) {
+      rows.push([
+        qCounter++,
+        ...variants.map((v) => {
+          const item = v.answerKey.part1.find((x) => x.questionNumber === i);
+          return item ? item.answer : 'A';
+        }),
+      ]);
+    }
+    for (let i = 1; i <= maxP2; i++) {
+      rows.push([
+        qCounter++,
+        ...variants.map((v) => {
+          const item = v.answerKey.part2.find((x) => x.questionNumber === i);
+          return item ? item.dsString : 'ĐSĐS';
+        }),
+      ]);
+    }
+    for (let i = 1; i <= maxP3; i++) {
+      rows.push([
+        qCounter++,
+        ...variants.map((v) => {
+          const item = v.answerKey.part3.find((x) => x.questionNumber === i);
+          const cleaned = String(item ? item.answer : '0').trim().replace(',', '.');
+          const num = Number(cleaned);
+          return !isNaN(num) && cleaned !== '' ? num : cleaned;
+        }),
+      ]);
+    }
+
+    return packRowsToXlsxBlob(rows, 'UnT_DapAn');
   }
 
   return packRowsToXlsxBlob(rows, 'Azota2025');
