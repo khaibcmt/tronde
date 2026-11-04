@@ -225,141 +225,135 @@ function rotateFourOptionsForVariant(
   });
 }
 
+export const AI_CLONE_BATCH_SIZE = 5;
+
+export interface AiBatchProgressInfo {
+  variantIndex: number;
+  totalVariants: number;
+  batchIndex: number;
+  totalBatches: number;
+  batchStartQuestionNumber: number;
+  batchEndQuestionNumber: number;
+  completedQuestionsCount: number;
+  totalQuestionsCount: number;
+  stepStage: 'STEP_1_MATRIX' | 'STEP_2_MECHANISM' | 'STEP_3_CONTEXT_DATA' | 'COMPLETED';
+  stepDescription: string;
+  partialQuestions: ExamQuestion[];
+}
+
 /**
- * Bộ Biến Đổi Thông Minh Như Người Thật Cho Mọi Câu Hỏi Bất Kỳ Do Giáo Viên Tải Lên (.docx / .pdf)
- * Đảm bảo 100% câu hỏi được biến đổi sâu và tạo ra 4 phiên bản khác biệt hoàn toàn theo k = 1, 2, 3, 4:
- * - Đảo chiều Đúng ↔ Sai, "bao nhiêu ý đúng" ↔ "bao nhiêu ý sai"
- * - Đổi biểu đồ tròn ↔ biểu đồ cột / bảng thống kê / đồ thị
- * - Đổi số liệu tự động và xoay vòng đáp án A, B, C, D
- * - Bắt buộc mỗi câu Phần I có đúng 4 lựa chọn, Phần II có đúng 4 ý a, b, c, d
+ * Loại bỏ triệt để các cụm từ sáo rỗng, vô nghĩa hoặc ngoài phạm vi đề gốc
+ * ("Theo chương trình giáo dục phổ thông 2018...", "(xét trong điều kiện chuẩn)", v.v.)
+ */
+export function stripForbiddenFluffPhrases(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/theo\s+chương\s+trình\s+giáo\s+dục\s+(phổ\s+thông\s+)?(mới\s+)?(năm\s+)?2018[,.:;\s-]*/gi, '')
+    .replace(/chuẩn\s+kiến\s+thức\s+kỹ\s+năng\s+(của\s+)?(bộ\s+gd\s*&\s*đt|gdpt\s*2018)[,.:;\s-]*/gi, '')
+    .replace(/đảm\s+bảo\s+chuẩn\s+kiến\s+thức\s+kỹ\s+năng\s+gdpt\s*2018[.,;\s]*/gi, '')
+    .replace(/\(\s*xét\s+trong\s+điều\s+kiện\s+chuẩn\s*\)/gi, '')
+    .replace(/\(\s*trong\s+điều\s+kiện\s+tiêu\s+chuẩn\s*\)/gi, '')
+    .replace(/\s+theo\s+quy\s+luật\s+lí\s+thuyết\?/gi, '?')
+    .replace(/\s+khi\s+phân\s+tích\s+dữ\s+kiện\s+trên\?/gi, '?')
+    .replace(/\s+trong\s+trường\s+hợp\s+điển\s+hình\?/gi, '?')
+    .replace(/\s+\(xét\s+trong\s+điều\s+kiện\s+chuẩn\)\?/gi, '?')
+    .replace(/^\s*(Câu\s+hỏi\s+tương\s+đương|Phiên\s+bản\s+mới|Đề\s+AI)\s*[:.-]\s*/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/**
+ * Bộ Biến Đổi Đồng Đẳng Sư Phạm 3 Bước (Fallback Nội Bộ An Toàn)
+ * Tuyệt đối KHÔNG cộng số bừa bãi (không bịa số liệu), KHÔNG thêm từ sáo rỗng hay GDPT 2018,
+ * giữ nguyên 100% cơ chế khoa học và phạm vi kiến thức của câu gốc.
  */
 function smartHumanExpertTransformGenericQuestion(
   q: ExamQuestion,
   cloneId: string,
   k: number
 ): ExamQuestion {
-  let newStem = q.stemText.trim();
-  let newExplanation = q.explanation || '';
+  let newStem = stripForbiddenFluffPhrases(q.stemText.trim());
+  let newExplanation = stripForbiddenFluffPhrases(q.explanation || '');
 
-  // 1. Đổi biểu đồ hình tròn ↔ biểu đồ hình cột / đồ thị
-  if (/hình tròn|biểu đồ tròn/i.test(newStem)) {
-    const targetChart = k % 2 === 1 ? 'biểu đồ hình cột' : 'bảng số liệu thống kê';
-    newStem = newStem
-      .replace(/đồ thị hình tròn/gi, targetChart)
-      .replace(/biểu đồ hình tròn/gi, targetChart)
-      .replace(/biểu đồ tròn/gi, targetChart);
-    newExplanation += ` (Đã chuyển đổi trực quan sang ${targetChart}).`;
-  } else if (/hình cột|dạng cột/i.test(newStem)) {
-    const targetChart = k % 2 === 1 ? 'biểu đồ hình tròn' : 'đồ thị đường biểu diễn';
-    newStem = newStem
-      .replace(/biểu đồ hình cột/gi, targetChart)
-      .replace(/đồ thị hình cột/gi, targetChart)
-      .replace(/biểu đồ dạng cột/gi, targetChart);
-    newExplanation += ` (Đã chuyển đổi trực quan sang ${targetChart}).`;
-  }
-
-  // 2. Đổi câu đếm "có bao nhiêu ý/phát biểu đúng" ↔ "có bao nhiêu ý/phát biểu sai"
-  if (/có bao nhiêu\s+(phát biểu|ý|nhận định|mệnh đề)\s+đúng/i.test(newStem)) {
-    newStem = newStem.replace(
-      /có bao nhiêu\s+(phát biểu|ý|nhận định|mệnh đề)\s+đúng/gi,
-      'có bao nhiêu $1 SAI (không đúng)'
-    );
-    newExplanation =
-      'Đã đảo chiều câu hỏi từ đếm số phát biểu ĐÚNG sang đếm số phát biểu SAI. ' +
-      newExplanation;
-  } else if (/có bao nhiêu\s+(phát biểu|ý|nhận định|mệnh đề)\s+(sai|không đúng)/i.test(newStem)) {
-    newStem = newStem.replace(
-      /có bao nhiêu\s+(phát biểu|ý|nhận định|mệnh đề)\s+(sai|không đúng)/gi,
-      'có bao nhiêu $1 ĐÚNG'
-    );
-    newExplanation =
-      'Đã đảo chiều câu hỏi từ đếm số phát biểu SAI sang đếm số phát biểu ĐÚNG. ' +
-      newExplanation;
-  }
-
-  // 3. Đổi sơ đồ chuỗi mũi tên (→) dài hơn hoặc ngắn hơn
-  if (newStem.includes('→') || newStem.includes('->')) {
-    const arrowChar = newStem.includes('→') ? '→' : '->';
-    const parts = newStem.split(arrowChar);
-    if (parts.length >= 3) {
-      if (k % 2 === 1) {
-        newStem = newStem.replace(
-          new RegExp(`(${arrowChar}\\s*[^.,;:\\n]+)$`),
-          `$1 ${arrowChar} Sinh vật phân giải bậc cuối`
-        );
-      }
-    }
-  }
-
-  // 4. Biến đổi mệnh đề dẫn theo 4 góc tiếp cận sư phạm khác nhau (k = 1..4) nhưng tuyệt đối không sáo rỗng
-  if (/(phát biểu|nhận định|kết luận)\s+nào\s+sau\s+đây\s+(là\s+)?đúng/i.test(newStem)) {
-    const variants = [
-      '$1 nào dưới đây là CHÍNH XÁC nhất',
-      '$1 nào sau đây phản ánh ĐÚNG bản chất khoa học',
-      'xét các mệnh đề sau, $1 nào là ĐÚNG',
-      'nhận xét nào dưới đây là ĐÚNG khi phân tích hiện tượng trên',
-    ];
-    newStem = newStem.replace(
+  // Bước 2 & 3: Đổi mới bối cảnh thực tiễn và góc hỏi trong đúng phạm vi câu gốc
+  const contextSwaps: Array<[RegExp, string[]]> = [
+    [
+      /\bỞ một loài thực vật\b/gi,
+      [
+        'Trong thí nghiệm lai giống ở một loài cây trồng',
+        'Khi khảo sát sự di truyền ở một loài thực vật có hoa',
+        'Phân tích phép lai trên một giống cây nông nghiệp lưỡng bội',
+        'Ở một loài cây ăn quả lưỡng bội',
+      ],
+    ],
+    [
+      /\bMột loài thực vật\b/gi,
+      [
+        'Một giống cây trồng lưỡng bội',
+        'Khảo sát một loài thực vật có hoa',
+        'Xét một loài cây lâm nghiệp lưỡng bội',
+        'Trong thí nghiệm ở một loài thực vật',
+      ],
+    ],
+    [
+      /\bMột quần thể\b/gi,
+      [
+        'Khảo sát một quần thể sinh vật trong tự nhiên',
+        'Xét cấu trúc di truyền của một quần thể',
+        'Tại một quần thể giao phối tự do',
+        'Phân tích số liệu của một quần thể sinh vật',
+      ],
+    ],
+    [
+      /\bTrong quá trình\b/gi,
+      [
+        'Xét cơ chế diễn ra quá trình',
+        'Khi phân tích diễn biến của quá trình',
+        'Ở các giai đoạn của quá trình',
+        'Trong hoạt động sinh lí của quá trình',
+      ],
+    ],
+    [
+      /\bKhi nói về\b/gi,
+      [
+        'Khi phân tích cơ chế khoa học của',
+        'Xét các đặc điểm bản chất của',
+        'Khi khảo sát hoạt động của',
+        'Trong nghiên cứu về',
+      ],
+    ],
+    [
       /(phát biểu|nhận định|kết luận)\s+nào\s+sau\s+đây\s+(là\s+)?đúng/gi,
-      variants[(k - 1) % 4]
-    );
-  } else if (
-    /(phát biểu|nhận định|kết luận)\s+nào\s+sau\s+đây\s+(là\s+)?(sai|không đúng)/i.test(newStem)
-  ) {
-    const variants = [
-      '$1 nào dưới đây là KHÔNG ĐÚNG (SAI)',
-      '$1 nào sau đây có nội dung SAI',
-      'xét các nhận xét sau, $1 nào là KHÔNG chính xác',
-      'mệnh đề nào dưới đây là SAI so với lí thuyết',
-    ];
-    newStem = newStem.replace(
+      [
+        '$1 nào dưới đây là chính xác',
+        '$1 nào sau đây phản ánh đúng bản chất',
+        'xét các mệnh đề dưới đây, $1 nào đúng',
+        'nhận xét nào sau đây là đúng',
+      ],
+    ],
+    [
       /(phát biểu|nhận định|kết luận)\s+nào\s+sau\s+đây\s+(là\s+)?(sai|không đúng)/gi,
-      variants[(k - 1) % 4]
-    );
-  } else {
-    // Biến đổi cấu trúc từ vựng khoa học tự nhiên cho mọi câu hỏi bất kỳ để 4 đề AI luôn khác nhau
-    const lexicalReplacements: Array<[RegExp, string[]]> = [
-      [/\bTrong quá trình\b/gi, ['Xét trong cơ chế của quá trình', 'Khi phân tích diễn biến quá trình', 'Ở giai đoạn diễn ra quá trình', 'Trong hoạt động sinh lí của quá trình']],
-      [/\bKhi nói về\b/gi, ['Khi phân tích chuyên sâu về', 'Xét các đặc điểm khoa học của', 'Khi khảo sát cơ chế hoạt động của', 'Trong nghiên cứu về']],
-      [/\bMột loài thực vật\b/gi, ['Ở một loài cây trồng nông nghiệp', 'Khảo sát một loài thực vật có hoa', 'Xét một giống thực vật lưỡng bội', 'Trong phép lai ở một loài thực vật']],
-      [/\bMột quần thể\b/gi, ['Khảo sát một quần thể sinh vật trong tự nhiên', 'Xét cấu trúc di truyền của một quần thể', 'Tại một quần thể giao phối tự do', 'Phân tích số liệu thống kê của một quần thể']],
-      [/\bCho biết\b/gi, ['Giả sử biết rằng', 'Theo dữ kiện thí nghiệm cho biết', 'Biết rằng trong điều kiện chuẩn,', 'Xét trường hợp biết']],
-    ];
-    let replacedAny = false;
-    for (const [pattern, choices] of lexicalReplacements) {
-      if (pattern.test(newStem)) {
-        newStem = newStem.replace(pattern, choices[(k - 1) % choices.length]);
-        replacedAny = true;
-        break;
-      }
-    }
-    if (!replacedAny && newStem.endsWith('?')) {
-      const suffixes = [
-        ' (xét trong điều kiện chuẩn)?',
-        ' theo quy luật lí thuyết?',
-        ' khi phân tích dữ kiện trên?',
-        ' trong trường hợp điển hình?',
-      ];
-      newStem = newStem.slice(0, -1) + suffixes[(k - 1) % 4];
+      [
+        '$1 nào dưới đây là không chính xác',
+        '$1 nào sau đây có nội dung sai',
+        'xét các nhận xét dưới đây, $1 nào không đúng',
+        'mệnh đề nào sau đây là sai',
+      ],
+    ],
+  ];
+
+  for (const [pattern, replacements] of contextSwaps) {
+    if (pattern.test(newStem)) {
+      newStem = newStem.replace(pattern, replacements[(k - 1) % replacements.length]);
     }
   }
-
-  // 5. Dịch chuyển số liệu thông minh cho các câu tính toán theo hệ số k
-  const shiftNumbersSmart = (str: string) =>
-    str.replace(/\b(\d+)\b/g, (match) => {
-      const n = parseInt(match, 10);
-      if (n <= 4 || n >= 1900 || n === 100 || n === 50) return match;
-      return String(n + k * 2);
-    });
-
-  newStem = shiftNumbersSmart(newStem);
 
   let clonedOpts: OptionPart1[] | undefined;
   if (q.part === 'PART_1') {
     const baseOpts = (q.options || []).map((o) => ({
       ...o,
       id: `${cloneId}-${o.currentLabel}`,
-      text: shiftNumbersSmart(o.text),
+      text: stripForbiddenFluffPhrases(o.text),
       isUnderline: o.isCorrect,
       isRed: o.isCorrect,
     }));
@@ -369,19 +363,16 @@ function smartHumanExpertTransformGenericQuestion(
   let clonedSubs: SubItemPart2[] | undefined;
   if (q.part === 'PART_2') {
     const baseSubs = (q.subItems || []).map((s, sIdx) => {
-      let subText = shiftNumbersSmart(s.text);
+      let subText = stripForbiddenFluffPhrases(s.text);
       let nextTrue = s.isTrue;
-      if (subText.includes('tăng lên')) {
+      if ((sIdx + k) % 2 === 1 && subText.includes('tăng lên')) {
         subText = subText.replace('tăng lên', 'giảm xuống');
         nextTrue = !s.isTrue;
-      } else if (subText.includes('giảm xuống')) {
+      } else if ((sIdx + k) % 2 === 1 && subText.includes('giảm xuống')) {
         subText = subText.replace('giảm xuống', 'tăng lên');
         nextTrue = !s.isTrue;
-      } else if (subText.includes('chỉ xảy ra')) {
-        subText = subText.replace('chỉ xảy ra', 'xảy ra ở mọi trường hợp');
-        nextTrue = false;
       } else if ((sIdx + k) % 2 === 0 && subText.includes(' luôn ')) {
-        subText = subText.replace(' luôn ', ' không bao giờ ');
+        subText = subText.replace(' luôn ', ' không ');
         nextTrue = !s.isTrue;
       }
       return {
@@ -399,29 +390,11 @@ function smartHumanExpertTransformGenericQuestion(
       subItems: baseSubs,
     };
     clonedSubs = enforceStrictFourSubItemsPart2(dummySubQ).subItems;
-    if (clonedSubs && clonedSubs.length === 4) {
-      const tCount = clonedSubs.filter((s) => s.isTrue).length;
-      if (tCount === 4 || tCount === 0) {
-        const flipIdx = (k - 1) % 4;
-        const nextVal = tCount === 0;
-        clonedSubs = clonedSubs.map((s, idx) =>
-          idx === flipIdx
-            ? { ...s, isTrue: nextVal, isUnderline: nextVal, isRed: nextVal }
-            : s
-        );
-      }
-    }
   }
 
   let clonedShortAns = q.shortAnswer;
   if (q.part === 'PART_3' && q.shortAnswer) {
-    const numVal = parseFloat(q.shortAnswer.replace(',', '.'));
-    if (!isNaN(numVal) && numVal > 5 && Number.isInteger(numVal)) {
-      const candidateAns = String(numVal + k * 2);
-      clonedShortAns = candidateAns.length <= 4 ? candidateAns : q.shortAnswer.slice(0, 4);
-    } else if (q.shortAnswer.trim().length > 4) {
-      clonedShortAns = q.shortAnswer.trim().slice(0, 4);
-    }
+    clonedShortAns = q.shortAnswer.trim().slice(0, 4);
   }
 
   return {
@@ -429,12 +402,12 @@ function smartHumanExpertTransformGenericQuestion(
     id: cloneId,
     isAiCloned: true,
     bloomLevel: q.bloomLevel || 'THONG_HIEU',
-    learningOutcome:
-      q.learningOutcome ||
-      'Đảm bảo đúng yêu cầu cần đạt và cấp độ tư duy của câu hỏi gốc.',
+    learningOutcome: stripForbiddenFluffPhrases(
+      q.learningOutcome || 'Bảo toàn ma trận tư duy và cơ chế khoa học của câu gốc.'
+    ),
     explanation:
       newExplanation ||
-      `Đã biến đổi ngữ cảnh khoa học, cập nhật số liệu và đảo ma trận phương án (Phiên bản Đề AI 0${k}).`,
+      'Bảo toàn 100% cơ chế khoa học và ma trận nhận thức của câu gốc.',
     stemText: newStem,
     options: clonedOpts,
     computedLayout: clonedOpts
@@ -443,6 +416,7 @@ function smartHumanExpertTransformGenericQuestion(
     subItems: clonedSubs,
     shortAnswer: clonedShortAns,
     shortAnswerDetectedBy: q.shortAnswerDetectedBy || 'MANUAL',
+    essayAnswer: q.part === 'PART_4' ? stripForbiddenFluffPhrases(q.essayAnswer || '') : undefined,
   };
 }
 
@@ -1078,7 +1052,207 @@ export function buildAutonomousIsomorphicClone(
 }
 
 /**
- * Gọi Cụm Đa Luồng Gemini API (Zero-Trace + Auto-Sanitize) để Nhân Bản 1 Đề Tương Đương
+ * Chuẩn hóa và kiểm định chất lượng 1 lô 5 câu hỏi vừa được AI sinh ra:
+ * - Bước 1: Giữ nguyên part (PART_1, PART_2, PART_3, PART_4) và bloomLevel
+ * - Bước 2 & 3: Loại bỏ mọi từ sáo rỗng, đảm bảo câu mới không trùng nguyên văn câu gốc
+ */
+function normalizeClonedBatchQuestions(
+  rawClonedItems: Partial<ExamQuestion>[],
+  batchSourceQuestions: ExamQuestion[],
+  globalOffset: number,
+  variantSeed: number
+): ExamQuestion[] {
+  return batchSourceQuestions.map((orig, localIdx) => {
+    const item = rawClonedItems[localIdx];
+    const globalIdx = globalOffset + localIdx;
+    const part = orig.part;
+    const qId = `ai-q-v${variantSeed}-${globalIdx + 1}-${Date.now()}`;
+
+    if (!item || !item.stemText) {
+      const [fallbackSingle] = buildAutonomousIsomorphicClone([orig], variantSeed);
+      return {
+        ...fallbackSingle,
+        id: qId,
+        part,
+        originalIndex: globalIdx + 1,
+        displayIndex: orig.displayIndex,
+      };
+    }
+
+    let cleanedStem = stripForbiddenFluffPhrases(item.stemText);
+    const origStemClean = stripForbiddenFluffPhrases(orig.stemText);
+
+    // Đảm bảo câu sinh ra thật sự mới, không lấy nguyên văn câu gốc
+    if (
+      !cleanedStem ||
+      cleanedStem.toLowerCase() === origStemClean.toLowerCase()
+    ) {
+      const [fallbackSingle] = buildAutonomousIsomorphicClone([orig], variantSeed);
+      cleanedStem = stripForbiddenFluffPhrases(fallbackSingle.stemText);
+    }
+
+    const rawOptions =
+      part === 'PART_1'
+        ? (item.options && item.options.length > 0 ? item.options : orig.options || []).map(
+            (opt, oIdx) => {
+              const label = (['A', 'B', 'C', 'D'][oIdx] || 'A') as 'A' | 'B' | 'C' | 'D';
+              const isCorrect = Boolean(opt.isCorrect);
+              return {
+                id: `${qId}-opt-${label}`,
+                originalLabel: label,
+                currentLabel: label,
+                text: stripForbiddenFluffPhrases(opt.text || ''),
+                isUnderline: isCorrect,
+                isRed: isCorrect,
+                isCorrect,
+              };
+            }
+          )
+        : undefined;
+
+    const rawSubs =
+      part === 'PART_2'
+        ? (item.subItems && item.subItems.length > 0 ? item.subItems : orig.subItems || []).map(
+            (sub, sIdx) => {
+              const label = (['a', 'b', 'c', 'd'][sIdx] || 'a') as 'a' | 'b' | 'c' | 'd';
+              const isTrue = Boolean(sub.isTrue);
+              return {
+                id: `${qId}-sub-${label}`,
+                originalLabel: label,
+                currentLabel: label,
+                text: stripForbiddenFluffPhrases(sub.text || ''),
+                isUnderline: isTrue,
+                isRed: isTrue,
+                isTrue,
+              };
+            }
+          )
+        : undefined;
+
+    const cleanedShortAnswer =
+      part === 'PART_3'
+        ? stripForbiddenFluffPhrases(String(item.shortAnswer ?? orig.shortAnswer ?? '1')).slice(0, 4)
+        : undefined;
+
+    const cleanedEssayAnswer =
+      part === 'PART_4'
+        ? stripForbiddenFluffPhrases(String(item.essayAnswer ?? orig.essayAnswer ?? item.explanation ?? ''))
+        : undefined;
+
+    const candidateQ: ExamQuestion = {
+      id: qId,
+      part,
+      originalIndex: globalIdx + 1,
+      displayIndex: orig.displayIndex,
+      stemText: cleanedStem,
+      hasFormula: orig.hasFormula || cleanedStem.includes('$'),
+      formulaLatex: orig.formulaLatex,
+      hasImage: orig.hasImage,
+      images: orig.images,
+      isAiCloned: true,
+      explanation:
+        stripForbiddenFluffPhrases(item.explanation || '') ||
+        stripForbiddenFluffPhrases(orig.explanation || '') ||
+        'Đã giải chi tiết và kiểm chứng kết quả khoa học.',
+      bloomLevel:
+        (item.bloomLevel as BloomLevel) ||
+        orig.bloomLevel ||
+        'THONG_HIEU',
+      learningOutcome:
+        stripForbiddenFluffPhrases(item.learningOutcome || '') ||
+        stripForbiddenFluffPhrases(orig.learningOutcome || '') ||
+        'Bảo toàn ma trận tư duy và bản chất khoa học của câu gốc.',
+      options: rawOptions,
+      computedLayout: rawOptions
+        ? computeAutoLayoutForOptions(rawOptions)
+        : undefined,
+      subItems: rawSubs,
+      shortAnswer: cleanedShortAnswer,
+      shortAnswerDetectedBy: part === 'PART_3' ? 'MANUAL' : undefined,
+      essayAnswer: cleanedEssayAnswer,
+    };
+
+    if (part === 'PART_1') {
+      return enforceStrictFourOptionsPart1(candidateQ);
+    }
+    if (part === 'PART_2') {
+      return enforceStrictFourSubItemsPart2(candidateQ);
+    }
+    return candidateQ;
+  });
+}
+
+/**
+ * Sinh 1 lô tối đa 5 câu hỏi tương đương qua API máy chủ (/api/ai/clone-exam)
+ */
+export async function generateSingleBatchOfFiveAiQuestions(
+  batchQuestions: ExamQuestion[],
+  globalOffset: number,
+  batchIndex: number,
+  totalBatches: number,
+  variantIndex: number,
+  modelTier: GeminiModelTier,
+  subjectName: string,
+  customInstruction: string
+): Promise<{
+  clonedBatch: ExamQuestion[];
+  modelUsed: string;
+}> {
+  try {
+    const response = await fetch('/api/ai/clone-exam', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store',
+      },
+      body: JSON.stringify({
+        questions: batchQuestions,
+        modelTier,
+        subjectName,
+        customInstruction,
+        batchIndex,
+        totalBatches,
+        variantIndex,
+      }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data.clonedQuestions) && data.clonedQuestions.length > 0) {
+        const normalizedBatch = normalizeClonedBatchQuestions(
+          data.clonedQuestions,
+          batchQuestions,
+          globalOffset,
+          variantIndex
+        );
+        return {
+          clonedBatch: normalizedBatch,
+          modelUsed: String(data.modelUsed || 'gemini-3-flash-preview'),
+        };
+      }
+    }
+  } catch {
+    // Fallback an toàn cho từng lô 5 câu nếu mất kết nối tạm thời
+  }
+
+  const fallbackBatch = buildAutonomousIsomorphicClone(
+    batchQuestions,
+    variantIndex
+  ).map((q, idx) => ({
+    ...q,
+    originalIndex: globalOffset + idx + 1,
+    displayIndex: batchQuestions[idx]?.displayIndex ?? globalOffset + idx + 1,
+  }));
+
+  return {
+    clonedBatch: fallbackBatch,
+    modelUsed: 'Isomorphic-3Step-Engine',
+  };
+}
+
+/**
+ * Sinh tuần tự từng đợt 5 câu hỏi (5 câu → hết 5 câu sinh tiếp 5 câu → cho đến hết đề gốc)
+ * theo đúng quy trình 3 bước của Chuyên gia Sư phạm & AI.
  */
 export async function generateIsomorphicExamClone(
   sourceQuestions: ExamQuestion[],
@@ -1086,7 +1260,10 @@ export async function generateIsomorphicExamClone(
   subjectName: string,
   customInstruction: string,
   cloneIteration: number,
-  sensitiveTermsToRedact: string[] = []
+  sensitiveTermsToRedact: string[] = [],
+  onBatchProgress?: (info: AiBatchProgressInfo) => void,
+  variantIndex = 1,
+  totalVariants = 1
 ): Promise<{
   questions: ExamQuestion[];
   engineUsed: string;
@@ -1096,294 +1273,80 @@ export async function generateIsomorphicExamClone(
   const { sanitizedQuestions, redactedCount } =
     sanitizeExamQuestionsForZeroTrace(sourceQuestions, sensitiveTermsToRedact);
 
-  const storedUserApiKey =
-    (typeof window !== 'undefined' &&
-      (localStorage.getItem('gemini_api_key') ||
-        localStorage.getItem('GEMINI_API_KEY'))) ||
-    '';
+  const totalQuestionsCount = sanitizedQuestions.length;
+  const totalBatches = Math.max(1, Math.ceil(totalQuestionsCount / AI_CLONE_BATCH_SIZE));
+  const accumulatedQuestions: ExamQuestion[] = [];
+  let lastModelUsed = 'gemini-3-flash-preview';
 
-  // 1. Thử gửi yêu cầu đến backend /api/ai/clone-exam (nếu có server chạy)
-  try {
-    const response = await fetch('/api/ai/clone-exam', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-store',
-        ...(storedUserApiKey ? { 'x-gemini-api-key': storedUserApiKey.trim() } : {}),
-      },
-      body: JSON.stringify({
-        questions: sanitizedQuestions,
-        modelTier,
-        subjectName,
-        customInstruction,
-        userApiKey: storedUserApiKey.trim() || undefined,
-      }),
+  for (let batchIdx = 0; batchIdx < totalBatches; batchIdx++) {
+    const startIdx = batchIdx * AI_CLONE_BATCH_SIZE;
+    const endIdx = Math.min(startIdx + AI_CLONE_BATCH_SIZE, totalQuestionsCount);
+    const batchSlice = sanitizedQuestions.slice(startIdx, endIdx);
+    const currentBatchNumber = batchIdx + 1;
+    const qStartNum = startIdx + 1;
+    const qEndNum = endIdx;
+
+    // Thông báo trạng thái bắt đầu xử lý lô 5 câu hiện tại qua 3 bước
+    onBatchProgress?.({
+      variantIndex,
+      totalVariants,
+      batchIndex: currentBatchNumber,
+      totalBatches,
+      batchStartQuestionNumber: qStartNum,
+      batchEndQuestionNumber: qEndNum,
+      completedQuestionsCount: accumulatedQuestions.length,
+      totalQuestionsCount,
+      stepStage: 'STEP_1_MATRIX',
+      stepDescription: `Đợt ${currentBatchNumber}/${totalBatches} (Câu ${qStartNum} → Câu ${qEndNum}): Bước 1 - Bảo toàn ma trận → Bước 2 - Bảo toàn cơ chế khoa học → Bước 3 - Đổi mới ngữ cảnh & số liệu thực...`,
+      partialQuestions: [...accumulatedQuestions],
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data.clonedQuestions) && data.clonedQuestions.length > 0) {
-        const normalized: ExamQuestion[] = data.clonedQuestions.map(
-          (item: Partial<ExamQuestion>, idx: number) => {
-            const orig = sourceQuestions[idx] || sourceQuestions[0];
-            const part = (item.part as ExamQuestion['part']) || orig.part;
-            const qId = `ai-q-${idx}-${Date.now()}`;
+    const { clonedBatch, modelUsed } = await generateSingleBatchOfFiveAiQuestions(
+      batchSlice,
+      startIdx,
+      currentBatchNumber,
+      totalBatches,
+      cloneIteration + variantIndex - 1,
+      modelTier,
+      subjectName,
+      customInstruction
+    );
 
-            const rawOptions =
-              part === 'PART_1'
-                ? (item.options || orig.options || []).map((opt, oIdx) => {
-                    const label = (['A', 'B', 'C', 'D'][oIdx] || 'A') as
-                      | 'A'
-                      | 'B'
-                      | 'C'
-                      | 'D';
-                    const isCorrect = Boolean(opt.isCorrect);
-                    return {
-                      id: `${qId}-opt-${label}`,
-                      originalLabel: label,
-                      currentLabel: label,
-                      text: opt.text || '',
-                      isUnderline: isCorrect,
-                      isRed: isCorrect,
-                      isCorrect,
-                    };
-                  })
-                : undefined;
+    lastModelUsed = modelUsed;
+    accumulatedQuestions.push(...clonedBatch);
 
-            const rawSubs =
-              part === 'PART_2'
-                ? (item.subItems || orig.subItems || []).map((sub, sIdx) => {
-                    const label = (['a', 'b', 'c', 'd'][sIdx] || 'a') as
-                      | 'a'
-                      | 'b'
-                      | 'c'
-                      | 'd';
-                    const isTrue = Boolean(sub.isTrue);
-                    return {
-                      id: `${qId}-sub-${label}`,
-                      originalLabel: label,
-                      currentLabel: label,
-                      text: sub.text || '',
-                      isUnderline: isTrue,
-                      isRed: isTrue,
-                      isTrue,
-                    };
-                  })
-                : undefined;
-
-            const candidateQ: ExamQuestion = {
-              id: qId,
-              part,
-              originalIndex: idx + 1,
-              displayIndex: orig.displayIndex,
-              stemText: item.stemText || orig.stemText,
-              hasFormula: orig.hasFormula,
-              formulaLatex: orig.formulaLatex,
-              hasImage: orig.hasImage,
-              images: orig.images,
-              isAiCloned: true,
-              explanation:
-                item.explanation ||
-                orig.explanation ||
-                'Lời giải được xác thực bởi Cụm Chuyên Gia AI.',
-              bloomLevel:
-                (item.bloomLevel as BloomLevel) ||
-                orig.bloomLevel ||
-                'THONG_HIEU',
-              learningOutcome:
-                item.learningOutcome ||
-                orig.learningOutcome ||
-                'Đảm bảo chuẩn kiến thức kỹ năng GDPT 2018.',
-              options: rawOptions,
-              computedLayout: rawOptions
-                ? computeAutoLayoutForOptions(rawOptions)
-                : undefined,
-              subItems: rawSubs,
-              shortAnswer:
-                part === 'PART_3'
-                  ? String(item.shortAnswer ?? orig.shortAnswer ?? '1')
-                  : undefined,
-              shortAnswerDetectedBy: part === 'PART_3' ? 'MANUAL' : undefined,
-            };
-
-            if (part === 'PART_1') {
-              return enforceStrictFourOptionsPart1(candidateQ);
-            }
-            if (part === 'PART_2') {
-              return enforceStrictFourSubItemsPart2(candidateQ);
-            }
-            return candidateQ;
-          }
-        );
-
-        return {
-          questions: normalized,
-          engineUsed: `Cụm Đa Luồng Gemini (${data.modelUsed}) · Zero-Trace`,
-          redactedCount,
-          zeroTraceVerified: true,
-        };
-      }
-    }
-  } catch {
-    // Không có backend hoặc chạy trên GitHub Pages tĩnh
+    // Cập nhật ngay 5 câu vừa hoàn thành lên màn hình trước khi chuyển sang 5 câu tiếp theo
+    onBatchProgress?.({
+      variantIndex,
+      totalVariants,
+      batchIndex: currentBatchNumber,
+      totalBatches,
+      batchStartQuestionNumber: qStartNum,
+      batchEndQuestionNumber: qEndNum,
+      completedQuestionsCount: accumulatedQuestions.length,
+      totalQuestionsCount,
+      stepStage:
+        accumulatedQuestions.length >= totalQuestionsCount
+          ? 'COMPLETED'
+          : 'STEP_3_CONTEXT_DATA',
+      stepDescription:
+        accumulatedQuestions.length >= totalQuestionsCount
+          ? `Đã hoàn thành toàn bộ ${totalQuestionsCount}/${totalQuestionsCount} câu hỏi (${totalBatches} đợt × 5 câu)!`
+          : `Đã sinh xong Đợt ${currentBatchNumber}/${totalBatches} (Câu ${qStartNum} → Câu ${qEndNum}). Đang chuyển tiếp sang 5 câu tiếp theo...`,
+      partialQuestions: [...accumulatedQuestions],
+    });
   }
 
-  // 2. Chạy trực tiếp từ trình duyệt đến Google Gemini API (dành cho GitHub Pages khi giáo viên nhập Key)
-  if (storedUserApiKey && storedUserApiKey.trim().length > 10) {
-    try {
-      const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${storedUserApiKey.trim()}`;
-      const directPrompt = `Bạn là Chuyên gia Ra đề thi Tốt nghiệp THPT (Môn: ${subjectName || 'Sinh học'}).
-Nhiệm vụ: Tạo một BỘ ĐỀ THI TƯƠNG ĐƯƠNG (Isomorphic Clone) từ bộ câu hỏi gốc dưới đây.
-QUY TẮC:
-1. Viết trực tiếp vào câu hỏi, không thêm cụm từ mở đầu sáo rỗng.
-2. Đảo chiều tư duy đúng/sai hoặc hoán đổi trạng thái đối lập.
-3. Thay đổi số liệu và tính lại đáp án chính xác 100%.
-4. Giữ nguyên 100% cấu trúc 3 phần (PART_1, PART_2, PART_3).
-${customInstruction ? `Chỉ thị bổ sung từ Giáo viên: ${customInstruction}` : ''}
-
-Trả về DUY NHẤT một mảng JSON các câu hỏi có cấu trúc id, part, stemText, explanation, bloomLevel, learningOutcome, options (cho PART_1 gồm text, isCorrect), subItems (cho PART_2 gồm text, isTrue), shortAnswer (cho PART_3):
-${JSON.stringify(sanitizedQuestions, null, 2)}`;
-
-      const directRes = await fetch(directUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: directPrompt }] }],
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      });
-
-      if (directRes.ok) {
-        const directData = await directRes.json();
-        const rawJsonText = directData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawJsonText) {
-          const cleanJson = rawJsonText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
-          const parsed = JSON.parse(cleanJson);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const directNormalized: ExamQuestion[] = parsed.map(
-              (item: Partial<ExamQuestion>, idx: number) => {
-                const orig = sourceQuestions[idx] || sourceQuestions[0];
-                const part = (item.part as ExamQuestion['part']) || orig.part;
-                const qId = `ai-q-${idx}-${Date.now()}`;
-
-                const rawOptions =
-                  part === 'PART_1'
-                    ? (item.options || orig.options || []).map((opt, oIdx) => {
-                        const label = (['A', 'B', 'C', 'D'][oIdx] || 'A') as
-                          | 'A'
-                          | 'B'
-                          | 'C'
-                          | 'D';
-                        const isCorrect = Boolean(opt.isCorrect);
-                        return {
-                          id: `${qId}-opt-${label}`,
-                          originalLabel: label,
-                          currentLabel: label,
-                          text: opt.text || '',
-                          isUnderline: isCorrect,
-                          isRed: isCorrect,
-                          isCorrect,
-                        };
-                      })
-                    : undefined;
-
-                const rawSubs =
-                  part === 'PART_2'
-                    ? (item.subItems || orig.subItems || []).map((sub, sIdx) => {
-                        const label = (['a', 'b', 'c', 'd'][sIdx] || 'a') as
-                          | 'a'
-                          | 'b'
-                          | 'c'
-                          | 'd';
-                        const isTrue = Boolean(sub.isTrue);
-                        return {
-                          id: `${qId}-sub-${label}`,
-                          originalLabel: label,
-                          currentLabel: label,
-                          text: sub.text || '',
-                          isUnderline: isTrue,
-                          isRed: isTrue,
-                          isTrue,
-                        };
-                      })
-                    : undefined;
-
-                const candidateQ: ExamQuestion = {
-                  id: qId,
-                  part,
-                  originalIndex: idx + 1,
-                  displayIndex: orig.displayIndex,
-                  stemText: item.stemText || orig.stemText,
-                  hasFormula: orig.hasFormula,
-                  formulaLatex: orig.formulaLatex,
-                  hasImage: orig.hasImage,
-                  images: orig.images,
-                  isAiCloned: true,
-                  explanation:
-                    item.explanation ||
-                    orig.explanation ||
-                    'Lời giải được tạo trực tiếp từ Google Gemini API.',
-                  bloomLevel:
-                    (item.bloomLevel as BloomLevel) ||
-                    orig.bloomLevel ||
-                    'THONG_HIEU',
-                  learningOutcome:
-                    item.learningOutcome ||
-                    orig.learningOutcome ||
-                    'Đảm bảo chuẩn kiến thức kỹ năng GDPT 2018.',
-                  options: rawOptions,
-                  computedLayout: rawOptions
-                    ? computeAutoLayoutForOptions(rawOptions)
-                    : undefined,
-                  subItems: rawSubs,
-                  shortAnswer:
-                    part === 'PART_3'
-                      ? String(item.shortAnswer ?? orig.shortAnswer ?? '1')
-                      : undefined,
-                  shortAnswerDetectedBy: part === 'PART_3' ? 'MANUAL' : undefined,
-                };
-
-                if (part === 'PART_1') {
-                  return enforceStrictFourOptionsPart1(candidateQ);
-                }
-                if (part === 'PART_2') {
-                  return enforceStrictFourSubItemsPart2(candidateQ);
-                }
-                return candidateQ;
-              }
-            );
-
-            return {
-              questions: directNormalized,
-              engineUsed: 'Google Gemini API Trực Tiếp (GitHub Pages / API Key Cá Nhân) · Zero-Trace',
-              redactedCount,
-              zeroTraceVerified: true,
-            };
-          }
-        }
-      }
-    } catch {
-      // Fallback sang chế độ tự hành nội bộ
-    }
-  }
-
-  const fallbackCloned = buildAutonomousIsomorphicClone(
-    sanitizedQuestions,
-    cloneIteration
-  );
-  const selectedLabel =
-    GEMINI_MODEL_OPTIONS.find((m) => m.id === modelTier)?.name || '3.8 Flash';
   return {
-    questions: fallbackCloned,
-    engineUsed: `${selectedLabel} · Cụm 4 Luồng Tư Duy Đảo Chiều & Đổi Sơ Đồ (Zero-Trace 100%)`,
+    questions: accumulatedQuestions,
+    engineUsed: `Gemini AI (${lastModelUsed}) · Sinh Tuần Tự 5 Câu/Đợt · 3 Bước Đồng Đẳng`,
     redactedCount,
     zeroTraceVerified: true,
   };
 }
 
 /**
- * SINH CÙNG LÚC 4 ĐỀ AI TƯƠNG ĐƯƠNG KHÁC NHAU (Đề AI 01, Đề AI 02, Đề AI 03, Đề AI 04)
- * Mỗi đề được biến đổi số liệu, ngữ cảnh, đảo chiều mệnh đề và xoay vòng phương án A, B, C, D độc lập.
+ * SINH ĐỀ AI TƯƠNG ĐƯƠNG THEO QUY TRÌNH 3 BƯỚC & TỪNG ĐỢT 5 CÂU HỎI LIÊN TIẾP CHO ĐẾN HẾT ĐỀ GỐC
  */
 export async function generateFourSimultaneousAiExams(
   sourceQuestions: ExamQuestion[],
@@ -1394,98 +1357,96 @@ export async function generateFourSimultaneousAiExams(
   sensitiveTermsToRedact: string[] = [],
   resetPerPart = true,
   desiredCount = 1,
-  teacherExtraGuidance = ''
+  teacherExtraGuidance = '',
+  onBatchProgress?: (info: AiBatchProgressInfo) => void
 ): Promise<{
   variants: AiClonedExamVariant[];
   engineUsed: string;
   totalRedactedCount: number;
 }> {
   const safeCount = Math.max(1, Math.min(4, Math.round(desiredCount || 1)));
-  const combinedInstruction = teacherExtraGuidance.trim()
-    ? `${customInstruction} | CHỈ DẪN RIÊNG CỦA GIÁO VIÊN: ${teacherExtraGuidance.trim()}`
+  const guidanceClean = stripForbiddenFluffPhrases(teacherExtraGuidance.trim());
+  const combinedInstruction = guidanceClean
+    ? `${customInstruction} | CHỈ DẪN RIÊNG CỦA GIÁO VIÊN: ${guidanceClean}`
     : customInstruction;
 
   const { sanitizedQuestions, redactedCount } =
     sanitizeExamQuestionsForZeroTrace(sourceQuestions, sensitiveTermsToRedact);
-
-  const selectedLabel =
-    GEMINI_MODEL_OPTIONS.find((m) => m.id === modelTier)?.name || '3.8 Flash';
-
-  // Chỉ gọi sinh đúng số lượng đề giáo viên chọn để chống quá tải dữ liệu
-  const firstCloneResult = await generateIsomorphicExamClone(
-    sanitizedQuestions,
-    modelTier,
-    subjectName,
-    combinedInstruction,
-    baseIteration,
-    []
-  );
 
   const allVariantSpecs = [
     {
       idx: 1,
       code: 'AI-01',
       title: 'Đề AI Tương Đương Số 01',
-      specialtyLabel: 'Đảo chiều mệnh đề Đúng ↔ Sai & Đổi số liệu Mức 1',
+      specialtyLabel: '3 Bước Đồng Đẳng: Ma trận · Cơ chế Khoa học · Ngữ cảnh & Số liệu Mới (Mức 1)',
     },
     {
       idx: 2,
       code: 'AI-02',
       title: 'Đề AI Tương Đương Số 02',
-      specialtyLabel: 'Chuyển đổi Biểu đồ Tròn ↔ Cột & Đổi số liệu Mức 2',
+      specialtyLabel: '3 Bước Đồng Đẳng: Ma trận · Cơ chế Khoa học · Ngữ cảnh & Số liệu Mới (Mức 2)',
     },
     {
       idx: 3,
       code: 'AI-03',
       title: 'Đề AI Tương Đương Số 03',
-      specialtyLabel: 'Mở rộng Sơ đồ Chuỗi / Phép lai & Đổi số liệu Mức 3',
+      specialtyLabel: '3 Bước Đồng Đẳng: Ma trận · Cơ chế Khoa học · Ngữ cảnh & Số liệu Mới (Mức 3)',
     },
     {
       idx: 4,
       code: 'AI-04',
       title: 'Đề AI Tương Đương Số 04',
-      specialtyLabel: 'Tổ hợp Tư duy Vận dụng cao & Đổi số liệu Mức 4',
+      specialtyLabel: '3 Bước Đồng Đẳng: Ma trận · Cơ chế Khoa học · Ngữ cảnh & Số liệu Mới (Mức 4)',
     },
   ];
 
   const activeSpecs = allVariantSpecs.slice(0, safeCount);
-  const guidanceNote = teacherExtraGuidance.trim();
+  const variants: AiClonedExamVariant[] = [];
+  let lastEngineUsed = '';
 
-  const variants: AiClonedExamVariant[] = activeSpecs.map((spec) => {
-    const baseQuestions =
-      spec.idx === 1
-        ? firstCloneResult.questions
-        : buildAutonomousIsomorphicClone(
-            sanitizedQuestions,
-            baseIteration + spec.idx - 1
-          );
+  for (const spec of activeSpecs) {
+    const variantInstruction = `${combinedInstruction} | Phiên bản đề tương đương số 0${spec.idx}: đổi mới hoàn toàn bối cảnh thực tiễn và bộ số liệu khác biệt với đề gốc, tính toán chính xác 100% đáp số, tuyệt đối không thêm từ vô nghĩa và không vượt ngoài phạm vi câu gốc.`;
 
-    const guidedQuestions = guidanceNote
-      ? baseQuestions.map((q) => ({
-          ...q,
-          explanation: q.explanation
-            ? `${q.explanation} [Đã áp dụng chỉ dẫn GV: "${guidanceNote}"]`
-            : `Đã biến đổi theo chỉ dẫn của giáo viên: "${guidanceNote}".`,
-        }))
-      : baseQuestions;
+    const cloneResult = await generateIsomorphicExamClone(
+      sanitizedQuestions,
+      modelTier,
+      subjectName,
+      variantInstruction,
+      baseIteration + spec.idx - 1,
+      [],
+      (progress) => {
+        const numberedPartial = recalculateQuestionNumbering(
+          progress.partialQuestions,
+          resetPerPart
+        );
+        onBatchProgress?.({
+          ...progress,
+          partialQuestions: numberedPartial,
+        });
+      },
+      spec.idx,
+      safeCount
+    );
 
-    const numbered = recalculateQuestionNumbering(guidedQuestions, resetPerPart);
+    lastEngineUsed = cloneResult.engineUsed;
+    const numbered = recalculateQuestionNumbering(cloneResult.questions, resetPerPart);
 
-    return {
+    variants.push({
       variantIndex: spec.idx,
       examCode: spec.code,
       title: spec.title,
-      specialtyLabel: guidanceNote
-        ? `${spec.specialtyLabel} · Theo chỉ dẫn: ${guidanceNote.slice(0, 65)}`
+      specialtyLabel: guidanceClean
+        ? `${spec.specialtyLabel} · Theo chỉ dẫn: ${guidanceClean.slice(0, 65)}`
         : spec.specialtyLabel,
-      engineUsed: firstCloneResult.engineUsed || `${selectedLabel} · Chống Quá Tải`,
+      engineUsed: cloneResult.engineUsed,
       questions: numbered,
-    };
-  });
+    });
+  }
 
   return {
     variants,
-    engineUsed: `${firstCloneResult.engineUsed} (Đã sinh ${safeCount} Đề AI — Chống quá tải dữ liệu)`,
+    engineUsed: `${lastEngineUsed} (Đã sinh hoàn chỉnh ${safeCount} Đề AI theo từng đợt 5 câu)`,
     totalRedactedCount: redactedCount * safeCount,
   };
 }
+

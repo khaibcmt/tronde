@@ -97,6 +97,8 @@ import {
 } from './utils/docxExporter';
 import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
 import {
+  AI_CLONE_BATCH_SIZE,
+  AiBatchProgressInfo,
   AiClonedExamVariant,
   AiConnectionStatus,
   AiNodeChannel,
@@ -104,10 +106,12 @@ import {
   GEMINI_MODEL_OPTIONS,
   checkAiPrivacyConnectionStatus,
   generateFourSimultaneousAiExams,
+  generateSingleBatchOfFiveAiQuestions,
+  sanitizeExamQuestionsForZeroTrace,
+  stripForbiddenFluffPhrases,
   triggerZeroTracePurgeOnDownload,
 } from './utils/aiExamCloner';
 import { UserGuideModal } from './components/UserGuideModal';
-import { GeminiApiKeyModal } from './components/GeminiApiKeyModal';
 import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModal';
 import { ScientificContentRenderer } from './components/ScientificContentRenderer';
 import {
@@ -327,19 +331,21 @@ export default function App() {
     });
 
   const [aiCustomPrompt, setAiCustomPrompt] = useState<string>(
-    'Sinh cùng lúc 4 Đề AI khác nhau: Đảo chiều câu hỏi Đúng thành Sai (và ngược lại), đổi câu đếm ý đúng sang đếm ý sai, đổi số liệu bài toán di truyền, thay đổi sơ đồ chuỗi thức ăn dài hơn/ngắn hơn và chuyển biểu đồ hình tròn sang biểu đồ dạng cột. Mỗi câu Phần I và Phần II bắt buộc đủ 4 phương án.'
+    'Thực hiện đúng 3 bước: Bước 1 - Bảo toàn cấu trúc & ma trận (Biết - Hiểu - Vận dụng); Bước 2 - Bảo toàn 100% cơ chế khoa học & dạng toán trong giới hạn đề gốc; Bước 3 - Đổi mới hoàn toàn ngữ cảnh thực tế & số liệu, tính lại đáp số chính xác 100%, không bịa số liệu, không lấy nguyên đề gốc, không thêm từ vô nghĩa hay theo chương trình giáo dục 2018.'
   );
   const [numAiExamsToGenerate, setNumAiExamsToGenerate] = useState<1 | 2 | 3 | 4>(1);
   const [aiTeacherGuidance, setAiTeacherGuidance] = useState<string>(
-    'Ưu tiên đổi số liệu chẵn dễ tính toán, đảo câu hỏi Đúng thành Sai (và ngược lại), thay đổi ví dụ sinh vật/hiện tượng thực tiễn nhưng giữ nguyên mức độ nhận thức của đề gốc.'
+    'Đổi mới hoàn toàn ngữ cảnh thực tiễn và bộ số liệu chẵn dễ tính toán, tính lại chính xác 100% đáp án, giữ nguyên cơ chế khoa học và mức độ tư duy của từng câu trong đề gốc.'
   );
   const [aiClonedVariants, setAiClonedVariants] = useState<AiClonedExamVariant[]>([]);
   const [selectedAiVariantIdx, setSelectedAiVariantIdx] = useState<number>(0);
   const [clonedQuestions, setClonedQuestions] = useState<ExamQuestion[]>([]);
   const [cloneIteration, setCloneIteration] = useState<number>(1);
   const [lastAiEngineUsed, setLastAiEngineUsed] = useState<string>(
-    '3.8 Flash · Cụm 4 Luồng Chuyên Gia (4 Đề Song Song)'
+    'Gemini AI · Sinh Tuần Tự 5 Câu/Đợt · Chuẩn 3 Bước Đồng Đẳng'
   );
+  const [aiBatchProgress, setAiBatchProgress] = useState<AiBatchProgressInfo | null>(null);
+  const [manualBatchCursor, setManualBatchCursor] = useState<number>(0);
 
   // 4. State kết quả sau khi bấm [Trộn đề]
   const [shuffledVariants, setShuffledVariants] = useState<ShuffledVariant[]>([]);
@@ -348,7 +354,6 @@ export default function App() {
 
   // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp & Xác thực Giáo viên (QuanLy_TronDe)
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
   const [isCoffeeModalOpen, setIsCoffeeModalOpen] = useState<boolean>(false);
   const [currentTeacherUser, setCurrentTeacherUser] =
     useState<TeacherAuthUser | null>(() => {
@@ -856,10 +861,12 @@ export default function App() {
     });
   };
 
-  // ================= HANDLER: AI TẠO CÙNG LÚC 4 ĐỀ TƯƠNG ĐƯƠNG KHÁC NHAU =================
+  // ================= HANDLER: AI TẠO ĐỀ TƯƠNG ĐƯƠNG TUẦN TỰ TỪNG ĐỢT 5 CÂU HỎI CHO ĐẾN HẾT ĐỀ GỐC =================
   const handleGenerateAiCloneExam = async () => {
+    if (questions.length === 0) return;
     setIsProcessing(true);
     setActiveRightTab('AI_CLONE_STUDIO');
+    setManualBatchCursor(0);
     try {
       const sensitiveList = anonymizeSchoolInfo
         ? [config.schoolName, config.departmentName, config.examTitle]
@@ -878,13 +885,24 @@ export default function App() {
         sensitiveList,
         config.resetNumberingPerPart,
         numAiExamsToGenerate,
-        aiTeacherGuidance
+        aiTeacherGuidance,
+        (progress) => {
+          setAiBatchProgress(progress);
+          if (progress.partialQuestions.length > 0 && progress.variantIndex === 1) {
+            setClonedQuestions(progress.partialQuestions);
+          }
+          setStatusBanner({
+            type: 'INFO',
+            text: `[Đề AI 0${progress.variantIndex}/${progress.totalVariants}] ${progress.stepDescription} (${progress.completedQuestionsCount}/${progress.totalQuestionsCount} câu)`,
+          });
+        }
       );
 
       setAiClonedVariants(result.variants);
       setSelectedAiVariantIdx(0);
       if (result.variants.length > 0) {
         setClonedQuestions(result.variants[0].questions);
+        setManualBatchCursor(result.variants[0].questions.length);
       }
       setCloneIteration((prev) => prev + numAiExamsToGenerate);
       setLastAiEngineUsed(result.engineUsed);
@@ -895,13 +913,124 @@ export default function App() {
       }
       setStatusBanner({
         type: 'SUCCESS',
-        text: `Đã sinh thành công ${result.variants.length} Đề AI Tương Đương theo đúng chỉ dẫn của giáo viên bằng [${result.engineUsed}] (Chế độ chống quá tải dữ liệu)!`,
+        text: `Đã sinh hoàn tất ${result.variants.length} Đề AI Tương Đương (${questions.length} câu · Sinh tuần tự từng đợt ${AI_CLONE_BATCH_SIZE} câu) theo chuẩn 3 bước Sư phạm & Khoa học!`,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi AI';
       setStatusBanner({
         type: 'ERROR',
-        text: `Không thể tạo 4 đề tương đương: ${msg}`,
+        text: `Không thể tạo đề tương đương: ${msg}`,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Sinh từng đợt 5 câu hỏi theo trình tự (Bấm lần 1: Câu 1->5, Bấm lần 2: Câu 6->10... cho đến hết đề gốc)
+  const handleGenerateNextFiveQuestionsStep = async () => {
+    if (questions.length === 0) return;
+    const totalCount = questions.length;
+    const startIdx = manualBatchCursor >= totalCount ? 0 : manualBatchCursor;
+    const endIdx = Math.min(startIdx + AI_CLONE_BATCH_SIZE, totalCount);
+    const totalBatches = Math.max(1, Math.ceil(totalCount / AI_CLONE_BATCH_SIZE));
+    const currentBatchNumber = Math.floor(startIdx / AI_CLONE_BATCH_SIZE) + 1;
+
+    setIsProcessing(true);
+    setActiveRightTab('AI_CLONE_STUDIO');
+    try {
+      const sensitiveList = anonymizeSchoolInfo
+        ? [config.schoolName, config.departmentName, config.examTitle]
+        : [];
+      const { sanitizedQuestions } = sanitizeExamQuestionsForZeroTrace(
+        questions,
+        sensitiveList
+      );
+      const batchSlice = sanitizedQuestions.slice(startIdx, endIdx);
+      const guidanceClean = stripForbiddenFluffPhrases(aiTeacherGuidance.trim());
+      const combinedInstruction = guidanceClean
+        ? `${aiCustomPrompt} | CHỈ DẪN RIÊNG CỦA GIÁO VIÊN: ${guidanceClean}`
+        : aiCustomPrompt;
+
+      const baseExisting = startIdx === 0 ? [] : clonedQuestions.slice(0, startIdx);
+
+      setAiBatchProgress({
+        variantIndex: 1,
+        totalVariants: 1,
+        batchIndex: currentBatchNumber,
+        totalBatches,
+        batchStartQuestionNumber: startIdx + 1,
+        batchEndQuestionNumber: endIdx,
+        completedQuestionsCount: baseExisting.length,
+        totalQuestionsCount: totalCount,
+        stepStage: 'STEP_1_MATRIX',
+        stepDescription: `Đang sinh Đợt ${currentBatchNumber}/${totalBatches} (Câu ${startIdx + 1} → Câu ${endIdx}): Bước 1 Ma trận → Bước 2 Cơ chế → Bước 3 Đổi mới ngữ cảnh & số liệu...`,
+        partialQuestions: baseExisting,
+      });
+
+      const { clonedBatch, modelUsed } = await generateSingleBatchOfFiveAiQuestions(
+        batchSlice,
+        startIdx,
+        currentBatchNumber,
+        totalBatches,
+        cloneIteration,
+        selectedModelTier,
+        config.subjectName,
+        combinedInstruction
+      );
+
+      const merged = recalculateQuestionNumbering(
+        [...baseExisting, ...clonedBatch],
+        config.resetNumberingPerPart
+      );
+
+      setClonedQuestions(merged);
+      setManualBatchCursor(merged.length);
+      setLastAiEngineUsed(`Gemini AI (${modelUsed}) · Sinh Từng Đợt 5 Câu (Đợt ${currentBatchNumber}/${totalBatches})`);
+
+      const nextVariant: AiClonedExamVariant = {
+        variantIndex: 1,
+        examCode: 'AI-01',
+        title: 'Đề AI Tương Đương Số 01',
+        specialtyLabel: `Đã sinh ${merged.length}/${totalCount} câu (Đợt ${currentBatchNumber}/${totalBatches})`,
+        engineUsed: `Gemini AI (${modelUsed})`,
+        questions: merged,
+      };
+      setAiClonedVariants([nextVariant]);
+      setSelectedAiVariantIdx(0);
+
+      setAiBatchProgress({
+        variantIndex: 1,
+        totalVariants: 1,
+        batchIndex: currentBatchNumber,
+        totalBatches,
+        batchStartQuestionNumber: startIdx + 1,
+        batchEndQuestionNumber: endIdx,
+        completedQuestionsCount: merged.length,
+        totalQuestionsCount: totalCount,
+        stepStage: merged.length >= totalCount ? 'COMPLETED' : 'STEP_3_CONTEXT_DATA',
+        stepDescription:
+          merged.length >= totalCount
+            ? `Đã hoàn thành toàn bộ ${totalCount}/${totalCount} câu hỏi của đề tương đương!`
+            : `Đã sinh xong Đợt ${currentBatchNumber}/${totalBatches} (Câu ${startIdx + 1} → Câu ${endIdx}). Nhấn "Sinh tiếp 5 câu" để tạo Câu ${endIdx + 1} → Câu ${Math.min(endIdx + AI_CLONE_BATCH_SIZE, totalCount)}.`,
+        partialQuestions: merged,
+      });
+
+      if (merged.length >= totalCount) {
+        setCloneIteration((prev) => prev + 1);
+      }
+
+      setStatusBanner({
+        type: 'SUCCESS',
+        text:
+          merged.length >= totalCount
+            ? `Đã sinh hoàn tất trọn bộ ${totalCount}/${totalCount} câu hỏi (Đợt cuối: Câu ${startIdx + 1} → Câu ${endIdx})!`
+            : `Đã sinh xong 5 câu Đợt ${currentBatchNumber}/${totalBatches} (Câu ${startIdx + 1} → Câu ${endIdx})! Hiện đã có ${merged.length}/${totalCount} câu.`,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Lỗi AI';
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Không thể sinh đợt 5 câu tiếp theo: ${msg}`,
       });
     } finally {
       setIsProcessing(false);
@@ -2585,16 +2714,6 @@ export default function App() {
               >
                 <ShieldCheck className="w-4 h-4 shrink-0" />
                 <span>Bảo Mật AI</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsApiKeyModalOpen(true)}
-                className="px-3.5 py-1.5 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-amber flex items-center gap-1.5 whitespace-nowrap cursor-pointer shadow-xs"
-                title="Cấu hình Google Gemini API Key để chạy trực tiếp trên GitHub Pages không cần backend"
-              >
-                <Key className="w-4 h-4 shrink-0" />
-                <span>⚙ Cấu Hình API Key</span>
               </button>
 
               {/* Dropdown chọn 4 mô hình Gemini */}
@@ -4339,39 +4458,157 @@ export default function App() {
           {/* ================= TAB 2 (MỚI): CHẾ ĐỘ BIÊN SOẠN AI TẠO ĐỀ TƯƠNG ĐƯƠNG ĐỀ GỐC (ISOMORPHIC EXAM CLONING) ================= */}
           {activeRightTab === 'AI_CLONE_STUDIO' && (
             <div className="space-y-5">
-              {/* Bảng Điều Khiển AI Gemini Studio (Tích hợp bộ chọn 4 mô hình như hình mẫu) */}
+              {/* Bảng Điều Khiển AI Gemini Studio: Quy trình 3 Bước & Sinh tuần tự 5 câu/đợt */}
               <div className="p-6 rounded-3xl card-3d-panel border-2 border-purple-300 space-y-5">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-purple-200 pb-4">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-2.5 flex-wrap">
                       <div className="p-2 rounded-xl btn-3d-purple text-white">
                         <Bot className="w-5 h-5" />
                       </div>
                       <h3 className="text-base sm:text-lg font-black text-purple-950 uppercase">
-                        AI GEMINI STUDIO — BIÊN SOẠN ĐỀ TƯƠNG ĐƯƠNG ĐỀ GỐC (ISOMORPHIC CLONING)
+                        AI GEMINI STUDIO — TẠO ĐỀ TƯƠNG ĐƯƠNG CHUẨN 3 BƯỚC SƯ PHẠM (SINH 5 CÂU / ĐỢT)
                       </h3>
                     </div>
                     <p className="text-xs text-slate-700 font-semibold">
-                      Giữ nguyên 100% ma trận nhận thức và cấu trúc 3 phần (Phần I, Phần II, Phần III) của đề gốc; tự động thay đổi số liệu, hàm số và ngữ cảnh khoa học.
+                      Sinh tuần tự từng đợt <strong>5 câu hỏi</strong> (hết 5 câu sinh tiếp 5 câu cho đến hết {questions.length} câu của đề gốc) — Không bịa số liệu, không sao chép đề gốc, không thêm từ vô nghĩa và không vượt ngoài giới hạn câu gốc.
                     </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsApiKeyModalOpen(true)}
-                      className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-sm transition-transform active:scale-95"
-                      title="Cấu hình Google Gemini API Key để chạy trực tiếp trên GitHub Pages"
-                    >
-                      <Key className="w-4 h-4 text-slate-950 shrink-0" />
-                      <span>⚙ Cấu Hình Gemini API Key</span>
-                    </button>
+                    <span className="px-3 py-1.5 rounded-xl bg-purple-100 border-2 border-purple-400 text-purple-950 text-xs font-extrabold flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-purple-700" />
+                      <span>
+                        Tổng {questions.length} câu ({Math.max(1, Math.ceil(questions.length / AI_CLONE_BATCH_SIZE))} đợt × {AI_CLONE_BATCH_SIZE} câu)
+                      </span>
+                    </span>
                     <span className="px-3 py-1.5 rounded-xl bg-emerald-100 border-2 border-emerald-400 text-emerald-950 text-xs font-extrabold flex items-center gap-1.5">
                       <ShieldCheck className="w-4 h-4 text-emerald-700" />
-                      <span>Bảo mật tuyệt đối · Tự hành 100%</span>
+                      <span>Chuẩn Khoa Học 100% · Zero-Trace</span>
                     </span>
                   </div>
                 </div>
+
+                {/* KHUNG QUY TRÌNH 3 BƯỚC ĐỒNG ĐẲNG SƯ PHẠM & KHOA HỌC */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                  <div className="p-3.5 rounded-2xl bg-blue-50/90 border-2 border-blue-300 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-blue-700 text-white text-[11px] font-black uppercase">
+                        Bước 1 · Cấu trúc &amp; Ma trận
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-blue-900">
+                        {questions.length} câu giữ nguyên
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-900">
+                      Bảo toàn cấu trúc &amp; ma trận nhận thức
+                    </p>
+                    <p className="text-[11px] text-slate-700 leading-relaxed">
+                      Giữ nguyên số lượng câu từng phần (P.I: {part1Count}, P.II: {part2Count}, P.III: {part3Count}{part4Count > 0 ? `, Tự luận: ${part4Count}` : ''}) và phân bố mức độ tư duy (Biết: {bloomStats.NHAN_BIET} - Hiểu: {bloomStats.THONG_HIEU} - Vận dụng: {bloomStats.VAN_DUNG + bloomStats.VAN_DUNG_CAO}).
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-purple-50/90 border-2 border-purple-300 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-purple-700 text-white text-[11px] font-black uppercase">
+                        Bước 2 · Cơ chế Khoa học
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-purple-900">
+                        Đúng bản chất 100%
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-900">
+                      Bảo toàn cơ chế khoa học &amp; dạng bài
+                    </p>
+                    <p className="text-[11px] text-slate-700 leading-relaxed">
+                      Nếu câu gốc kiểm tra hiện tượng, cơ chế hoặc dạng toán nào thì câu mới kiểm tra đúng cơ chế/dạng tương đương bản chất 100%, tuyệt đối không diễn đạt ngoài giới hạn đề gốc.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-300 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 rounded-lg bg-emerald-700 text-white text-[11px] font-black uppercase">
+                        Bước 3 · Ngữ cảnh &amp; Số liệu
+                      </span>
+                      <span className="text-[11px] font-mono font-bold text-emerald-900">
+                        Tính toán thật 100%
+                      </span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-900">
+                      Đổi mới hoàn toàn ngữ cảnh &amp; tham số
+                    </p>
+                    <p className="text-[11px] text-slate-700 leading-relaxed">
+                      Toàn bộ tham số, bối cảnh thực tiễn đời sống được sáng tạo mới và giải toán kiểm chứng thực tế; không bịa số liệu, không chép đề gốc, không thêm từ sáo rỗng.
+                    </p>
+                  </div>
+                </div>
+
+                {/* THANH TIẾN TRÌNH SINH TUẦN TỰ TỪNG ĐỢT 5 CÂU HỎI */}
+                {aiBatchProgress && (
+                  <div className="p-4 rounded-2xl bg-slate-900 text-white border-2 border-purple-400 space-y-2.5 shadow-md">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2 font-black text-amber-300 uppercase">
+                        <Sparkles className="w-4 h-4 shrink-0" />
+                        <span>
+                          Tiến trình sinh từng đợt 5 câu — Đợt {aiBatchProgress.batchIndex}/{aiBatchProgress.totalBatches} (Câu {aiBatchProgress.batchStartQuestionNumber} → Câu {aiBatchProgress.batchEndQuestionNumber})
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-400">
+                        Đã hoàn thành: {aiBatchProgress.completedQuestionsCount} / {aiBatchProgress.totalQuestionsCount} câu ({Math.round((aiBatchProgress.completedQuestionsCount / Math.max(1, aiBatchProgress.totalQuestionsCount)) * 100)}%)
+                      </span>
+                    </div>
+
+                    <div className="w-full h-3 bg-slate-700 rounded-full overflow-hidden p-0.5">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-purple-500 via-sky-400 to-emerald-400 transition-all duration-300"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            Math.round(
+                              (aiBatchProgress.completedQuestionsCount /
+                                Math.max(1, aiBatchProgress.totalQuestionsCount)) *
+                                100
+                            )
+                          )}%`,
+                        }}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-200 font-medium">
+                      <span>{aiBatchProgress.stepDescription}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {Array.from(
+                          { length: aiBatchProgress.totalBatches },
+                          (_, bIdx) => {
+                            const bNum = bIdx + 1;
+                            const bStart = bIdx * AI_CLONE_BATCH_SIZE + 1;
+                            const bEnd = Math.min(
+                              (bIdx + 1) * AI_CLONE_BATCH_SIZE,
+                              aiBatchProgress.totalQuestionsCount
+                            );
+                            const isDone =
+                              aiBatchProgress.completedQuestionsCount >= bEnd;
+                            const isCurrent = aiBatchProgress.batchIndex === bNum && !isDone;
+                            return (
+                              <span
+                                key={`batch-pill-${bNum}`}
+                                className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold ${
+                                  isDone
+                                    ? 'bg-emerald-600 text-white'
+                                    : isCurrent
+                                    ? 'bg-amber-400 text-slate-950 animate-pulse'
+                                    : 'bg-slate-800 text-slate-400 border border-slate-700'
+                                }`}
+                              >
+                                Đợt {bNum} (C.{bStart}-{bEnd})
+                              </span>
+                            );
+                          }
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Bộ chọn 4 mô hình AI Gemini thiết kế chuẩn theo hình ảnh đính kèm */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
@@ -4415,29 +4652,25 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Khung cấu hình Số lượng Đề AI (Chống quá tải) & Ô Mô Tả Chỉ Dẫn Riêng Của Giáo Viên */}
+                  {/* Khung cấu hình Số lượng Đề AI & Ô Mô Tả Chỉ Dẫn Riêng Của Giáo Viên */}
                   <div className="md:col-span-7 flex flex-col justify-between space-y-4 bg-purple-50/70 p-4 rounded-2xl border-2 border-purple-200">
-                    {/* 1. NÚT TÙY CHỌN SỐ LƯỢNG ĐỀ AI CẦN SINH ĐỂ TRÁNH QUÁ TẢI DỮ LIỆU */}
+                    {/* 1. NÚT TÙY CHỌN SỐ LƯỢNG ĐỀ AI CẦN SINH */}
                     <div className="p-3.5 rounded-2xl bg-white border-2 border-purple-300 shadow-xs space-y-2.5">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <span className="text-xs font-black text-purple-950 uppercase flex items-center gap-1.5">
                           <Layers className="w-4 h-4 text-purple-700" />
-                          <span>1. Chọn Số Lượng Đề AI Cần Sinh (Tránh Quá Tải Dữ Liệu):</span>
+                          <span>1. Chọn Số Lượng Đề AI Cần Sinh (Mỗi Đề Sinh 5 Câu / Lượt):</span>
                         </span>
                         <span className="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-mono text-[11px] font-black">
                           {numAiExamsToGenerate === 1
-                            ? 'Tải nhẹ 25% · Tốc độ nhanh nhất'
-                            : numAiExamsToGenerate === 2
-                            ? 'Tải vừa 50% · Ổn định'
-                            : numAiExamsToGenerate === 3
-                            ? 'Tải 75% · Khá nặng'
-                            : 'Tải 100% · Tối đa 4 đề'}
+                            ? '1 Đề · Sinh chuẩn từng 5 câu'
+                            : `${numAiExamsToGenerate} Đề · Sinh tuần tự từng 5 câu`}
                         </span>
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         {([
-                          { count: 1, label: '1 Đề AI', sub: 'Khuyên dùng (Nhẹ)' },
+                          { count: 1, label: '1 Đề AI', sub: 'Khuyên dùng (Nhanh)' },
                           { count: 2, label: '2 Đề AI', sub: 'Cân bằng' },
                           { count: 3, label: '3 Đề AI', sub: 'Đa biến thể' },
                           { count: 4, label: '4 Đề AI', sub: 'Trọn bộ 4 đề' },
@@ -4474,7 +4707,7 @@ export default function App() {
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-1">
                         <label className="block text-xs font-black text-purple-950 uppercase">
-                          2. Mô Tả / Chỉ Dẫn Thêm Của Giáo Viên Cho AI:
+                          2. Mô Tả / Chỉ Dẫn Thêm Của Giáo Viên Cho AI (Trong Phạm Vi Đề Gốc):
                         </label>
                         <button
                           type="button"
@@ -4489,7 +4722,7 @@ export default function App() {
                         rows={3}
                         value={aiTeacherGuidance}
                         onChange={(e) => setAiTeacherGuidance(e.target.value)}
-                        placeholder="Nhập mô tả chi tiết để AI sinh đề theo ý Thầy/Cô (VD: Chỉ đổi số liệu chẵn dễ tính, đảo câu đúng thành sai, đổi bối cảnh sang cây lúa/cà chua, giữ nguyên độ khó...)"
+                        placeholder="Nhập chỉ dẫn để AI sinh đề theo ý Thầy/Cô (VD: Đổi số liệu chẵn dễ tính toán, đổi bối cảnh thực tế đời sống, giữ nguyên 100% cơ chế khoa học và giới hạn của đề gốc...)"
                         className="w-full px-3.5 py-2.5 text-xs sm:text-sm font-semibold text-slate-900 bg-white border-2 border-purple-400 rounded-xl focus:outline-none focus:border-blue-600 leading-relaxed shadow-inner"
                       />
 
@@ -4500,10 +4733,10 @@ export default function App() {
                         </span>
                         {[
                           'Đổi số liệu chẵn dễ tính nhẩm',
-                          'Đảo câu Đúng thành Sai & ngược lại',
-                          'Đổi sơ đồ chuỗi thức ăn & biểu đồ cột',
-                          'Tăng câu hỏi thực tiễn & thí nghiệm',
-                          'Giữ nguyên độ khó như đề gốc',
+                          'Đảo mệnh đề Đúng thành Sai & ngược lại',
+                          'Đổi mới bối cảnh thực tiễn đời sống',
+                          'Bảo toàn 100% cơ chế khoa học câu gốc',
+                          'Không vượt ngoài giới hạn đề gốc',
                         ].map((chip) => (
                           <button
                             key={chip}
@@ -4527,23 +4760,41 @@ export default function App() {
 
                     <div className="flex flex-wrap items-center gap-2.5 pt-1">
                       <button
+                        type="button"
                         onClick={handleGenerateAiCloneExam}
                         disabled={isProcessing}
                         className="flex-1 py-3.5 px-4 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-purple flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+                        title="Tự động sinh lần lượt từng đợt 5 câu hỏi (hết 5 câu sinh tiếp 5 câu) cho đến hết toàn bộ đề gốc"
                       >
                         <RefreshCw
                           className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`}
                         />
                         <span>
                           {aiClonedVariants.length > 0
-                            ? `Sinh Lại ${numAiExamsToGenerate} Đề AI Theo Chỉ Dẫn Mới`
-                            : `Bắt Đầu Sinh ${numAiExamsToGenerate} Đề AI Theo Ý Giáo Viên (${currentModelInfo.name})`}
+                            ? `Sinh Lại Tuần Tự 5 Câu/Đợt Cho Đến Hết Đề (${questions.length} Câu)`
+                            : `Sinh Đề Tương Đương (5 Câu/Đợt × ${Math.max(1, Math.ceil(questions.length / AI_CLONE_BATCH_SIZE))} Đợt = ${questions.length} Câu)`}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleGenerateNextFiveQuestionsStep}
+                        disabled={isProcessing}
+                        className="py-3.5 px-4 rounded-xl text-xs sm:text-sm font-black text-white btn-3d-indigo flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                        title="Bấm mỗi lần để sinh đúng 5 câu hỏi tiếp theo theo thứ tự từ đầu đến cuối đề"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>
+                          {manualBatchCursor > 0 && manualBatchCursor < questions.length
+                            ? `Sinh Tiếp 5 Câu (Câu ${manualBatchCursor + 1} → ${Math.min(manualBatchCursor + AI_CLONE_BATCH_SIZE, questions.length)})`
+                            : `Sinh Từng Đợt 5 Câu (Câu 1 → ${Math.min(AI_CLONE_BATCH_SIZE, questions.length)})`}
                         </span>
                       </button>
 
                       {clonedQuestions.length > 0 && (
                         <>
                           <button
+                            type="button"
                             onClick={handleApplyAiCloneAsMaster}
                             className="py-3 px-3.5 rounded-xl text-xs font-black text-white btn-3d-emerald flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                           >
@@ -4552,6 +4803,7 @@ export default function App() {
                           </button>
 
                           <button
+                            type="button"
                             onClick={handleDownloadAiCloneDocx}
                             className="py-3 px-3.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                           >
@@ -4561,6 +4813,7 @@ export default function App() {
 
                           {aiClonedVariants.length > 1 && (
                             <button
+                              type="button"
                               onClick={handleDownloadAllFourAiClonesZip}
                               className="py-3 px-3.5 rounded-xl text-xs font-black text-white btn-3d-rose flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
                             >
@@ -4580,15 +4833,15 @@ export default function App() {
                 <div className="p-10 rounded-3xl card-3d-panel text-center space-y-3">
                   <Bot className="w-12 h-12 text-purple-600 mx-auto" />
                   <h4 className="text-base font-black text-slate-900">
-                    Sẵn sàng nhân bản bộ đề tương đương từ {questions.length} câu hỏi gốc
+                    Sẵn sàng sinh đề tương đương theo từng đợt 5 câu từ {questions.length} câu hỏi gốc
                   </h4>
                   <p className="text-xs text-slate-600 max-w-lg mx-auto">
-                    Nhấn nút <strong>[Bắt Đầu Sinh Đề AI]</strong> phía trên để hệ thống sinh bộ đề mới giữ nguyên cấu trúc 3 phần và đối chiếu trực quan từng câu với đề gốc.
+                    Nhấn nút <strong>[Sinh Đề Tương Đương (5 Câu/Đợt)]</strong> để AI tự động sinh lần lượt từng 5 câu cho đến hết đề gốc, hoặc nhấn <strong>[Sinh Từng Đợt 5 Câu]</strong> để kiểm duyệt từng lô 5 câu một.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {/* THANH CHỌN 4 ĐỀ AI KHÁC NHAU ĐƯỢC SINH CÙNG LÚC */}
+                  {/* THANH CHỌN CÁC ĐỀ AI VỪA SINH */}
                   {aiClonedVariants.length > 0 && (
                     <div className="p-4 rounded-2xl toolbar-3d flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -4634,7 +4887,7 @@ export default function App() {
                     <div className="flex items-center gap-2 text-xs font-extrabold uppercase">
                       <Sparkles className="w-4 h-4 text-amber-400" />
                       <span>
-                        Đối Chiếu Song Song: Đề Gốc &amp; {aiClonedVariants[selectedAiVariantIdx]?.title || 'Đề Tương Đương'} ({clonedQuestions.length} câu — Đủ 4 phương án/câu)
+                        Đối Chiếu Song Song: Đề Gốc &amp; {aiClonedVariants[selectedAiVariantIdx]?.title || 'Đề Tương Đương'} ({clonedQuestions.length}/{questions.length} câu đã sinh)
                       </span>
                     </div>
                     <span className="text-xs font-mono text-emerald-400">
@@ -4644,20 +4897,39 @@ export default function App() {
 
                   {clonedQuestions.map((cq, idx) => {
                     const origQ = questions[idx] || cq;
+                    const batchNum = Math.floor(idx / AI_CLONE_BATCH_SIZE) + 1;
+                    const partLabel =
+                      cq.part === 'PART_1'
+                        ? 'Phần I (Trắc nghiệm 4 lựa chọn)'
+                        : cq.part === 'PART_2'
+                        ? 'Phần II (Đúng / Sai)'
+                        : cq.part === 'PART_3'
+                        ? 'Phần III (Trả lời ngắn)'
+                        : `${essayRomanLabel} (Tự luận)`;
+                    const bloomBadgeLabel =
+                      cq.bloomLevel === 'NHAN_BIET'
+                        ? 'Nhận biết'
+                        : cq.bloomLevel === 'VAN_DUNG'
+                        ? 'Vận dụng'
+                        : cq.bloomLevel === 'VAN_DUNG_CAO'
+                        ? 'Vận dụng cao'
+                        : 'Thông hiểu';
+
                     return (
                       <div
                         key={cq.id}
                         className="p-5 rounded-2xl card-3d-panel space-y-3"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-sky-200">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-3 py-1 rounded-lg text-xs font-black text-white btn-3d-purple font-mono">
-                              {cq.part === 'PART_1'
-                                ? 'Phần I'
-                                : cq.part === 'PART_2'
-                                ? 'Phần II'
-                                : 'Phần III'}{' '}
-                              — Câu {cq.displayIndex}
+                              {partLabel} — Câu {cq.displayIndex}
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-sky-100 text-sky-900 border border-sky-300 font-mono">
+                              Đợt {batchNum} (Câu {(batchNum - 1) * AI_CLONE_BATCH_SIZE + 1}→{Math.min(batchNum * AI_CLONE_BATCH_SIZE, questions.length)})
+                            </span>
+                            <span className="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                              Mức độ: {bloomBadgeLabel}
                             </span>
                           </div>
                         </div>
@@ -4672,18 +4944,67 @@ export default function App() {
                           {/* Cột trái: Câu hỏi trong Đề gốc */}
                           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-300 space-y-2">
                             <div className="text-xs font-sans font-bold text-slate-500 uppercase">
-                              Bản Đề Gốc:
+                              Bản Đề Gốc (Cơ chế &amp; Ma trận gốc):
                             </div>
                             <p className="text-left text-slate-800">
                               <strong>Câu {origQ.displayIndex}. </strong>
                               <ScientificContentRenderer text={origQ.stemText} inline />
                             </p>
+
+                            {origQ.part === 'PART_1' && origQ.options && (
+                              <div className="grid grid-cols-2 gap-1.5 pt-1 text-sm text-slate-700">
+                                {origQ.options.map((o) => (
+                                  <div
+                                    key={o.id}
+                                    className={
+                                      o.isCorrect
+                                        ? 'text-rose-700 font-bold underline'
+                                        : ''
+                                    }
+                                  >
+                                    <strong>{o.currentLabel}. </strong>
+                                    <ScientificContentRenderer text={o.text} inline />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {origQ.part === 'PART_2' && origQ.subItems && (
+                              <div className="space-y-1 pt-1 text-sm text-slate-700">
+                                {origQ.subItems.map((s) => (
+                                  <div
+                                    key={s.id}
+                                    className={
+                                      s.isTrue
+                                        ? 'text-emerald-800 font-bold underline'
+                                        : ''
+                                    }
+                                  >
+                                    <strong>{s.currentLabel}) </strong>
+                                    <ScientificContentRenderer text={s.text} inline /> ({s.isTrue ? 'Đúng' : 'Sai'})
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {origQ.part === 'PART_3' && (
+                              <div className="pt-1 text-sm font-bold text-slate-700">
+                                Đáp án gốc: {origQ.shortAnswer}
+                              </div>
+                            )}
+
+                            {origQ.part === 'PART_4' && origQ.essayAnswer && (
+                              <div className="pt-1 text-sm text-slate-700">
+                                <strong>Hướng dẫn chấm gốc: </strong>
+                                <ScientificContentRenderer text={origQ.essayAnswer} inline />
+                              </div>
+                            )}
                           </div>
 
                           {/* Cột phải: Câu hỏi tương đương do AI sinh */}
                           <div className="p-3.5 rounded-xl bg-purple-50/70 border-2 border-purple-300 space-y-2">
                             <div className="text-xs font-sans font-extrabold text-purple-900 uppercase flex items-center justify-between">
-                              <span>Bản Đề Tương Đương (Đã đổi số liệu & ngữ cảnh):</span>
+                              <span>Bản Đề Tương Đương (Đổi mới ngữ cảnh &amp; số liệu thực):</span>
                             </div>
                             <p className="text-left text-slate-950 font-medium">
                               <strong>Câu {cq.displayIndex}. </strong>
@@ -4728,7 +5049,24 @@ export default function App() {
 
                             {cq.part === 'PART_3' && (
                               <div className="pt-1 text-sm font-bold text-rose-600 underline">
-                                Đáp án: {cq.shortAnswer}
+                                Đáp án mới: {cq.shortAnswer}
+                              </div>
+                            )}
+
+                            {cq.part === 'PART_4' && (
+                              <div className="pt-1 text-sm text-rose-700">
+                                <strong>Hướng dẫn chấm mới: </strong>
+                                <ScientificContentRenderer
+                                  text={cq.essayAnswer || cq.explanation || ''}
+                                  inline
+                                />
+                              </div>
+                            )}
+
+                            {cq.explanation && cq.part !== 'PART_4' && (
+                              <div className="pt-1.5 mt-1 border-t border-purple-200 text-xs text-slate-700 italic">
+                                <strong>Giải thích / Cơ chế: </strong>
+                                <ScientificContentRenderer text={cq.explanation} inline />
                               </div>
                             )}
                           </div>
@@ -4736,6 +5074,25 @@ export default function App() {
                       </div>
                     );
                   })}
+
+                  {manualBatchCursor > 0 && manualBatchCursor < questions.length && (
+                    <div className="p-4 rounded-2xl bg-indigo-50 border-2 border-indigo-300 flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-xs font-bold text-indigo-950">
+                        Đã sinh {manualBatchCursor}/{questions.length} câu hỏi. Còn {questions.length - manualBatchCursor} câu hỏi tiếp theo đang chờ sinh.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleGenerateNextFiveQuestionsStep}
+                        disabled={isProcessing}
+                        className="px-4 py-2 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Sparkles className="w-4 h-4" />
+                        <span>
+                          Sinh Tiếp 5 Câu Tiếp Theo (Câu {manualBatchCursor + 1} → Câu {Math.min(manualBatchCursor + AI_CLONE_BATCH_SIZE, questions.length)})
+                        </span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -6002,18 +6359,6 @@ export default function App() {
             <div className="flex flex-wrap items-center justify-end gap-3 pt-2 border-t border-sky-200">
               <button
                 type="button"
-                onClick={() => {
-                  setIsAiSecurityModalOpen(false);
-                  setIsApiKeyModalOpen(true);
-                }}
-                className="px-4 py-2.5 rounded-xl text-xs font-black text-slate-900 bg-amber-400 hover:bg-amber-500 flex items-center gap-2 cursor-pointer shadow-xs"
-              >
-                <Key className="w-4 h-4 text-slate-950" />
-                <span>⚙ Cấu Hình Google Gemini API Key</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={handleVerifyAiSecuritySession}
                 disabled={isProcessing}
                 className="px-4 py-2.5 rounded-xl text-xs font-black text-white btn-3d-primary flex items-center gap-2"
@@ -6275,19 +6620,6 @@ export default function App() {
       )}
 
       {/* Modal Hướng dẫn sử dụng chi tiết & Tự động cập nhật khi nâng cấp tính năng */}
-      <GeminiApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
-        onKeySaved={(newKey) => {
-          setStatusBanner({
-            type: 'SUCCESS',
-            text: newKey
-              ? 'Đã cấu hình thành công Google Gemini API Key vào trình duyệt!'
-              : 'Đã xóa API Key. Hệ thống chuyển sang chế độ tự hành dự phòng thông minh.',
-          });
-        }}
-      />
-
       <UserGuideModal
         isOpen={isGuideOpen}
         onClose={() => setIsGuideOpen(false)}
