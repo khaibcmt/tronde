@@ -1235,6 +1235,9 @@ export async function generateSingleBatchOfFiveAiQuestions(
     // Fallback an toàn cho từng lô 5 câu nếu mất kết nối tạm thời
   }
 
+  // Nhường luồng UI 220ms mỗi đợt 5 câu để hiển thị mượt mà tiến trình từng đợt 5 câu trên cả GitHub Pages
+  await new Promise((resolve) => setTimeout(resolve, 220));
+
   const fallbackBatch = buildAutonomousIsomorphicClone(
     batchQuestions,
     variantIndex

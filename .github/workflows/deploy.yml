@@ -16,9 +16,13 @@ concurrency:
   group: "pages"
   cancel-in-progress: true
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,17 +32,20 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install --legacy-peer-deps --no-audit --no-fund
 
       - name: Build production bundle
         run: npm run build
 
-      - name: Copy index.html to 404.html for SPA routing
-        run: cp dist/index.html dist/404.html
-
-      - name: Touch .nojekyll
-        run: touch dist/.nojekyll
+      - name: Clean temporary chat screenshots from dist artifact
+        run: |
+          rm -f dist/assets/aistudio/image_*.png || true
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -48,10 +55,22 @@ jobs:
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment_retry.outputs.page_url }}
     runs-on: ubuntu-latest
     needs: build
+    timeout-minutes: 15
     steps:
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (Attempt 1)
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
+        with:
+          timeout: 240000
+
+      - name: Retry Deploy to GitHub Pages if transient timeout occurred
+        id: deployment_retry
+        if: steps.deployment.outcome != 'success'
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 300000
+
