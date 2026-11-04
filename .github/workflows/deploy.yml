@@ -60,6 +60,31 @@ jobs:
     needs: build
     timeout-minutes: 15
     steps:
+      - name: Cancel any stuck previous Pages deployments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHAS=$(curl -s -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/${{ github.repository }}/actions/runs?per_page=15" | node -e "
+            try {
+              const d = JSON.parse(require('fs').readFileSync(0, 'utf8'));
+              const list = (d.workflow_runs || []).map(r => r.head_sha).filter(Boolean);
+              list.push('260046630a4b709d3d3f7fc972bff96d99ed973c');
+              console.log([...new Set(list)].join(' '));
+            } catch {
+              console.log('260046630a4b709d3d3f7fc972bff96d99ed973c');
+            }
+          ")
+          for sha in $SHAS; do
+            if [ "$sha" != "${{ github.sha }}" ]; then
+              curl -s -X POST \
+                -H "Accept: application/vnd.github+json" \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/${{ github.repository }}/pages/deployments/$sha/cancel" >/dev/null 2>&1 || true
+            fi
+          done
+          sleep 3
+
       - name: Deploy to GitHub Pages (Attempt 1)
         id: deployment
         uses: actions/deploy-pages@v4
@@ -67,10 +92,23 @@ jobs:
         with:
           timeout: 240000
 
-      - name: Retry Deploy to GitHub Pages if transient timeout occurred
+      - name: Clear lock and Retry Deploy if Attempt 1 failed
+        if: steps.deployment.outcome != 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -s -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/pages/deployments/${{ github.sha }}/cancel" >/dev/null 2>&1 || true
+          sleep 5
+
+      - name: Retry Deploy to GitHub Pages
         id: deployment_retry
         if: steps.deployment.outcome != 'success'
         uses: actions/deploy-pages@v4
         with:
           timeout: 300000
+
 
