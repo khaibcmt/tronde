@@ -1329,9 +1329,10 @@ function splitClumpedParagraphIntoLogicalParagraphs(
   const rawJoined = para.runs.map((r) => r.text).join('');
   if (!rawJoined.trim()) return [para];
 
-  // Chỉ tách giữa dòng khi thực sự là tiêu đề "PHẦN I/II/III/IV", "TỰ LUẬN" hoặc "Câu 1." / "Bài 1." (tránh tách nhầm chữ "từ câu 1 đến câu 18" trong hướng dẫn)
+  // Chỉ tách giữa dòng khi thực sự là tiêu đề "PHẦN I/II/III/IV", "TỰ LUẬN" độc lập hoặc "Câu 1." / "Bài 1."
+  // (Tuyệt đối KHÔNG tách giữa "PHẦN III." và "Tự luận" khi chúng nằm trên cùng 1 tiêu đề "PHẦN III. Tự luận")
   const splitRegex =
-    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?<!(?:từ|đến|ở|như|theo)\s+)(?=(?:(?:PHẦN|Phần)\s+(?:IV|III|II|I|4|3|2|1)\b|(?:\b(?:[A-ZIVX]+|\d+)\s*[.:\-–—]\s*)?(?:TỰ\s*LUẬN|Tự\s*luận|TU\s*LUAN)\b|(?:[*#]\s*)?(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\b\s*(?:[.:\-–—)]+|\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])|\t+|\s{2,}))))/g;
+    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?<!(?:từ|đến|ở|như|theo)\s+)(?<!(?:PHẦN|Phần|phần)\s*(?:IV|III|II|I|4|3|2|1|[A-D])?\s*[.:\-–—)]*\s*)(?=(?:(?:PHẦN|Phần)\s+(?:IV|III|II|I|4|3|2|1)\b|(?:\b(?:[A-ZIVX]+|\d+)\s*[.:\-–—]\s*)?(?:TỰ\s*LUẬN|Tự\s*luận|TU\s*LUAN)\b|(?:[*#]\s*)?(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\b\s*(?:[.:\-–—)]+|\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])|\t+|\s{2,}))))/g;
 
   const splitIndices: number[] = [0];
   let match: RegExpExecArray | null;
@@ -2381,68 +2382,84 @@ function extractParagraphsFromDocxXml(
       const lvlInfo = lvlMap?.get(resolvedIlvl);
 
       if (lvlInfo) {
-        const counterKey = `${resolvedNumId}:${resolvedIlvl}`;
-        const currentCount = (listCounters.get(counterKey) ?? lvlInfo.start - 1) + 1;
-        listCounters.set(counterKey, currentCount);
-
-        // Reset bộ đếm của các cấp con sâu hơn (ilvl lớn hơn)
-        const ilvlNum = parseInt(resolvedIlvl, 10) || 0;
-        for (const key of Array.from(listCounters.keys())) {
-          const [kNumId, kIlvl] = key.split(':');
-          if (kNumId === resolvedNumId && (parseInt(kIlvl, 10) || 0) > ilvlNum) {
-            listCounters.delete(key);
-          }
-        }
-
         const joinedPreview = runs.map((r) => r.text).join('').trim();
-        const isParaHighlighted =
-          paraLevelProps.isUnderline ||
-          paraLevelProps.isRed ||
-          lvlInfo.isUnderline ||
-          lvlInfo.isRed;
+        const isSectionOrAdminHeading =
+          isEssaySectionHeader(joinedPreview) ||
+          isAdministrativeExamHeader(joinedPreview) ||
+          /^(?:[*#•+\-–—\s])*(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])\b/i.test(
+            joinedPreview
+          ) ||
+          /^(?:[-–—_*=~•\s]{2,}\s*)?HẾT\b/i.test(joinedPreview) ||
+          /^(?:[*#•+\-–—\s])*(?:BẢNG\s+ĐÁP\s+ÁN|ĐÁP\s+ÁN|HƯỚNG\s+DẪN\s+CHẤM|HƯỚNG\s+DẪN\s+GIẢI|LỜI\s+GIẢI)\b/i.test(
+            joinedPreview
+          );
 
-        if (lvlInfo.numFmt === 'bullet') {
+        if (isSectionOrAdminHeading) {
+          // Không đánh số tự động "Câu X." vào dòng tiêu đề PHẦN I/II/III/IV hoặc Tự luận
           isAutoNumbered = false;
-        } else if (
-          lvlInfo.numFmt === 'upperLetter' &&
-          !/^[*#]?[A-D]\s*[.:)\-–—]/.test(joinedPreview)
-        ) {
-          const letters = ['A', 'B', 'C', 'D'];
-          const letter = letters[(currentCount - 1) % 4];
-          runs.unshift({
-            text: `${isParaHighlighted ? '*' : ''}${letter}. `,
-            isUnderline: isParaHighlighted,
-            isRed: isParaHighlighted,
-            isBold: true,
-            hasFormula: false,
-          });
-          isAutoNumbered = false;
-        } else if (
-          lvlInfo.numFmt === 'lowerLetter' &&
-          !/^[*#]?[a-d]\s*[).:\-–—]/.test(joinedPreview)
-        ) {
-          const letters = ['a', 'b', 'c', 'd'];
-          const letter = letters[(currentCount - 1) % 4];
-          runs.unshift({
-            text: `${isParaHighlighted ? '*' : ''}${letter}) `,
-            isUnderline: isParaHighlighted,
-            isRed: isParaHighlighted,
-            isBold: true,
-            hasFormula: false,
-          });
-          isAutoNumbered = false;
-        } else if (
-          (lvlInfo.numFmt === 'decimal' || lvlInfo.numFmt === 'decimalZero') &&
-          !/^(?:Câu|Bài|Question|\d+\s*[.:)])/i.test(joinedPreview) &&
-          !/^[*#]?[A-Da-d]\s*[.:)\-–—]/.test(joinedPreview)
-        ) {
-          runs.unshift({
-            text: `Câu ${currentCount}. `,
-            isUnderline: false,
-            isRed: false,
-            isBold: true,
-            hasFormula: false,
-          });
+        } else {
+          const counterKey = `${resolvedNumId}:${resolvedIlvl}`;
+          const currentCount = (listCounters.get(counterKey) ?? lvlInfo.start - 1) + 1;
+          listCounters.set(counterKey, currentCount);
+
+          // Reset bộ đếm của các cấp con sâu hơn (ilvl lớn hơn)
+          const ilvlNum = parseInt(resolvedIlvl, 10) || 0;
+          for (const key of Array.from(listCounters.keys())) {
+            const [kNumId, kIlvl] = key.split(':');
+            if (kNumId === resolvedNumId && (parseInt(kIlvl, 10) || 0) > ilvlNum) {
+              listCounters.delete(key);
+            }
+          }
+
+          const isParaHighlighted =
+            paraLevelProps.isUnderline ||
+            paraLevelProps.isRed ||
+            lvlInfo.isUnderline ||
+            lvlInfo.isRed;
+
+          if (lvlInfo.numFmt === 'bullet') {
+            isAutoNumbered = false;
+          } else if (
+            lvlInfo.numFmt === 'upperLetter' &&
+            !/^[*#]?[A-D]\s*[.:)\-–—]/.test(joinedPreview)
+          ) {
+            const letters = ['A', 'B', 'C', 'D'];
+            const letter = letters[(currentCount - 1) % 4];
+            runs.unshift({
+              text: `${isParaHighlighted ? '*' : ''}${letter}. `,
+              isUnderline: isParaHighlighted,
+              isRed: isParaHighlighted,
+              isBold: true,
+              hasFormula: false,
+            });
+            isAutoNumbered = false;
+          } else if (
+            lvlInfo.numFmt === 'lowerLetter' &&
+            !/^[*#]?[a-d]\s*[).:\-–—]/.test(joinedPreview)
+          ) {
+            const letters = ['a', 'b', 'c', 'd'];
+            const letter = letters[(currentCount - 1) % 4];
+            runs.unshift({
+              text: `${isParaHighlighted ? '*' : ''}${letter}) `,
+              isUnderline: isParaHighlighted,
+              isRed: isParaHighlighted,
+              isBold: true,
+              hasFormula: false,
+            });
+            isAutoNumbered = false;
+          } else if (
+            (lvlInfo.numFmt === 'decimal' || lvlInfo.numFmt === 'decimalZero') &&
+            !/^(?:Câu|Bài|Question|\d+\s*[.:)])/i.test(joinedPreview) &&
+            !/^[*#]?[A-Da-d]\s*[.:)\-–—]/.test(joinedPreview)
+          ) {
+            runs.unshift({
+              text: `Câu ${currentCount}. `,
+              isUnderline: false,
+              isRed: false,
+              isBold: true,
+              hasFormula: false,
+            });
+          }
         }
       }
     }
@@ -3235,7 +3252,24 @@ export function normalizeAllQuestionsStrictFourOptions(
   questions: ExamQuestion[],
   resetPerPart = true
 ): ExamQuestion[] {
-  const cleaned = questions.map((q) => {
+  // Lọc bỏ triệt để mọi câu hỏi giả (phantom question) do tiêu đề "PHẦN I/II/III/IV" hoặc "Tự luận" bị lọt vào
+  const validQuestions = questions.filter((q) => {
+    const rawStem = (q.stemText || '').trim();
+    const isBareSectionStem =
+      /^(?:[*#•+\-–—\s])*(?:(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+\s*[.:\-–—)]*\s*)?(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])|TỰ\s*LUẬN|TU\s*LUAN)\s*[.:\-–—)]*$/i.test(
+        rawStem
+      );
+    if (isBareSectionStem) {
+      const hasAnyOptionText = (q.options || []).some((o) => (o.text || '').trim().length > 0);
+      const hasAnySubText = (q.subItems || []).some((s) => (s.text || '').trim().length > 0);
+      if (!hasAnyOptionText && !hasAnySubText && !q.hasImage) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const cleaned = validQuestions.map((q) => {
     const healedStem = autoHealScientificAndStemText(q.stemText || '');
     const healedQ: ExamQuestion = {
       ...q,
@@ -3515,6 +3549,22 @@ function isAdministrativeExamHeader(text: string): boolean {
 }
 
 /**
+ * Loại bỏ tiền tố "Câu X." / "X." bị dính nhầm vào dòng tiêu đề PHẦN I/II/III/IV hoặc TỰ LUẬN
+ * (Do giáo viên bấm Enter từ câu trên mà chưa tắt Auto-Numbering trong Word, tạo ra "Câu 5. PHẦN III. Tự luận" hoặc "Câu 5. PHẦN III.")
+ */
+function stripAccidentalQuestionPrefixFromSectionHeader(rawText: string): string {
+  const clean = rawText.trim();
+  if (!clean) return clean;
+  const match = clean.match(
+    /^(?:[*#•+\-–—\s])*(?:(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+|\d{1,3})\s*[.:\-–—)]+\s*((?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])\b.*|(?:TỰ\s*LUẬN|TU\s*LUAN)\b.*))$/i
+  );
+  if (match && match[1]) {
+    return match[1].trim();
+  }
+  return clean;
+}
+
+/**
  * Kiểm tra xem một dòng có phải là tiêu đề Phần Tự Luận hay không:
  * Chuẩn hóa nhận diện Tự Luận theo yêu cầu người dùng:
  * Bất kể ghi Phần III hoặc Phần IV (hoặc Phần II, Phần 2, Phần 3, Phần 4, B. Tự luận...),
@@ -3522,7 +3572,7 @@ function isAdministrativeExamHeader(text: string): boolean {
  * Đồng thời hỗ trợ tiêu đề thuần "PHẦN IV" / "PHẦN 4" kể cả khi không viết kèm chữ "Tự luận".
  */
 export function isEssaySectionHeader(text: string): boolean {
-  const clean = text.trim();
+  const clean = stripAccidentalQuestionPrefixFromSectionHeader(text);
   if (!clean) return false;
 
   // Loại trừ các câu hỏi cụ thể (VD: "Câu 1. Em hãy giải bài tập tự luận sau...", "Bài 1. Tự luận:")
@@ -3982,6 +4032,22 @@ export function buildQuestionsFromParsedParagraphs(
     inQuestionSolutionBlock = false;
     if (!currentQuestion) return;
 
+    // Chặn tuyệt đối trường hợp tiêu đề "PHẦN I/II/III/IV." bị nhận nhầm thành thân câu hỏi rỗng
+    const trimmedStemCheck = (currentQuestion.stemText || '').trim();
+    if (
+      /^(?:[*#•+\-–—\s])*(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])|TỰ\s*LUẬN|TU\s*LUAN)\s*[.:\-–—)]*$/i.test(
+        trimmedStemCheck
+      )
+    ) {
+      const hasOpts = (currentQuestion.options || []).some((o) => (o.text || '').trim().length > 0);
+      const hasSubs = (currentQuestion.subItems || []).some((s) => (s.text || '').trim().length > 0);
+      if (!hasOpts && !hasSubs && !currentQuestion.hasImage) {
+        currentQuestion = null;
+        currentQuestionRuns = [];
+        return;
+      }
+    }
+
     // Nếu câu hỏi đang ở PART_1 nhưng hoàn toàn không có phương án A,B,C,D mà lại có đủ 4 ý a), b), c), d) -> chuyển câu này sang PART_2
     if (
       currentQuestion.part === 'PART_1' &&
@@ -4078,7 +4144,8 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
 
-    const text = normalizeVietnameseExamText(para.fullText).trim();
+    const rawNormalizedText = normalizeVietnameseExamText(para.fullText).trim();
+    const text = stripAccidentalQuestionPrefixFromSectionHeader(rawNormalizedText);
     if (!text && para.images.length === 0) continue;
     const rawJoined = normalizeVietnameseExamText(para.runs.map((r) => r.text).join(''));
 
