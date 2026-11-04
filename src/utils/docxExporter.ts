@@ -1995,8 +1995,13 @@ function buildQuestionsBodyXml(
   }
 
   if (part4.length > 0) {
-    // Nếu đề gốc không có Phần III (câu hỏi trả lời ngắn) thì tự động trình bày là PHẦN III. Tự luận cho đúng thứ tự
-    const essayRoman = part3.length === 0 ? 'PHẦN III' : 'PHẦN IV';
+    // Nếu đề gốc không có Phần II và III thì là PHẦN II. Nếu chỉ thiếu Phần III thì là PHẦN III. Nếu đủ thì là PHẦN IV.
+    const essayRoman =
+      part3.length === 0 && part2.length === 0
+        ? 'PHẦN II'
+        : part3.length === 0
+        ? 'PHẦN III'
+        : 'PHẦN IV';
     const essayRangeInstruction =
       part4.length === 1
         ? `Thí sinh trình bày lời giải chi tiết câu ${part4[0].displayIndex}.`

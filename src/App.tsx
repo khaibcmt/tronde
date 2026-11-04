@@ -391,7 +391,12 @@ export default function App() {
   const part2Count = questions.filter((q) => q.part === 'PART_2').length;
   const part3Count = questions.filter((q) => q.part === 'PART_3').length;
   const part4Count = questions.filter((q) => q.part === 'PART_4').length;
-  const essayRomanLabel = part3Count === 0 ? 'PHẦN III' : 'PHẦN IV';
+  const essayRomanLabel =
+    part3Count === 0 && part2Count === 0
+      ? 'PHẦN II'
+      : part3Count === 0
+      ? 'PHẦN III'
+      : 'PHẦN IV';
 
   // Thống kê Ma trận nhận thức Bloom
   const bloomStats = {

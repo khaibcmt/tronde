@@ -1329,9 +1329,9 @@ function splitClumpedParagraphIntoLogicalParagraphs(
   const rawJoined = para.runs.map((r) => r.text).join('');
   if (!rawJoined.trim()) return [para];
 
-  // Chỉ tách giữa dòng khi thực sự là tiêu đề "PHẦN I/II/III/IV" hoặc "Câu 1." / "Bài 1." (tránh tách nhầm chữ "từ câu 1 đến câu 18" trong hướng dẫn)
+  // Chỉ tách giữa dòng khi thực sự là tiêu đề "PHẦN I/II/III/IV", "TỰ LUẬN" hoặc "Câu 1." / "Bài 1." (tránh tách nhầm chữ "từ câu 1 đến câu 18" trong hướng dẫn)
   const splitRegex =
-    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?<!(?:từ|đến|ở|như|theo)\s+)(?=(?:(?:PHẦN|Phần)\s+(?:I|II|III|IV|1|2|3|4)\b|(?:[A-ZIVX]+\s*[.:\-]\s*)?(?:TỰ\s+LUẬN|Tự\s+luận)\b|(?:[*#]\s*)?(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\b\s*(?:[.:\-–—)]+|\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])|\t+|\s{2,}))))/g;
+    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?<!(?:từ|đến|ở|như|theo)\s+)(?=(?:(?:PHẦN|Phần)\s+(?:IV|III|II|I|4|3|2|1)\b|(?:\b(?:[A-ZIVX]+|\d+)\s*[.:\-–—]\s*)?(?:TỰ\s*LUẬN|Tự\s*luận|TU\s*LUAN)\b|(?:[*#]\s*)?(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\b\s*(?:[.:\-–—)]+|\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])|\t+|\s{2,}))))/g;
 
   const splitIndices: number[] = [0];
   let match: RegExpExecArray | null;
@@ -1384,7 +1384,7 @@ function splitClumpedParagraphIntoLogicalParagraphs(
     });
   }
 
-  // Nếu còn ảnh cấp đoạn văn (para.images) chưa nằm trong run cụ thể nào, ưu tiên gắn vào đoạn con chứa "Câu X" (không gắn vào dòng tiêu đề PHẦN I/II/III để tránh bị bỏ qua)
+  // Nếu còn ảnh cấp đoạn văn (para.images) chưa nằm trong run cụ thể nào, ưu tiên gắn vào đoạn con chứa "Câu X" (không gắn vào dòng tiêu đề PHẦN I/II/III/Tự luận để tránh bị bỏ qua)
   const leftoverParaImages = para.images.filter((img) => !assignedImageUrls.has(img.dataUrl));
   if (leftoverParaImages.length > 0 && subParagraphs.length > 0) {
     const targetSub =
@@ -1393,9 +1393,9 @@ function splitClumpedParagraphIntoLogicalParagraphs(
       ) ||
       subParagraphs.find(
         (sp) =>
-          !/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(?:I|II|III|IV|1|2|3|4)\b/i.test(
+          !/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(?:IV|III|II|I|4|3|2|1)\b/i.test(
             sp.fullText.trim()
-          )
+          ) && !/\b(?:tự\s*luận|tu\s*luan)\b/i.test(sp.fullText.trim())
       ) ||
       subParagraphs[subParagraphs.length - 1];
     targetSub.images = [...targetSub.images, ...leftoverParaImages];
@@ -3514,6 +3514,54 @@ function isAdministrativeExamHeader(text: string): boolean {
   );
 }
 
+/**
+ * Kiểm tra xem một dòng có phải là tiêu đề Phần Tự Luận hay không:
+ * Chuẩn hóa nhận diện Tự Luận theo yêu cầu người dùng:
+ * Bất kể ghi Phần III hoặc Phần IV (hoặc Phần II, Phần 2, Phần 3, Phần 4, B. Tự luận...),
+ * MIỄN LÀ DÒNG CÓ CHỨA CHỮ "TỰ LUẬN" (hoặc "tu luan" không dấu) thì 100% ĐƯỢC XÁC ĐỊNH LÀ PHẦN TỰ LUẬN (PART_4)!
+ * Đồng thời hỗ trợ tiêu đề thuần "PHẦN IV" / "PHẦN 4" kể cả khi không viết kèm chữ "Tự luận".
+ */
+export function isEssaySectionHeader(text: string): boolean {
+  const clean = text.trim();
+  if (!clean) return false;
+
+  // Loại trừ các câu hỏi cụ thể (VD: "Câu 1. Em hãy giải bài tập tự luận sau...", "Bài 1. Tự luận:")
+  if (
+    /^(?:[*#•+\-–—\s]|\[[^\]]{1,15}\]|\([^)\d]{1,15}\))*(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+\b/i.test(
+      clean
+    )
+  ) {
+    return false;
+  }
+
+  // Loại trừ tiêu đề hành chính đầu đề thi kiểu "Hình thức thi: Trắc nghiệm và Tự luận"
+  if (
+    /^(?:Hình\s+thức(?:\s+thi|\s+kiểm\s+tra)?\s*[:.]|Đề\s+(?:thi\s+)?gồm|Thời\s+gian|Hướng\s+dẫn\s+chung)/i.test(
+      clean
+    ) &&
+    /\b(?:trắc\s*nghiệm\s*(?:và|&)\s*tự\s*luận)\b/i.test(clean)
+  ) {
+    return false;
+  }
+
+  // Bắt mọi biến thể chứa "TỰ LUẬN" hoặc "TU LUAN" (có hoặc không có dấu, hoa/thường):
+  // Miễn là có chữ tự luận trong tiêu đề (bất kể ghi Phần III hay Phần IV)
+  if (/\b(?:tự\s*luận|tu\s*luan)\b/i.test(clean)) {
+    return true;
+  }
+
+  // Hoặc ghi rõ PHẦN IV / PHẦN 4 mà không phải câu hỏi
+  if (
+    /^(?:[*#•+\-–—\s])*(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?PHẦN\s*(?:IV|4)\b/i.test(
+      clean
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 interface ExtractedLineItem {
   label: string;
   text: string;
@@ -3753,32 +3801,31 @@ export function buildQuestionsFromParsedParagraphs(
     if (!cleanLine) return;
 
     const strippedPrefix = cleanLine.replace(/^[*#•\-–—\s]+/, '');
-    if (
-      /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|TỰ\s+LUẬN\b)/i.test(
-        strippedPrefix
-      )
-    ) {
+    if (isEssaySectionHeader(strippedPrefix)) {
       trailingKeyCurrentPart = 'PART_4';
       return;
     }
     if (
-      (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedPrefix) &&
-        !/PHẦN\s+(II|III|IV)/i.test(strippedPrefix)) ||
+      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedPrefix) &&
+        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedPrefix) &&
+        !/PHẦN\s+(IV|III|II)/i.test(strippedPrefix)) ||
       /trắc\s+nghiệm\s+nhiều\s+phương\s+án/i.test(strippedPrefix)
     ) {
       trailingKeyCurrentPart = 'PART_1';
       return;
     }
     if (
-      (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedPrefix) &&
-        !/PHẦN\s+(III|IV)/i.test(strippedPrefix)) ||
+      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedPrefix) &&
+        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedPrefix) &&
+        !/PHẦN\s+(IV|III)/i.test(strippedPrefix)) ||
       /trắc\s+nghiệm\s+đúng\s*[\/\-–—\s]*sai/i.test(strippedPrefix)
     ) {
       trailingKeyCurrentPart = 'PART_2';
       return;
     }
     if (
-      /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedPrefix) ||
+      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedPrefix) &&
+        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedPrefix)) ||
       /trắc\s+nghiệm\s+trả\s+lời\s+ngắn/i.test(strippedPrefix)
     ) {
       trailingKeyCurrentPart = 'PART_3';
@@ -4056,21 +4103,21 @@ export function buildQuestionsFromParsedParagraphs(
     }
 
     // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III, PHẦN IV (Tự luận)
-    const strippedHeaderPrefix = text.replace(/^[*#•\-–—\s]+/, '');
-    if (
-      /^(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|4)\b|PHẦN\s*(?:I|II|III|IV|1|2|3|4)?\s*[.:\-–—]?\s*TỰ\s+LUẬN\b|TỰ\s+LUẬN\b)/i.test(
-        strippedHeaderPrefix
-      )
-    ) {
+    // ƯU TIÊN SỐ 1 TUYỆT ĐỐI: Bất kể ghi Phần III hay Phần IV (hoặc Phần II, Phần 2, Phần 3, Phần 4, B. Tự luận...),
+    // MIỄN CÓ CHỮ "TỰ LUẬN" LÀ HỆ THỐNG XÁC ĐỊNH NGAY LÀ PHẦN TỰ LUẬN (PART_4)!
+    if (isEssaySectionHeader(text)) {
       pushCurrentQuestion();
       pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
       inIgnoredEssaySection = false;
       currentPart = 'PART_4';
       continue;
     }
+
+    const strippedHeaderPrefix = text.replace(/^[*#•\-–—\s]+/, '');
     if (
-      (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedHeaderPrefix) &&
-        !/PHẦN\s+(II|III|IV)/i.test(strippedHeaderPrefix)) ||
+      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedHeaderPrefix) &&
+        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedHeaderPrefix) &&
+        !/PHẦN\s+(IV|III|II)/i.test(strippedHeaderPrefix)) ||
       /^(?:PHẦN\s*(?:I|1)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+nhiều\s+phương\s+án\s+lựa\s+chọn/i.test(
         strippedHeaderPrefix
       )
@@ -4082,8 +4129,9 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
     if (
-      (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedHeaderPrefix) &&
-        !/PHẦN\s+(III|IV)/i.test(strippedHeaderPrefix)) ||
+      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedHeaderPrefix) &&
+        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedHeaderPrefix) &&
+        !/PHẦN\s+(IV|III)/i.test(strippedHeaderPrefix)) ||
       /^(?:PHẦN\s*(?:II|2)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+đúng\s*[\/\-–—\s]*sai/i.test(
         strippedHeaderPrefix
       )
@@ -4095,7 +4143,8 @@ export function buildQuestionsFromParsedParagraphs(
       continue;
     }
     if (
-      /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedHeaderPrefix) ||
+      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedHeaderPrefix) &&
+        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedHeaderPrefix)) ||
       /^(?:PHẦN\s*(?:III|3)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+trả\s+lời\s+ngắn/i.test(
         strippedHeaderPrefix
       )
@@ -4850,7 +4899,12 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
   }
 
   if (p4.length > 0) {
-    const essayRoman = p3.length === 0 ? 'PHẦN III' : 'PHẦN IV';
+    const essayRoman =
+      p3.length === 0 && p2.length === 0
+        ? 'PHẦN II'
+        : p3.length === 0
+        ? 'PHẦN III'
+        : 'PHẦN IV';
     sections.push(`\n${essayRoman}. Tự luận.`);
     for (const q of p4) {
       const ansText = (q.essayAnswer || q.explanation || '').trim();
