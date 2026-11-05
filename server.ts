@@ -10,20 +10,32 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Bảng ánh xạ từ các tùy chọn giao diện sang các model chuẩn của @google/genai
+// Bộ nhớ đệm model hoạt động tốt nhất để không mất thời gian thử lại ở các đợt 5 câu tiếp theo
+const unavailableModels = new Set<string>();
+
 function resolveAllowedGeminiModel(requestedTier?: string): string {
+  let preferred = 'gemini-3.1-flash-lite';
   switch (requestedTier) {
     case '3.5-flash-lite':
-      return 'gemini-3.1-flash-lite';
+      preferred = 'gemini-3.1-flash-lite';
+      break;
     case '3.8-flash':
-      return 'gemini-3.8-flash';
+      preferred = 'gemini-3.8-flash';
+      break;
     case '3.1-pro':
-      return 'gemini-3.1-pro-preview';
+      preferred = 'gemini-3.1-pro-preview';
+      break;
     case '4-argon':
-      return 'gemini-3.8-flash';
+      preferred = 'gemini-3.8-flash';
+      break;
     default:
-      return 'gemini-3.8-flash';
+      preferred = 'gemini-3.1-flash-lite';
+      break;
   }
+  if (unavailableModels.has(preferred)) {
+    return 'gemini-3.1-flash-lite';
+  }
+  return preferred;
 }
 
 async function startServer() {
@@ -32,8 +44,14 @@ async function startServer() {
 
   app.use(express.json({ limit: '15mb' }));
 
-  // Middleware bảo mật tối đa: Không lưu cache, không lưu vết trên máy chủ (Zero-Trace Headers)
-  app.use('/api', (_req, res, next) => {
+  // Middleware CORS & Bảo mật Zero-Trace: Cho phép cả bản triển khai trên GitHub Pages gọi trực tiếp về AI Server
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Cache-Control, Pragma, X-Gemini-Api-Key, Authorization'
+    );
     res.setHeader(
       'Cache-Control',
       'no-store, no-cache, must-revalidate, proxy-revalidate, private'
@@ -41,6 +59,11 @@ async function startServer() {
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
     res.setHeader('X-Zero-Trace-Policy', 'NO_SERVER_LOGGING_IMMEDIATE_PURGE');
+
+    if (req.method === 'OPTIONS') {
+      res.status(204).end();
+      return;
+    }
     next();
   });
 
@@ -100,6 +123,7 @@ async function startServer() {
         /\s+(?:theo\s+chương\s+trình\s+giáo\s+dục\s+phổ\s+thông\s+2018|theo\s+chương\s+trình\s+GDPT\s*2018|theo\s+quy\s+luật\s+lí\s+thuyết|khi\s+phân\s+tích\s+dữ\s+kiện\s+trên)(?=[?.,;:]|$)/gi,
         ''
       )
+      .replace(/^\s*(?:Câu\s+\d+\s*[.:/-]?\s*)/i, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
   }
@@ -107,7 +131,8 @@ async function startServer() {
   // 1. API Tạo Đề Tương Đương Theo Từng Đợt 5 Câu (3-Step Pedagogical & Scientific Isomorphic Engine)
   app.post('/api/ai/clone-exam', async (req, res) => {
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const clientKey = req.headers['x-gemini-api-key'] as string | undefined;
+      const apiKey = (clientKey && clientKey.trim()) || process.env.GEMINI_API_KEY;
       if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         res.status(503).json({
           error: 'MISSING_SERVER_KEY',
@@ -143,48 +168,70 @@ async function startServer() {
       const primaryModel = resolveAllowedGeminiModel(modelTier);
       const fallbackModel = 'gemini-3.1-flash-lite';
 
-      const systemInstruction = `Bạn là Chuyên gia Sư phạm, Khảo thí Quốc gia và Chuyên gia Khoa học hàng đầu (Môn: ${
+      // Rút gọn dữ liệu đầu vào chỉ giữ đúng nội dung khoa học để AI tập trung 100% tư duy sáng tạo câu hỏi mới
+      const cleanInputQuestions = questions.map((q: Record<string, unknown>, idx: number) => ({
+        id: String(q.id || `q_${idx + 1}`),
+        part: String(q.part || 'PART_1'),
+        bloomLevel: String(q.bloomLevel || 'THONG_HIEU'),
+        stemText: String(q.stemText || ''),
+        choices:
+          q.part === 'PART_1' && Array.isArray(q.options)
+            ? q.options.map((o: Record<string, unknown>) => ({
+                label: String(o.currentLabel || o.originalLabel || 'A'),
+                text: String(o.text || ''),
+                isCorrect: Boolean(o.isCorrect),
+              }))
+            : q.part === 'PART_2' && Array.isArray(q.subItems)
+              ? q.subItems.map((s: Record<string, unknown>) => ({
+                  label: String(s.currentLabel || s.originalLabel || 'a'),
+                  text: String(s.text || ''),
+                  isCorrect: Boolean(s.isTrue),
+                }))
+              : [],
+        shortAnswer: String(q.shortAnswer || q.essayAnswer || ''),
+      }));
+
+      const systemInstruction = `Bạn là Giáo sư Đầu ngành, Chuyên gia Ra đề Thi Quốc gia và Chuyên gia Sư phạm môn ${
         subjectName || 'Khoa học Tự nhiên / THPT'
-      }).
-Nhiệm vụ của bạn là biên soạn CÂU HỎI TƯƠNG ĐƯƠNG ĐỒNG ĐẲNG (Isomorphic Question) cho từng câu hỏi trong đợt hiện tại (mỗi đợt tối đa 5 câu hỏi) theo đúng 3 BƯỚC BẮT BUỘC sau:
+      }.
+Nhiệm vụ của bạn là biên soạn BỘ CÂU HỎI TƯƠNG ĐƯƠNG MỚI HOÀN TOÀN (Isomorphic Questions) cho từng câu hỏi trong đợt hiện tại theo đúng 3 BƯỚC BẮT BUỘC:
 
 BƯỚC 1 - BẢO TOÀN CẤU TRÚC & MA TRẬN (100%):
-- Giữ nguyên tuyệt đối số lượng câu hỏi, mã phần (part: PART_1, PART_2, PART_3, hoặc PART_4), thứ tự câu và cấp độ nhận thức (bloomLevel: NHAN_BIET, THONG_HIEU, VAN_DUNG, VAN_DUNG_CAO) của từng câu gốc.
-- PART_1: Bắt buộc có đúng 4 phương án A, B, C, D (chỉ có duy nhất 1 phương án isCorrect = true).
-- PART_2: Bắt buộc có đúng 4 mệnh đề a, b, c, d (mỗi mệnh đề có isTrue = true hoặc false chuẩn xác).
-- PART_3: Câu trả lời ngắn có đáp số (shortAnswer) là một con số chuẩn xác (tối đa 4 ký tự, chỉ dùng chữ số 0-9, dấu "-" và dấu ",").
-- PART_4: Câu hỏi tự luận có đề bài mới tương đương kèm hướng dẫn chấm chi tiết (essayAnswer / explanation).
+- Trả về mảng JSON có ĐÚNG ${cleanInputQuestions.length} phần tử tương ứng 1-1 với ${cleanInputQuestions.length} câu hỏi gốc (giữ nguyên "id" và "part").
+- Với part = "PART_1": Mảng "choices" BẮT BUỘC có đúng 4 phương án A, B, C, D (chỉ có duy nhất 1 phương án isCorrect = true, 3 phương án còn lại isCorrect = false).
+- Với part = "PART_2": Mảng "choices" BẮT BUỘC có đúng 4 mệnh đề a, b, c, d (mỗi mệnh đề có isCorrect = true nếu mệnh đề Đúng, hoặc false nếu mệnh đề Sai).
+- Với part = "PART_3": Trường "shortAnswer" chứa đáp số mới chính xác (tối đa 4 ký tự số), mảng "choices" để rỗng [].
+- Với part = "PART_4": Trường "shortAnswer" và "explanation" chứa hướng dẫn chấm tự luận chi tiết, mảng "choices" để rỗng [].
 
-BƯỚC 2 - BẢO TOÀN CƠ CHẾ KHOA HỌC (100%):
-- Nếu câu gốc kiểm tra hiện tượng, cơ chế khoa học, quy luật hay dạng toán nào, câu mới BẮT BUỘC kiểm tra đúng cơ chế/dạng toán tương đương bản chất 100%.
-- TUYỆT ĐỐI KHÔNG diễn đạt vượt ra ngoài giới hạn kiến thức hoặc phạm vi của câu hỏi gốc.
+BƯỚC 2 - BẢO TOÀN CƠ CHẾ KHOA HỌC NHƯNG ĐỔI GÓC HỎI ĐỂ TẠO CÂU HỎI & ĐÁP ÁN MỚI THẬT SỰ (100%):
+- Câu mới kiểm tra đúng chuyên đề, hiện tượng, cơ chế khoa học hoặc dạng toán của câu gốc, KHÔNG vượt ngoài giới hạn kiến thức của câu gốc.
+- TUYỆT ĐỐI CẤM giữ nguyên câu hỏi gốc hoặc giữ nguyên đáp án đúng giống hệt câu gốc!
+- Quy tắc biến đổi thông minh cho câu hỏi Lý thuyết / Cơ chế (PART_1):
+  + Chiến lược 1 (Chuyển sang đối tượng tương đương trong cùng nhóm): Nếu câu gốc hỏi vai trò của nguyên tố/chất/cơ quan A (ví dụ câu gốc hỏi nguyên tố Cl quang phân li nước trong 4 phương án Cl, Ca, Mg, Mo), câu mới BẮT BUỘC hỏi vai trò của một nguyên tố/chất/cơ quan KHÁC trong nhóm đó (ví dụ hỏi nguyên tố Mg cấu tạo diệp lục, hoặc Mo cấu tạo enzyme cố định đạm nitrogenase, hoặc Ca cấu tạo thành tế bào) để ĐÁP ÁN ĐÚNG LÀ PHƯƠNG ÁN MỚI!
+  + Chiến lược 2 (Đảo trạng thái sinh lí / Đảo chiều hiện tượng): Nếu câu gốc hỏi trạng thái A (ví dụ: khi cây bị hạn, tế bào khí khổng mất trương nước thì thành mỏng co lại, thành dày duỗi thẳng làm khí khổng đóng), câu mới BẮT BUỘC hỏi trạng thái đối lập hoặc khâu điều tiết khác trong cùng cơ chế (ví dụ: khi cây đủ nước và chiếu sáng, tế bào khí khổng trương nước thì thành mỏng căng mạnh kéo thành dày cong theo làm khí khổng mở rộng) và viết mới cả 4 phương án A, B, C, D!
 
-BƯỚC 3 - ĐỔI MỚI NGỮ CẢNH & SỐ LIỆU THỰC TIỄN CHUẨN XÁC (100%):
-- Sáng tạo mới hoàn toàn bối cảnh thực tế đời sống/thí nghiệm và thay đổi toàn bộ tham số, số liệu (biến thể đề số ${
+BƯỚC 3 - ĐỔI MỚI NGỮ CẢNH THỰC TẾ & SỐ LIỆU TÍNH TOÁN (100%):
+- Với bài toán tính toán: Thay đổi hoàn toàn bộ số liệu và bối cảnh thực tế (Biến thể đề số ${
         variantIndex || 1
-      }).
-- Tự giải lại bài toán theo đúng công thức khoa học để đáp án đúng, các phương án nhiễu và lời giải (explanation) khớp nhau 100%, TUYỆT ĐỐI KHÔNG bịa số liệu sai lệch.
-
-QUY TẮC CẤM TUYỆT ĐỐI:
-1. KHÔNG ĐƯỢC chép lại nguyên xi câu hỏi gốc hoặc chỉ đảo vị trí từ ngữ.
-2. KHÔNG ĐƯỢC thêm các cụm từ vô nghĩa, sáo rỗng như: "Theo chương trình giáo dục phổ thông 2018", "Theo chương trình GDPT 2018", "Theo chương trình mới", "Theo chương trình THPT 2025", "(xét trong điều kiện chuẩn)", "theo quy luật lí thuyết", "khi phân tích dữ kiện trên".
-3. Viết ngắn gọn, chuẩn mực, sắc sảo đúng văn phong đề thi chính thức của Bộ Giáo dục và Đào tạo.`;
+      }), tính toán lại đáp số chính xác 100% và ghi rõ phép tính trong "explanation".
+- CẤM TUYỆT ĐỐI các cụm từ vô nghĩa như "Theo chương trình giáo dục phổ thông 2018", "(xét trong điều kiện chuẩn)". Không ghi tiền tố "Câu 1.", "A.", "B." ở đầu stemText hay text của choices.`;
 
       const userPrompt = `Đang xử lý Đợt ${batchIndex || 1}/${
         totalBatches || 1
-      } (Biến thể đề số ${variantIndex || 1}) gồm ${
-        questions.length
-      } câu hỏi gốc dưới đây.
+      } (Biến thể đề số ${variantIndex || 1}).
 ${
   customInstruction
     ? `Chỉ dẫn bổ sung của Giáo viên: ${customInstruction}\n`
     : ''
-}Hãy thực hiện tuần tự Bước 1 -> Bước 2 -> Bước 3 để tạo ra đúng ${
-        questions.length
-      } câu hỏi mới tương đương bản chất 100%, đổi mới hoàn toàn ngữ cảnh thực tế & số liệu tính toán chuẩn xác.
+}Hãy trả về mảng JSON gồm ĐÚNG ${
+        cleanInputQuestions.length
+      } câu hỏi tương đương mới hoàn toàn theo danh sách id: [${cleanInputQuestions
+        .map((q) => `"${q.id}"`)
+        .join(', ')}].
+Mỗi câu hỏi mới PHẢI có "stemText" mới, mảng "choices" gồm 4 phương án A, B, C, D mới và đáp án đúng MỚI khác với câu gốc!
 
-Danh sách câu hỏi gốc của đợt này (JSON):
-${JSON.stringify(questions, null, 2)}`;
+Danh sách câu hỏi gốc:
+${JSON.stringify(cleanInputQuestions, null, 2)}`;
 
       const schemaConfig = {
         systemInstruction,
@@ -194,46 +241,62 @@ ${JSON.stringify(questions, null, 2)}`;
           items: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING },
-              part: { type: Type.STRING },
-              originalIndex: { type: Type.INTEGER },
-              displayIndex: { type: Type.INTEGER },
-              stemText: { type: Type.STRING },
-              explanation: { type: Type.STRING },
-              essayAnswer: { type: Type.STRING },
-              bloomLevel: { type: Type.STRING },
-              learningOutcome: { type: Type.STRING },
-              shortAnswer: { type: Type.STRING },
-              options: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    id: { type: Type.STRING },
-                    originalLabel: { type: Type.STRING },
-                    currentLabel: { type: Type.STRING },
-                    text: { type: Type.STRING },
-                    isCorrect: { type: Type.BOOLEAN },
-                  },
-                  required: ['originalLabel', 'currentLabel', 'text', 'isCorrect'],
-                },
+              id: {
+                type: Type.STRING,
+                description: 'Giữ nguyên id của câu hỏi gốc tương ứng',
               },
-              subItems: {
+              part: {
+                type: Type.STRING,
+                description: 'PART_1, PART_2, PART_3, hoặc PART_4',
+              },
+              stemText: {
+                type: Type.STRING,
+                description: 'Nội dung câu hỏi mới tương đương (không ghi Câu 1, Câu 2 ở đầu)',
+              },
+              explanation: {
+                type: Type.STRING,
+                description: 'Giải thích cơ chế khoa học hoặc lời giải chi tiết của câu hỏi mới',
+              },
+              bloomLevel: {
+                type: Type.STRING,
+                description: 'NHAN_BIET, THONG_HIEU, VAN_DUNG, hoặc VAN_DUNG_CAO',
+              },
+              shortAnswer: {
+                type: Type.STRING,
+                description: 'Đáp số cho PART_3 (tối đa 4 ký tự) hoặc hướng dẫn chấm cho PART_4; để chuỗi rỗng nếu là PART_1/PART_2',
+              },
+              choices: {
                 type: Type.ARRAY,
+                description: 'BẮT BUỘC có 4 phần tử A, B, C, D (cho PART_1) hoặc a, b, c, d (cho PART_2)',
                 items: {
                   type: Type.OBJECT,
                   properties: {
-                    id: { type: Type.STRING },
-                    originalLabel: { type: Type.STRING },
-                    currentLabel: { type: Type.STRING },
-                    text: { type: Type.STRING },
-                    isTrue: { type: Type.BOOLEAN },
+                    label: {
+                      type: Type.STRING,
+                      description: 'A, B, C, D (với PART_1) hoặc a, b, c, d (với PART_2)',
+                    },
+                    text: {
+                      type: Type.STRING,
+                      description: 'Nội dung phương án/mệnh đề mới (không ghi A., B., a), b) ở đầu)',
+                    },
+                    isCorrect: {
+                      type: Type.BOOLEAN,
+                      description: 'true nếu là đáp án đúng (PART_1) hoặc mệnh đề Đúng (PART_2), ngược lại là false',
+                    },
                   },
-                  required: ['originalLabel', 'currentLabel', 'text', 'isTrue'],
+                  required: ['label', 'text', 'isCorrect'],
                 },
               },
             },
-            required: ['id', 'part', 'stemText'],
+            required: [
+              'id',
+              'part',
+              'stemText',
+              'explanation',
+              'bloomLevel',
+              'shortAnswer',
+              'choices',
+            ],
           },
         },
       };
@@ -247,6 +310,7 @@ ${JSON.stringify(questions, null, 2)}`;
           config: schemaConfig,
         });
       } catch (primaryErr) {
+        unavailableModels.add(primaryModel);
         if (primaryModel !== fallbackModel) {
           usedModel = fallbackModel;
           response = await ai.models.generateContent({
@@ -261,31 +325,72 @@ ${JSON.stringify(questions, null, 2)}`;
 
       const rawText = response.text || '[]';
       const parsedQuestions = JSON.parse(rawText);
-      const clonedQuestions = Array.isArray(parsedQuestions)
-        ? parsedQuestions.map((qItem: Record<string, unknown>) => ({
-            ...qItem,
-            stemText: stripForbiddenFluffText(String(qItem.stemText || '')),
-            explanation: stripForbiddenFluffText(String(qItem.explanation || '')),
-            essayAnswer: qItem.essayAnswer
-              ? stripForbiddenFluffText(String(qItem.essayAnswer))
-              : undefined,
-            learningOutcome: stripForbiddenFluffText(
-              String(qItem.learningOutcome || '')
-            ),
-            options: Array.isArray(qItem.options)
-              ? qItem.options.map((o: Record<string, unknown>) => ({
-                  ...o,
-                  text: stripForbiddenFluffText(String(o.text || '')),
-                }))
-              : undefined,
-            subItems: Array.isArray(qItem.subItems)
-              ? qItem.subItems.map((s: Record<string, unknown>) => ({
-                  ...s,
-                  text: stripForbiddenFluffText(String(s.text || '')),
-                }))
-              : undefined,
-          }))
+      const parsedArray: Array<Record<string, unknown>> = Array.isArray(parsedQuestions)
+        ? parsedQuestions
         : [];
+
+      const clonedQuestions = cleanInputQuestions.map((origQ, idx) => {
+        const matched =
+          parsedArray.find((item) => String(item.id) === origQ.id) ||
+          parsedArray[idx] ||
+          {};
+        const rawChoices = Array.isArray(matched.choices)
+          ? (matched.choices as Array<Record<string, unknown>>)
+          : [];
+
+        const isPart1 = origQ.part === 'PART_1';
+        const isPart2 = origQ.part === 'PART_2';
+
+        const options = isPart1
+          ? rawChoices.slice(0, 4).map((c, cIdx) => {
+              const lbl = ['A', 'B', 'C', 'D'][cIdx] || 'A';
+              return {
+                id: `${origQ.id}-opt-${lbl}`,
+                originalLabel: lbl,
+                currentLabel: lbl,
+                text: stripForbiddenFluffText(
+                  String(c.text || '').replace(/^[A-Da-d]\s*[.:)]\s*/, '')
+                ),
+                isCorrect: Boolean(c.isCorrect),
+              };
+            })
+          : undefined;
+
+        const subItems = isPart2
+          ? rawChoices.slice(0, 4).map((c, cIdx) => {
+              const lbl = ['a', 'b', 'c', 'd'][cIdx] || 'a';
+              return {
+                id: `${origQ.id}-sub-${lbl}`,
+                originalLabel: lbl,
+                currentLabel: lbl,
+                text: stripForbiddenFluffText(
+                  String(c.text || '').replace(/^[a-dA-D]\s*[.:)]\s*/, '')
+                ),
+                isTrue: Boolean(c.isCorrect),
+              };
+            })
+          : undefined;
+
+        return {
+          id: origQ.id,
+          part: origQ.part,
+          stemText: stripForbiddenFluffText(String(matched.stemText || '')),
+          explanation: stripForbiddenFluffText(String(matched.explanation || '')),
+          bloomLevel: String(matched.bloomLevel || origQ.bloomLevel || 'THONG_HIEU'),
+          shortAnswer:
+            origQ.part === 'PART_3'
+              ? stripForbiddenFluffText(String(matched.shortAnswer || '')).slice(0, 4)
+              : undefined,
+          essayAnswer:
+            origQ.part === 'PART_4'
+              ? stripForbiddenFluffText(
+                  String(matched.shortAnswer || matched.explanation || '')
+                )
+              : undefined,
+          options,
+          subItems,
+        };
+      });
 
       if (req.body) {
         delete req.body.questions;
@@ -311,7 +416,8 @@ ${JSON.stringify(questions, null, 2)}`;
   // 2. API Giải Chi Tiết & Phân Tích Ma Trận Đặc Tả (Zero-Trace)
   app.post('/api/ai/solve-and-analyze', async (req, res) => {
     try {
-      const apiKey = process.env.GEMINI_API_KEY;
+      const clientKey = req.headers['x-gemini-api-key'] as string | undefined;
+      const apiKey = (clientKey && clientKey.trim()) || process.env.GEMINI_API_KEY;
       if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
         res.status(503).json({
           error: 'MISSING_SERVER_KEY',
@@ -336,26 +442,51 @@ ${JSON.stringify(questions, null, 2)}`;
       } sau đây (Tuyệt đối không thêm các từ sáo rỗng):
 ${JSON.stringify(questions, null, 2)}`;
 
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                id: { type: Type.STRING },
-                explanation: { type: Type.STRING },
-                bloomLevel: { type: Type.STRING },
-                learningOutcome: { type: Type.STRING },
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  bloomLevel: { type: Type.STRING },
+                  learningOutcome: { type: Type.STRING },
+                },
+                required: ['id', 'explanation', 'bloomLevel', 'learningOutcome'],
               },
-              required: ['id', 'explanation', 'bloomLevel', 'learningOutcome'],
             },
           },
-        },
-      });
+        });
+      } catch {
+        unavailableModels.add(modelName);
+        response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  bloomLevel: { type: Type.STRING },
+                  learningOutcome: { type: Type.STRING },
+                },
+                required: ['id', 'explanation', 'bloomLevel', 'learningOutcome'],
+              },
+            },
+          },
+        });
+      }
 
       if (req.body) {
         delete req.body.questions;
