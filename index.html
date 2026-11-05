@@ -17,6 +17,664 @@
     <script type="module" src="./src/main.tsx"></script>
   <!-- Bộ giải mã vector WMF/EMF sang HTML5 Canvas cho trình duyệt -->
 <script src="https://cdn.jsdelivr.net/npm/wmf@1.0.2/dist/wmf.min.js"></script>
+
+  <!-- ================= EDU MIX 2025 - 3D TEACHER AUTHENTICATION MODAL ================= -->
+  <style>
+    #edumix-auth-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 999999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: radial-gradient(circle at 50% 25%, rgba(15, 23, 42, 0.85) 0%, rgba(2, 6, 23, 0.96) 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      perspective: 1200px;
+    }
+
+    #edumix-auth-overlay.active {
+      display: flex;
+      animation: edumixFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes edumixFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .edumix-modal-3d {
+      position: relative;
+      width: 100%;
+      max-width: 470px;
+      background: linear-gradient(160deg, #1e293b 0%, #0f172a 60%, #090d16 100%);
+      border-radius: 26px;
+      padding: 30px 28px 28px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      box-shadow:
+        0 28px 60px -12px rgba(0, 0, 0, 0.85),
+        0 10px 0 0 #090f1d,
+        0 12px 25px 0 rgba(14, 165, 233, 0.22),
+        inset 0 2px 2px rgba(255, 255, 255, 0.15);
+      transform: translateY(0) rotateX(2deg);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      color: #f8fafc;
+      overflow: hidden;
+    }
+
+    .edumix-modal-3d::before {
+      content: "";
+      position: absolute;
+      top: -80px;
+      left: -80px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .edumix-modal-3d::after {
+      content: "";
+      position: absolute;
+      bottom: -80px;
+      right: -80px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.2) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .edumix-header-wrap {
+      text-align: center;
+      margin-bottom: 22px;
+      position: relative;
+      z-index: 2;
+    }
+
+    .edumix-logo-3d {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 12px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 50%, #6366f1 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      color: #ffffff;
+      box-shadow:
+        0 8px 0 #1e3a8a,
+        0 14px 24px rgba(59, 130, 246, 0.45),
+        inset 0 2px 3px rgba(255, 255, 255, 0.45);
+      transform: translateY(-2px);
+      animation: edumixFloatLogo 3s ease-in-out infinite;
+    }
+
+    @keyframes edumixFloatLogo {
+      0%, 100% { transform: translateY(-2px); }
+      50% { transform: translateY(-7px); }
+    }
+
+    .edumix-app-title {
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: -0.5px;
+      margin: 0 0 8px;
+      background: linear-gradient(90deg, #38bdf8, #c084fc, #fbbf24);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 4px 16px rgba(56, 189, 248, 0.2);
+    }
+
+    .edumix-neon-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 14px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #67e8f9;
+      background: rgba(6, 182, 212, 0.14);
+      border: 1px solid rgba(34, 211, 238, 0.55);
+      box-shadow: 0 0 14px rgba(34, 211, 238, 0.45), inset 0 0 8px rgba(34, 211, 238, 0.25);
+      animation: edumixNeonPulse 1.8s infinite alternate;
+    }
+
+    .edumix-neon-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22d3ee;
+      box-shadow: 0 0 10px #22d3ee, 0 0 20px #22d3ee;
+      animation: edumixBlink 1s infinite;
+    }
+
+    @keyframes edumixNeonPulse {
+      0% {
+        box-shadow: 0 0 8px rgba(34, 211, 238, 0.35), inset 0 0 6px rgba(34, 211, 238, 0.15);
+        border-color: rgba(34, 211, 238, 0.45);
+      }
+      100% {
+        box-shadow: 0 0 20px rgba(34, 211, 238, 0.85), 0 0 32px rgba(168, 85, 247, 0.45), inset 0 0 10px rgba(34, 211, 238, 0.35);
+        border-color: rgba(103, 232, 249, 0.95);
+      }
+    }
+
+    @keyframes edumixBlink {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.85); }
+    }
+
+    .edumix-subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin: 10px 0 0;
+      line-height: 1.45;
+    }
+
+    .edumix-form-group-3d {
+      position: relative;
+      z-index: 2;
+      margin-bottom: 16px;
+      padding: 13px 15px 14px;
+      border-radius: 16px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .edumix-form-group-3d:focus-within {
+      transform: translateY(-2px);
+    }
+
+    /* Ô 1: Địa chỉ Gmail - Xanh Cyan/Blue */
+    .edumix-group-cyan {
+      background: linear-gradient(145deg, rgba(6, 182, 212, 0.14) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid rgba(34, 211, 238, 0.4);
+      box-shadow:
+        0 6px 0 #083344,
+        0 10px 20px -4px rgba(6, 182, 212, 0.28),
+        inset 0 1px 1px rgba(255, 255, 255, 0.12);
+    }
+    .edumix-group-cyan:focus-within {
+      border-color: #22d3ee;
+      box-shadow:
+        0 6px 0 #0e7490,
+        0 12px 24px -2px rgba(34, 211, 238, 0.42),
+        inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    }
+    .edumix-group-cyan .edumix-field-label {
+      color: #67e8f9;
+    }
+    .edumix-group-cyan .edumix-input-icon {
+      color: #22d3ee;
+    }
+
+    /* Ô 2: Họ và tên Thầy / Cô - Tím Thạch Anh (Amethyst Purple) */
+    .edumix-group-purple {
+      background: linear-gradient(145deg, rgba(168, 85, 247, 0.14) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid rgba(192, 132, 252, 0.4);
+      box-shadow:
+        0 6px 0 #3b0764,
+        0 10px 20px -4px rgba(168, 85, 247, 0.28),
+        inset 0 1px 1px rgba(255, 255, 255, 0.12);
+    }
+    .edumix-group-purple:focus-within {
+      border-color: #c084fc;
+      box-shadow:
+        0 6px 0 #6b21a8,
+        0 12px 24px -2px rgba(192, 132, 252, 0.42),
+        inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    }
+    .edumix-group-purple .edumix-field-label {
+      color: #d8b4fe;
+    }
+    .edumix-group-purple .edumix-input-icon {
+      color: #c084fc;
+    }
+
+    /* Ô 3: Trường công tác - Cam Hổ Phách (Amber Orange) */
+    .edumix-group-amber {
+      background: linear-gradient(145deg, rgba(245, 158, 11, 0.14) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid rgba(251, 191, 36, 0.4);
+      box-shadow:
+        0 6px 0 #451a03,
+        0 10px 20px -4px rgba(245, 158, 11, 0.28),
+        inset 0 1px 1px rgba(255, 255, 255, 0.12);
+    }
+    .edumix-group-amber:focus-within {
+      border-color: #fbbf24;
+      box-shadow:
+        0 6px 0 #92400e,
+        0 12px 24px -2px rgba(251, 191, 36, 0.42),
+        inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    }
+    .edumix-group-amber .edumix-field-label {
+      color: #fde68a;
+    }
+    .edumix-group-amber .edumix-input-icon {
+      color: #fbbf24;
+    }
+
+    .edumix-field-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 7px;
+    }
+
+    .edumix-required-star {
+      color: #f87171;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .edumix-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .edumix-input-icon {
+      position: absolute;
+      left: 12px;
+      font-size: 15px;
+      pointer-events: none;
+    }
+
+    .edumix-input-3d {
+      width: 100%;
+      padding: 10px 12px 10px 38px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(2, 6, 23, 0.65);
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 500;
+      outline: none;
+      transition: all 0.2s ease;
+      box-sizing: border-box;
+    }
+
+    .edumix-input-3d::placeholder {
+      color: #64748b;
+      font-weight: 400;
+    }
+
+    .edumix-input-3d:focus {
+      background: rgba(2, 6, 23, 0.9);
+      border-color: rgba(255, 255, 255, 0.28);
+    }
+
+    /* Khung báo lỗi màu đỏ */
+    #edumix-auth-error {
+      display: none;
+      position: relative;
+      z-index: 2;
+      margin: 4px 0 16px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(220, 38, 38, 0.25) 0%, rgba(127, 29, 29, 0.45) 100%);
+      border: 1px solid #ef4444;
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3);
+      color: #fecaca;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.45;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #edumix-auth-error.visible {
+      display: flex;
+      animation: edumixShake 0.4s ease;
+    }
+
+    @keyframes edumixShake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-6px); }
+      40%, 80% { transform: translateX(6px); }
+    }
+
+    /* Nút bấm khối 3D gradient có hiệu ứng click lún */
+    .edumix-submit-btn-3d {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      margin-top: 6px;
+      padding: 15px 20px;
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(90deg, #06b6d4 0%, #3b82f6 50%, #8b5cf6 100%);
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      box-shadow:
+        0 7px 0 #1e3a8a,
+        0 14px 28px rgba(59, 130, 246, 0.45),
+        inset 0 2px 2px rgba(255, 255, 255, 0.35);
+      transform: translateY(0);
+      transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.2s ease;
+      user-select: none;
+    }
+
+    .edumix-submit-btn-3d:hover:not(:disabled) {
+      filter: brightness(1.08);
+      transform: translateY(-2px);
+      box-shadow:
+        0 9px 0 #1e3a8a,
+        0 18px 32px rgba(59, 130, 246, 0.55),
+        inset 0 2px 2px rgba(255, 255, 255, 0.45);
+    }
+
+    .edumix-submit-btn-3d:active:not(:disabled) {
+      transform: translateY(6px);
+      box-shadow:
+        0 1px 0 #1e3a8a,
+        0 4px 10px rgba(59, 130, 246, 0.35),
+        inset 0 2px 4px rgba(0, 0, 0, 0.25);
+    }
+
+    .edumix-submit-btn-3d:disabled {
+      opacity: 0.75;
+      cursor: wait;
+    }
+
+    .edumix-footer-note {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      margin-top: 16px;
+      font-size: 11.5px;
+      color: #64748b;
+    }
+  </style>
+
+  <div id="edumix-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="edumix-modal-title">
+    <div class="edumix-modal-3d">
+      <div class="edumix-header-wrap">
+        <div class="edumix-logo-3d">
+          <i class="fa-solid fa-layer-group"></i>
+        </div>
+        <h2 id="edumix-modal-title" class="edumix-app-title">Edu Mix 2025</h2>
+        <div class="edumix-neon-badge">
+          <span class="edumix-neon-dot"></span>
+          <span>Xác thực Giáo viên Bản quyền 3D</span>
+        </div>
+        <p class="edumix-subtitle">Vui lòng nhập thông tin Thầy / Cô để kích hoạt và đồng bộ phiên làm việc</p>
+      </div>
+
+      <form id="edumix-auth-form" novalidate>
+        <!-- Ô 1: Địa chỉ Gmail (xanh cyan/blue) -->
+        <div class="edumix-form-group-3d edumix-group-cyan">
+          <label for="edumix-gmail" class="edumix-field-label">
+            <span><i class="fa-solid fa-envelope"></i> Địa chỉ Gmail</span>
+            <span class="edumix-required-star">* Bắt buộc</span>
+          </label>
+          <div class="edumix-input-wrapper">
+            <i class="fa-brands fa-google edumix-input-icon"></i>
+            <input
+              type="email"
+              id="edumix-gmail"
+              name="gmail"
+              class="edumix-input-3d"
+              placeholder="ví dụ: giaovien@gmail.com"
+              required
+              autocomplete="email"
+            />
+          </div>
+        </div>
+
+        <!-- Ô 2: Họ và tên Thầy / Cô (tím thạch anh) -->
+        <div class="edumix-form-group-3d edumix-group-purple">
+          <label for="edumix-teacher-name" class="edumix-field-label">
+            <span><i class="fa-solid fa-user-graduate"></i> Họ và tên Thầy / Cô</span>
+            <span class="edumix-required-star">* Bắt buộc</span>
+          </label>
+          <div class="edumix-input-wrapper">
+            <i class="fa-solid fa-chalkboard-user edumix-input-icon"></i>
+            <input
+              type="text"
+              id="edumix-teacher-name"
+              name="teacherName"
+              class="edumix-input-3d"
+              placeholder="Nhập đầy đủ họ và tên Thầy / Cô"
+              required
+              autocomplete="name"
+            />
+          </div>
+        </div>
+
+        <!-- Ô 3: Trường công tác (cam hổ phách) -->
+        <div class="edumix-form-group-3d edumix-group-amber">
+          <label for="edumix-school-name" class="edumix-field-label">
+            <span><i class="fa-solid fa-school"></i> Trường công tác</span>
+            <span class="edumix-required-star">* Bắt buộc</span>
+          </label>
+          <div class="edumix-input-wrapper">
+            <i class="fa-solid fa-building-columns edumix-input-icon"></i>
+            <input
+              type="text"
+              id="edumix-school-name"
+              name="schoolName"
+              class="edumix-input-3d"
+              placeholder="Ví dụ: Trường THPT Chuyên..."
+              required
+              autocomplete="organization"
+            />
+          </div>
+        </div>
+
+        <!-- Khung hiển thị thông báo lỗi màu đỏ -->
+        <div id="edumix-auth-error" role="alert">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 18px; color: #f87171; flex-shrink: 0;"></i>
+          <span id="edumix-auth-error-text">Đã có lỗi xảy ra. Vui lòng kiểm tra lại!</span>
+        </div>
+
+        <!-- Nút bấm khối 3D gradient có hiệu ứng click lún -->
+        <button type="submit" id="edumix-auth-submit" class="edumix-submit-btn-3d">
+          <i class="fa-solid fa-rocket" id="edumix-submit-icon"></i>
+          <span id="edumix-submit-text">VÀO PHẦN MỀM TRỘN ĐỀ</span>
+        </button>
+      </form>
+
+      <div class="edumix-footer-note">
+        <i class="fa-solid fa-shield-halved"></i> Bảo mật thiết bị &amp; đồng bộ trực tiếp hệ thống Edu Mix 2025
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzwdXDqUQbWShXFFYrgX17fCnhi0jc4TLFaoECm6DvTi8zcDO8i37dsxnLQfErZNRfj/exec";
+      const USER_STORAGE_KEY = "tronde_current_user";
+      const DEVICE_STORAGE_KEY = "tronde_device_id";
+
+      function getOrCreateDeviceId() {
+        try {
+          let deviceId = localStorage.getItem(DEVICE_STORAGE_KEY);
+          if (!deviceId) {
+            const randomPart = (typeof crypto !== "undefined" && crypto.randomUUID)
+              ? crypto.randomUUID()
+              : "dev-" + Date.now().toString(36) + "-" + Math.random().toString(36).substring(2, 10);
+            deviceId = "EDUMIX-" + randomPart.toUpperCase();
+            localStorage.setItem(DEVICE_STORAGE_KEY, deviceId);
+          }
+          return deviceId;
+        } catch (err) {
+          return "EDUMIX-FALLBACK-" + Date.now();
+        }
+      }
+
+      async function fetchClientIp() {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(function () { controller.abort(); }, 3500);
+          const res = await fetch("https://api.ipify.org?format=json", { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.ip) return String(data.ip);
+          }
+        } catch (e) {
+          // Ignore IP fetch failure and use fallback
+        }
+        return "unknown";
+      }
+
+      function showError(msg) {
+        const errBox = document.getElementById("edumix-auth-error");
+        const errText = document.getElementById("edumix-auth-error-text");
+        if (errBox && errText) {
+          errText.textContent = msg;
+          errBox.classList.remove("visible");
+          void errBox.offsetWidth; // Reflow to re-trigger shake animation
+          errBox.classList.add("visible");
+        }
+      }
+
+      function hideError() {
+        const errBox = document.getElementById("edumix-auth-error");
+        if (errBox) {
+          errBox.classList.remove("visible");
+        }
+      }
+
+      function initAuthModal() {
+        const overlay = document.getElementById("edumix-auth-overlay");
+        const form = document.getElementById("edumix-auth-form");
+        const gmailInput = document.getElementById("edumix-gmail");
+        const teacherInput = document.getElementById("edumix-teacher-name");
+        const schoolInput = document.getElementById("edumix-school-name");
+        const submitBtn = document.getElementById("edumix-auth-submit");
+        const submitText = document.getElementById("edumix-submit-text");
+        const submitIcon = document.getElementById("edumix-submit-icon");
+
+        if (!overlay || !form) return;
+
+        // Luôn đảm bảo sinh mã máy duy nhất ("tronde_device_id") ngay khi tải trang
+        const deviceId = getOrCreateDeviceId();
+
+        // Kiểm tra localStorage "tronde_current_user"
+        let currentUser = null;
+        try {
+          const rawUser = localStorage.getItem(USER_STORAGE_KEY);
+          if (rawUser) {
+            const parsed = JSON.parse(rawUser);
+            if (parsed && parsed.gmail && parsed.teacherName && parsed.schoolName) {
+              currentUser = parsed;
+            }
+          }
+        } catch (e) {
+          currentUser = null;
+        }
+
+        if (!currentUser) {
+          overlay.classList.add("active");
+        }
+
+        form.addEventListener("submit", async function (e) {
+          e.preventDefault();
+          hideError();
+
+          const gmail = (gmailInput ? gmailInput.value : "").trim();
+          const teacherName = (teacherInput ? teacherInput.value : "").trim();
+          const schoolName = (schoolInput ? schoolInput.value : "").trim();
+
+          if (!gmail || !teacherName || !schoolName) {
+            showError("Vui lòng điền đầy đủ cả 3 thông tin bắt buộc: Địa chỉ Gmail, Họ và tên Thầy / Cô và Trường công tác!");
+            return;
+          }
+
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(gmail)) {
+            showError("Địa chỉ Gmail không hợp lệ. Vui lòng nhập đúng định dạng email (ví dụ: giaovien@gmail.com)!");
+            return;
+          }
+
+          if (submitBtn) submitBtn.disabled = true;
+          if (submitText) submitText.textContent = "ĐANG XÁC THỰC HỆ THỐNG...";
+          if (submitIcon) submitIcon.className = "fa-solid fa-spinner fa-spin";
+
+          try {
+            const ipAddress = await fetchClientIp();
+            const payload = {
+              gmail: gmail,
+              teacherName: teacherName,
+              schoolName: schoolName,
+              deviceId: deviceId,
+              ipAddress: ipAddress,
+              status: "active"
+            };
+
+            const response = await fetch(GOOGLE_SCRIPT_URL, {
+              method: "POST",
+              headers: {
+                "Content-Type": "text/plain;charset=utf-8"
+              },
+              body: JSON.stringify(payload)
+            });
+
+            let result = null;
+            try {
+              const text = await response.text();
+              result = text ? JSON.parse(text) : { status: "success" };
+            } catch (parseErr) {
+              result = { status: "success" };
+            }
+
+            if (result && (result.status === "duplicate" || result.status === "error")) {
+              const serverMsg = result.message || (
+                result.status === "duplicate"
+                  ? "Tài khoản Gmail hoặc thiết bị này đã được đăng ký trên một thiết bị khác!"
+                  : "Xác thực không thành công từ máy chủ. Vui lòng kiểm tra lại thông tin!"
+              );
+              showError(serverMsg);
+              if (submitBtn) submitBtn.disabled = false;
+              if (submitText) submitText.textContent = "VÀO PHẦN MỀM TRỘN ĐỀ";
+              if (submitIcon) submitIcon.className = "fa-solid fa-rocket";
+              return;
+            }
+
+            // Lưu thông tin vào localStorage "tronde_current_user" và ẩn modal
+            try {
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(payload));
+            } catch (storageErr) {
+              // Ignore storage quota errors
+            }
+            overlay.classList.remove("active");
+          } catch (networkErr) {
+            showError("Không thể kết nối đến máy chủ xác thực. Vui lòng kiểm tra kết nối mạng và thử lại!");
+          } finally {
+            if (submitBtn) submitBtn.disabled = false;
+            if (submitText) submitText.textContent = "VÀO PHẦN MỀM TRỘN ĐỀ";
+            if (submitIcon) submitIcon.className = "fa-solid fa-rocket";
+          }
+        });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", initAuthModal);
+      } else {
+        initAuthModal();
+      }
+    })();
+  </script>
+  <!-- ================= END EDU MIX 2025 AUTHENTICATION MODAL ================= -->
   </body>
 </html>
 
