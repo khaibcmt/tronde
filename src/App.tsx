@@ -1814,7 +1814,7 @@ export default function App() {
       const blob = await exportCleanedMasterDocx(questions, config, false);
       triggerBrowserDownload(
         blob,
-        buildStandardExportFileName(config, 'docx', 'Đề chuẩn Word Equation oMath')
+        buildStandardExportFileName(config, 'docx', 'Đề gốc')
       );
       setStatusBanner({
         type: 'SUCCESS',
@@ -1832,7 +1832,7 @@ export default function App() {
       const blob = await exportMasterAnswerSheetDocx(shuffledVariants, config);
       triggerBrowserDownload(
         blob,
-        buildStandardExportFileName(config, 'docx', 'Bảng đáp án khảo thí ma trận')
+        buildStandardExportFileName(config, 'docx', 'Đáp án')
       );
       await executePostDownloadZeroTracePurge(
         `Bảng Đáp Án Ma Trận ${shuffledVariants.length} Mã Đề (.docx)`
@@ -1848,7 +1848,7 @@ export default function App() {
       const blob = await exportMatrixAndSpecificationDocx(questions, config);
       triggerBrowserDownload(
         blob,
-        buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991')
+        buildStandardExportFileName(config, 'docx', 'Ma trận đặc tả CV 7991')
       );
       await executePostDownloadZeroTracePurge('Khung Ma Trận & Bản Đặc Tả CV 7991 (.docx)');
     } finally {
@@ -1912,7 +1912,7 @@ export default function App() {
         buildStandardExportFileName(config, 'zip')
       );
       await executePostDownloadZeroTracePurge(
-        `Trọn Bộ ${targetVariants.length} Đề Thi (Chuẩn Word Equation <m:oMath>) + Đáp Án + Ma Trận CV 7991 + 4 Mã QR + 4 File Excel (.zip)`
+        `Trọn Bộ ${targetVariants.length} Đề Thi (1. Thư mục đề & 2. Thư mục đáp án) — ${buildStandardExportFileName(config, 'zip')}`
       );
     } finally {
       setIsProcessing(false);
@@ -1926,7 +1926,7 @@ export default function App() {
       const blob = await exportQrCodesZip(shuffledVariants, config);
       triggerBrowserDownload(
         blob,
-        buildStandardExportFileName(config, 'zip', 'Bộ mã QR chấm thi')
+        buildStandardExportFileName(config, 'zip', 'Bộ mã QR và Excel')
       );
       await executePostDownloadZeroTracePurge(
         `Bộ 4 Mã QR Chấm Thi (${shuffledVariants.length} mã đề) + 4 File Excel (.zip)`
@@ -1942,9 +1942,9 @@ export default function App() {
       const blob = await exportSingleVariantDocx(variant, config);
       triggerBrowserDownload(
         blob,
-        buildStandardExportFileName(config, 'docx', `Mã đề ${variant.examCode}`)
+        buildStandardExportFileName(config, 'docx', `Đề ${variant.examCode}`)
       );
-      await executePostDownloadZeroTracePurge(`Mã Đề ${variant.examCode} (.docx)`);
+      await executePostDownloadZeroTracePurge(`Đề ${variant.examCode} (.docx)`);
     } finally {
       setIsProcessing(false);
     }
@@ -5626,7 +5626,7 @@ export default function App() {
                                     link.download = buildStandardExportFileName(
                                       config,
                                       'png',
-                                      `QR Tổng Hợp - ${card.item.appId}`
+                                      `Mã QR ${card.excelCode}`
                                     );
                                     link.click();
                                   }}
@@ -5649,7 +5649,7 @@ export default function App() {
                                       buildStandardExportFileName(
                                         config,
                                         'xlsx',
-                                        `Đáp Án Chuẩn ${card.excelCode}`
+                                        `Excel ${card.excelCode}`
                                       )
                                     );
                                     setStatusBanner({

@@ -3331,23 +3331,38 @@ function cleanFileSegment(raw: string): string {
 }
 
 /**
- * Tạo chuỗi tên tệp chuẩn: Môn:... Lớp:... Kỳ kiểm tra:... dd/mm/yy (dùng dấu - an toàn cho Windows/Mac/Linux)
- * Ví dụ: Môn Toán học & KHTN - Lớp 12 - Kỳ kiểm tra Cuối học kì 1 - 30-10-26 - Mã đề 101.docx
+ * Rút gọn tên Kỳ kiểm tra để đặt tên file tổng ngắn gọn: "Môn [...]-KT [...]-dd-mm-yy"
+ * (Tự động bỏ chữ "Kỳ kiểm tra" hoặc "Kiểm tra" bị lặp ở đầu vì đã có tiền tố "KT ")
  */
+function formatShortExamTitleForFileName(rawTitle: string): string {
+  const cleaned = cleanFileSegment(rawTitle || 'Ôn tập');
+  const stripped = cleaned.replace(/^(?:kỳ\s+kiểm\s+tra|kiểm\s+tra|kì\s+kiểm\s+tra|kt)\s+/i, '').trim();
+  return stripped || cleaned || 'Ôn tập';
+}
+
+/**
+ * Tạo chuỗi tên tệp tổng tải về theo đúng nguyên tắc ngắn gọn, dễ nhìn nhất:
+ * "Môn [....]-KT [....]-dd-mm-yy" (dùng dấu - thay cho / để an toàn 100% trên Windows/Mac/Linux)
+ * Ví dụ: Môn Sinh học 12-KT Cuối học kì 1-05-11-26.zip
+ */
+export function buildMasterBundleBaseName(config: ShuffleConfig): string {
+  const subjectPart = cleanFileSegment(config.subjectName || 'KHTN');
+  const examPart = formatShortExamTitleForFileName(config.examTitle || 'Ôn tập');
+  const datePart = getFormattedDateDdMmYy();
+  return `Môn ${subjectPart}-KT ${examPart}-${datePart}`;
+}
+
 export function buildStandardExportFileName(
   config: ShuffleConfig,
   extension: 'docx' | 'zip' | 'csv' | 'png' | 'txt' | 'xlsx',
   suffix?: string
 ): string {
-  const subjectPart = cleanFileSegment(config.subjectName || 'Toán học & KHTN');
-  const rawGrade = cleanFileSegment(config.gradeLevel || 'Lớp 12');
-  const gradePart = /^lớp\s+/i.test(rawGrade) ? rawGrade : `Lớp ${rawGrade}`;
-  const examPart = cleanFileSegment(config.examTitle || 'Kỳ kiểm tra');
-  const datePart = getFormattedDateDdMmYy();
-
-  const baseName = `Môn ${subjectPart} - ${gradePart} - Kỳ kiểm tra ${examPart} - ${datePart}`;
-  const extra = suffix ? ` - ${cleanFileSegment(suffix)}` : '';
-  return `${baseName}${extra}.${extension}`;
+  const baseName = buildMasterBundleBaseName(config);
+  if (!suffix) {
+    return `${baseName}.${extension}`;
+  }
+  const cleanSuffix = cleanFileSegment(suffix);
+  return `${cleanSuffix} (${baseName}).${extension}`;
 }
 
 export async function exportAllVariantsZipBundle(
@@ -3358,58 +3373,42 @@ export async function exportAllVariantsZipBundle(
   const bundleZip = new JSZip();
   const utf8Encoder = new TextEncoder();
 
-  // Cấu trúc tệp .zip gồm đúng 2 thư mục tích hợp đầy đủ tất cả tính năng:
-  // 1. Thư mục các mã đề:
-  //    - Đề gốc chuẩn Word Equation <m:oMath> (giữ nguyên gạch chân, tô đỏ đáp án đúng để đối chiếu)
-  //    - Đề gốc có lời giải chi tiết chuẩn Word Equation <m:oMath>
-  //    - Toàn bộ các Mã đề hoán vị (Mã đề 101, 102...) nhúng công thức <m:oMath> Cambria Math UTF-8, ảnh 300 DPI và Phiếu trả lời trắc nghiệm
+  // Đặt thư mục tổng bên trong trùng khớp tên gói tải về: Môn [....]-KT [....]-dd-mm-yy
+  // Bên trong có đúng 2 thư mục rõ ràng, đơn giản, dễ nhìn nhất cho giáo viên:
+  // 1. Thư mục đề:
+  //    - Đề gốc.docx, Đề gốc có lời giải.docx
+  //    - Đề 101.docx, Đề 102.docx...
   // 2. Thư mục đáp án:
-  //    - Bảng đáp án chung (.docx) kèm tên Giáo viên ra đề ở cuối trang & Bộ 3 Mã QR
-  //    - Ma trận và Bản đặc tả CV 7991 (.docx) khổ A4 Ngang chuẩn Bộ GD&ĐT kèm chữ ký Giáo viên ra đề
-  //    - Bộ 3 ảnh Mã QR Chung (.png) + Payload (.txt) + Bộ 3 File Excel (.xlsx) cho QM 2025, TNMaker, Azota + Bảng đáp án tổng hợp (.csv)
-  const thuMucCacMaDe = bundleZip.folder('Thư mục các mã đề');
+  //    - Đáp án.docx, Ma trận đặc tả CV 7991.docx
+  //    - Mã QR QM 2025.png, Mã QR TNMaker.png, Mã QR Azota.png, Mã QR UnT Dạy Học.png
+  //    - Excel QM 2025.xlsx, Excel TNMaker.xlsx, Excel Azota.xlsx, Excel UnT Dạy Học.xlsx
+  //    - Đáp án tổng hợp.csv
+  const thuMucDe = bundleZip.folder('Thư mục đề');
   const thuMucDapAn = bundleZip.folder('Thư mục đáp án');
 
-  // 1. Lưu Đề gốc chuẩn Word Equation <m:oMath> (có gạch chân & tô đỏ đáp án đúng) + Đề gốc có lời giải + Các Mã đề trộn
+  // 1. Lưu vào "Thư mục đề": Đề gốc, Đề gốc có lời giải, và các đề trộn: Đề [Mã đề]
   const [masterCleanBlob, masterSolutionsBlob] = await Promise.all([
     exportCleanedMasterDocx(masterQuestions, config, false),
     exportMasterExamWithSolutionsDocx(masterQuestions, config),
   ]);
 
-  thuMucCacMaDe?.file(
-    buildStandardExportFileName(config, 'docx', 'Đề gốc chuẩn Word Equation oMath'),
-    masterCleanBlob
-  );
-  thuMucCacMaDe?.file(
-    buildStandardExportFileName(config, 'docx', 'Đề gốc có lời giải chi tiết'),
-    masterSolutionsBlob
-  );
+  thuMucDe?.file('Đề gốc.docx', masterCleanBlob);
+  thuMucDe?.file('Đề gốc có lời giải.docx', masterSolutionsBlob);
 
   for (const v of variants) {
     const docxBlob = await exportSingleVariantDocx(v, config);
-    thuMucCacMaDe?.file(
-      buildStandardExportFileName(config, 'docx', `Mã đề ${v.examCode}`),
-      docxBlob
-    );
+    thuMucDe?.file(`Đề ${cleanFileSegment(v.examCode)}.docx`, docxBlob);
   }
 
-  // 2. Lưu các file liên quan đến Đáp án (có tên Giáo viên ra đề) & Ma trận CV 7991 vào "Thư mục đáp án"
+  // 2. Lưu vào "Thư mục đáp án": Đáp án, Mã QR [...], Excel [...]
   const [masterAnswerDocxBlob, matrixSpecDocxBlob] = await Promise.all([
     exportMasterAnswerSheetDocx(variants, config),
     exportMatrixAndSpecificationDocx(masterQuestions, config),
   ]);
 
-  thuMucDapAn?.file(
-    buildStandardExportFileName(config, 'docx', 'Bảng đáp án chung'),
-    masterAnswerDocxBlob
-  );
+  thuMucDapAn?.file('Đáp án.docx', masterAnswerDocxBlob);
+  thuMucDapAn?.file('Ma trận đặc tả CV 7991.docx', matrixSpecDocxBlob);
 
-  thuMucDapAn?.file(
-    buildStandardExportFileName(config, 'docx', 'Ma trận và Bản đặc tả CV 7991'),
-    matrixSpecDocxBlob
-  );
-
-  // Xuất Mã QR Chung tích hợp các mã đề (tối đa 8 mã đề / 1 Mã QR Chung) + Payload TXT + 3 File Excel chuẩn
   try {
     const qrPayloadLines: string[] = [];
     const totalBatches = Math.ceil(variants.length / MAX_CODES_PER_SINGLE_QR);
@@ -3420,55 +3419,52 @@ export async function exportAllVariantsZipBundle(
       );
       const codeRangeLabel =
         batch.length === 1
-          ? `Mã ${batch[0].examCode}`
-          : `Mã ${batch[0].examCode}-${batch[batch.length - 1].examCode}`;
-      const batchPrefix =
-        totalBatches === 1
-          ? `QR Chung (${codeRangeLabel})`
-          : `QR Chung Cụm ${bIdx + 1} (${codeRangeLabel})`;
+          ? `${batch[0].examCode}`
+          : `${batch[0].examCode}-${batch[batch.length - 1].examCode}`;
+      const batchSuffix = totalBatches === 1 ? '' : ` (Cụm ${bIdx + 1}: Đề ${codeRangeLabel})`;
 
       const batchTripleQr = await generateTripleGradingQrSet(batch);
       if (batchTripleQr.qm2025.qrDataUrl) {
         thuMucDapAn?.file(
-          buildStandardExportFileName(config, 'png', `${batchPrefix} - 1 - App QM 2025`),
+          `Mã QR QM 2025${batchSuffix}.png`,
           dataUrlToUint8Array(batchTripleQr.qm2025.qrDataUrl)
         );
         qrPayloadLines.push(
-          `=== 1. PAYLOAD CHUNG (${codeRangeLabel}) APP QM 2025 ===\n${batchTripleQr.qm2025.qrPayload}\n`
+          `=== 1. MÃ QR QM 2025 (Đề ${codeRangeLabel}) ===\n${batchTripleQr.qm2025.qrPayload}\n`
         );
       }
       if (batchTripleQr.tnmaker.qrDataUrl) {
         thuMucDapAn?.file(
-          buildStandardExportFileName(config, 'png', `${batchPrefix} - 2 - App TNMaker`),
+          `Mã QR TNMaker${batchSuffix}.png`,
           dataUrlToUint8Array(batchTripleQr.tnmaker.qrDataUrl)
         );
         qrPayloadLines.push(
-          `=== 2. PAYLOAD CHUNG (${codeRangeLabel}) APP TNMAKER 2025 ===\n${batchTripleQr.tnmaker.qrPayload}\n`
+          `=== 2. MÃ QR TNMAKER (Đề ${codeRangeLabel}) ===\n${batchTripleQr.tnmaker.qrPayload}\n`
         );
       }
       if (batchTripleQr.azota.qrDataUrl) {
         thuMucDapAn?.file(
-          buildStandardExportFileName(config, 'png', `${batchPrefix} - 3 - App Azota`),
+          `Mã QR Azota${batchSuffix}.png`,
           dataUrlToUint8Array(batchTripleQr.azota.qrDataUrl)
         );
         qrPayloadLines.push(
-          `=== 3. PAYLOAD CHUNG (${codeRangeLabel}) APP AZOTA 2025 ===\n${batchTripleQr.azota.qrPayload}\n`
+          `=== 3. MÃ QR AZOTA (Đề ${codeRangeLabel}) ===\n${batchTripleQr.azota.qrPayload}\n`
         );
       }
       if (batchTripleQr.unt.qrDataUrl) {
         thuMucDapAn?.file(
-          buildStandardExportFileName(config, 'png', `${batchPrefix} - 4 - App UnT Day Hoc`),
+          `Mã QR UnT Dạy Học${batchSuffix}.png`,
           dataUrlToUint8Array(batchTripleQr.unt.qrDataUrl)
         );
         qrPayloadLines.push(
-          `=== 4. PAYLOAD CHUNG (${codeRangeLabel}) APP UNT DẠY HỌC 2025 ===\n${batchTripleQr.unt.qrPayload}\n`
+          `=== 4. MÃ QR UNT DẠY HỌC (Đề ${codeRangeLabel}) ===\n${batchTripleQr.unt.qrPayload}\n`
         );
       }
     }
 
     if (qrPayloadLines.length > 0) {
       thuMucDapAn?.file(
-        buildStandardExportFileName(config, 'txt', 'Payload-4-Phan-Mem-QR'),
+        'Mã QR Payload.txt',
         utf8Encoder.encode(qrPayloadLines.join('\n').normalize('NFC'))
       );
     }
@@ -3479,22 +3475,10 @@ export async function exportAllVariantsZipBundle(
       exportGradingExcelXlsx(variants, 'AZOTA'),
       exportGradingExcelXlsx(variants, 'UNT'),
     ]);
-    thuMucDapAn?.file(
-      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn QM 2025'),
-      xlsxQm
-    );
-    thuMucDapAn?.file(
-      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn TNMaker 2025'),
-      xlsxTn
-    );
-    thuMucDapAn?.file(
-      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn Azota 2025'),
-      xlsxAz
-    );
-    thuMucDapAn?.file(
-      buildStandardExportFileName(config, 'xlsx', 'Đáp án chuẩn UnT Dạy Học 2025'),
-      xlsxUnt
-    );
+    thuMucDapAn?.file('Excel QM 2025.xlsx', xlsxQm);
+    thuMucDapAn?.file('Excel TNMaker.xlsx', xlsxTn);
+    thuMucDapAn?.file('Excel Azota.xlsx', xlsxAz);
+    thuMucDapAn?.file('Excel UnT Dạy Học.xlsx', xlsxUnt);
   } catch (err) {
     console.warn('Không thể lưu bộ 4 ảnh QR chung & Excel vào zip:', err);
   }
@@ -3516,7 +3500,7 @@ export async function exportAllVariantsZipBundle(
     );
   }
   thuMucDapAn?.file(
-    buildStandardExportFileName(config, 'csv', 'Bảng đáp án tổng hợp'),
+    'Đáp án tổng hợp.csv',
     utf8Encoder.encode(('\uFEFF' + csvLines.join('\n')).normalize('NFC'))
   );
 
@@ -3541,41 +3525,38 @@ export async function exportQrCodesZip(
     );
     const codeRangeLabel =
       batch.length === 1
-        ? `Mã ${batch[0].examCode}`
-        : `Mã ${batch[0].examCode}-${batch[batch.length - 1].examCode}`;
-    const batchPrefix =
-      totalBatches === 1
-        ? `QR Chung (${codeRangeLabel})`
-        : `QR Chung Cụm ${bIdx + 1} (${codeRangeLabel})`;
+        ? `${batch[0].examCode}`
+        : `${batch[0].examCode}-${batch[batch.length - 1].examCode}`;
+    const batchSuffix = totalBatches === 1 ? '' : ` (Cụm ${bIdx + 1}: Đề ${codeRangeLabel})`;
 
     const batchTripleQr = await generateTripleGradingQrSet(batch);
     if (batchTripleQr.qm2025.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `01-${batchPrefix} - App QM 2025`),
+        `Mã QR QM 2025${batchSuffix}.png`,
         dataUrlToUint8Array(batchTripleQr.qm2025.qrDataUrl)
       );
-      lines.push(`=== 1. PAYLOAD CHUNG (${codeRangeLabel}) APP QM 2025 ===\n${batchTripleQr.qm2025.qrPayload}\n`);
+      lines.push(`=== 1. MÃ QR QM 2025 (Đề ${codeRangeLabel}) ===\n${batchTripleQr.qm2025.qrPayload}\n`);
     }
     if (batchTripleQr.tnmaker.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `02-${batchPrefix} - App TNMaker`),
+        `Mã QR TNMaker${batchSuffix}.png`,
         dataUrlToUint8Array(batchTripleQr.tnmaker.qrDataUrl)
       );
-      lines.push(`=== 2. PAYLOAD CHUNG (${codeRangeLabel}) APP TNMAKER 2025 ===\n${batchTripleQr.tnmaker.qrPayload}\n`);
+      lines.push(`=== 2. MÃ QR TNMAKER (Đề ${codeRangeLabel}) ===\n${batchTripleQr.tnmaker.qrPayload}\n`);
     }
     if (batchTripleQr.azota.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `03-${batchPrefix} - App Azota`),
+        `Mã QR Azota${batchSuffix}.png`,
         dataUrlToUint8Array(batchTripleQr.azota.qrDataUrl)
       );
-      lines.push(`=== 3. PAYLOAD CHUNG (${codeRangeLabel}) APP AZOTA 2025 ===\n${batchTripleQr.azota.qrPayload}\n`);
+      lines.push(`=== 3. MÃ QR AZOTA (Đề ${codeRangeLabel}) ===\n${batchTripleQr.azota.qrPayload}\n`);
     }
     if (batchTripleQr.unt.qrDataUrl) {
       qrZip.file(
-        buildStandardExportFileName(config, 'png', `04-${batchPrefix} - App UnT Day Hoc`),
+        `Mã QR UnT Dạy Học${batchSuffix}.png`,
         dataUrlToUint8Array(batchTripleQr.unt.qrDataUrl)
       );
-      lines.push(`=== 4. PAYLOAD CHUNG (${codeRangeLabel}) APP UNT DẠY HỌC 2025 ===\n${batchTripleQr.unt.qrPayload}\n`);
+      lines.push(`=== 4. MÃ QR UNT DẠY HỌC (Đề ${codeRangeLabel}) ===\n${batchTripleQr.unt.qrPayload}\n`);
     }
   }
 
@@ -3585,27 +3566,12 @@ export async function exportQrCodesZip(
     exportGradingExcelXlsx(variants, 'AZOTA'),
     exportGradingExcelXlsx(variants, 'UNT'),
   ]);
-  qrZip.file(
-    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn QM 2025'),
-    xlsxQm
-  );
-  qrZip.file(
-    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn TNMaker 2025'),
-    xlsxTn
-  );
-  qrZip.file(
-    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn Azota 2025'),
-    xlsxAz
-  );
-  qrZip.file(
-    buildStandardExportFileName(config, 'xlsx', 'File Excel Đáp Án Chuẩn UnT Dạy Học 2025'),
-    xlsxUnt
-  );
+  qrZip.file('Excel QM 2025.xlsx', xlsxQm);
+  qrZip.file('Excel TNMaker.xlsx', xlsxTn);
+  qrZip.file('Excel Azota.xlsx', xlsxAz);
+  qrZip.file('Excel UnT Dạy Học.xlsx', xlsxUnt);
 
-  qrZip.file(
-    buildStandardExportFileName(config, 'txt', 'Payload-4-Phan-Mem-QR'),
-    lines.join('\n')
-  );
+  qrZip.file('Mã QR Payload.txt', lines.join('\n'));
   return qrZip.generateAsync({ type: 'blob' });
 }
 
@@ -3617,7 +3583,7 @@ export async function exportFourAiClonesZipBundle(
   config: ShuffleConfig
 ): Promise<Blob> {
   const aiZip = new JSZip();
-  const folderStudent = aiZip.folder('Bo_De_AI_Tuong_Duong_Docx');
+  const folderStudent = aiZip.folder('Thư mục đề AI tương đương');
 
   for (const v of aiVariants) {
     const studentBlob = await exportCleanedMasterDocx(
@@ -3628,10 +3594,7 @@ export async function exportFourAiClonesZipBundle(
       },
       false
     );
-    folderStudent?.file(
-      buildStandardExportFileName(config, 'docx', `${v.examCode}`),
-      studentBlob
-    );
+    folderStudent?.file(`Đề ${cleanFileSegment(v.examCode)}.docx`, studentBlob);
   }
 
   return aiZip.generateAsync({ type: 'blob' });
@@ -3863,7 +3826,7 @@ export async function exportUserManualDocx(features: any[] = []): Promise<Blob> 
       'ECFEFF',
       [
         ['Mặc Định Thông Minh: 45 Phút & Kỳ Kiểm Tra Ôn Tập', 'Thiết lập sẵn Thời gian làm bài mặc định 45 phút (tùy chỉnh linh hoạt 15p/45p/60p/90p) và Kỳ kiểm tra mặc định là "KIỂM TRA ÔN TẬP".'],
-        ['Quy Chuẩn Tên File Đồng Nhất & Đóng Gói 2 Thư Mục', 'Tự động đặt tên: Môn [Tên môn] - Lớp [Lớp] - Kỳ kiểm tra [Kỳ] - [dd-mm-yy] - [Hậu tố] và đóng gói gọn gàng vào Thư mục các mã đề (nhúng sẵn Phiếu trả lời đã chọn) & Thư mục đáp án.'],
+        ['Quy Chuẩn Tên File Tổng Ngắn Gọn & Đóng Gói 2 Thư Mục Rõ Ràng', 'Tự động đặt tên file tổng tải về: Môn [....]-KT [....]-dd-mm-yy.zip. Bên trong có đúng 2 thư mục: 1. Thư mục đề (Đề gốc, Đề 101, Đề 102...) và 2. Thư mục đáp án (Đáp án, Mã QR [...], Excel [...]).'],
       ],
       'Mặc định 45 phút · Kỳ kiểm tra ôn tập · Font Times New Roman 12pt chuẩn in ấn nhà trường.'
     ),
