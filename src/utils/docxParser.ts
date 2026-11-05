@@ -124,6 +124,8 @@ export function validateExamQuestions(
   const issues: ValidationIssue[] = [];
 
   questions.forEach((q) => {
+    if (isExamInstructionLine(q.stemText || '')) return;
+
     const partLabel =
       q.part === 'PART_1'
         ? 'Phần I'
@@ -1330,9 +1332,10 @@ function splitClumpedParagraphIntoLogicalParagraphs(
   if (!rawJoined.trim()) return [para];
 
   // Chỉ tách giữa dòng khi thực sự là tiêu đề "PHẦN I/II/III/IV", "TỰ LUẬN" độc lập hoặc "Câu 1." / "Bài 1."
-  // (Tuyệt đối KHÔNG tách giữa "PHẦN III." và "Tự luận" khi chúng nằm trên cùng 1 tiêu đề "PHẦN III. Tự luận")
+  // (Tuyệt đối KHÔNG tách giữa "PHẦN III." và "Tự luận" khi chúng nằm trên cùng 1 tiêu đề "PHẦN III. Tự luận",
+  // và TUYỆT ĐỐI KHÔNG tách bên trong các câu dẫn hướng dẫn làm bài: "từ câu 1 đến câu 12", "đến câu 4", "trình bày lời giải chi tiết từ câu 1 đến câu 3"...)
   const splitRegex =
-    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?<!(?:từ|đến|ở|như|theo)\s+)(?<!(?:PHẦN|Phần|phần)\s*(?:IV|III|II|I|4|3|2|1|[A-D])?\s*[.:\-–—)]*\s*)(?=(?:(?:PHẦN|Phần)\s+(?:IV|III|II|I|4|3|2|1)\b|(?:\b(?:[A-ZIVX]+|\d+)\s*[.:\-–—]\s*)?(?:TỰ\s*LUẬN|Tự\s*luận|TU\s*LUAN)\b|(?:[*#]\s*)?(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\b\s*(?:[.:\-–—)]+|\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])|\t+|\s{2,}))))/g;
+    /(?:\n+|(?<=[.?!;:\t\s)"'”’\]])(?<!(?:[tT]ừ|[đĐ]ến|[ởỞ]|[nN]hư|[tT]heo|[tT]rả\s+lời\s+từ|[lL]àm\s+bài\s+từ|[tT]rình\s+bày\s+từ|[tT]iết\s+từ)\s+)(?<!(?:PHẦN|Phần|phần)\s*(?:IV|III|II|I|4|3|2|1|[A-D])?\s*[.:\-–—)]*\s*)(?=(?:(?:PHẦN|Phần)\s+(?:IV|III|II|I|4|3|2|1)\b|(?:\b(?:[A-ZIVX]+|\d+)\s*[.:\-–—]\s*)?(?:TỰ\s*LUẬN|Tự\s*luận|TU\s*LUAN)\b|(?:[*#]\s*)?(?:Câu|CÂU|Bài|BÀI|Question|QUESTION)(?:\s+hỏi|\s+số|\s+tập)?\s*\d+\b\s*(?:[.:\-–—)]+|\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])|\t+|\s{2,}))))/g;
 
   const splitIndices: number[] = [0];
   let match: RegExpExecArray | null;
@@ -1569,6 +1572,59 @@ function extractParagraphsFromDocxXmlRegex(
 }
 
 /**
+ * Nhận diện câu dẫn / câu chỉ dẫn làm bài của đề thi (Bộ GD&ĐT & cấu trúc đề 2025):
+ * - "Thí sinh trả lời từ câu 1 đến câu 12. Mỗi câu hỏi thí sinh chỉ chọn một phương án."
+ * - "Thí sinh trả lời từ câu 1 đến câu 4. Trong mỗi ý a), b), c), d) ở mỗi câu, thí sinh chọn đúng hoặc sai."
+ * - "Thí sinh trả lời từ câu 1 đến câu 4." / "Thí sinh trả lời từ câu 1 đến câu 6."
+ * - "Thí sinh trình bày lời giải chi tiết từ câu 1 đến câu 3."
+ * - "Từ câu 1 đến câu 12..." / "Mỗi câu hỏi thí sinh chỉ chọn một phương án."
+ * Tuyệt đối không bao giờ nhận nhầm các câu dẫn này là câu hỏi của đề thi!
+ */
+export function isExamInstructionLine(rawText: string): boolean {
+  if (!rawText) return false;
+  let clean = rawText
+    .trim()
+    .replace(/^(?:[*#•+\-–—\s]|\[(?:NB|TH|VD|VDC|[^\]]{1,15})\]|\((?:NB|TH|VD|VDC|[^)]{1,15})\))*/, '')
+    .trim();
+  clean = clean.replace(
+    /^(?:(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+|\d{1,3})\s*[.:\-–—)]+\s*/i,
+    ''
+  ).trim();
+  clean = clean.replace(/^(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])\b.*?[.:\-–—]*|(?:TỰ\s*LUẬN|TU\s*LUAN)\b.*?[.:\-–—]*)/i, '').trim();
+  clean = clean.replace(/^[([]+|[)\]]+$/g, '').trim();
+
+  if (!clean) return false;
+
+  return (
+    /^(?:Thí\s+sinh\s+)?(?:trả\s+lời|làm\s+bài|hoàn\s+thành|trình\s+bày(?:\s+lời\s+giải)?(?:\s+chi\s+tiết)?)\s+từ\s+(?:câu|bài)\s*\d+/i.test(clean) ||
+    /thí\s+sinh\s+trình\s+bày\s+lời\s+giải(?:\s+chi\s+tiết)?/i.test(clean) ||
+    /^(?:Từ|từ)\s+(?:câu|bài)\s*\d+\s+(?:đến|–|-)\s*(?:câu|bài)?\s*\d+/i.test(clean) ||
+    /^(?:Mỗi\s+câu\s+hỏi\s+)?(?:thí\s+sinh\s+)?chỉ\s+chọn\s+một\s+phương\s+án/i.test(clean) ||
+    /^(?:Trong\s+mỗi\s+ý\s+)?a[).:\-\s]*,?\s*b[).:\-\s]*,?\s*c[).:\-\s]*,?\s*d[).:\-\s]*(?:ở\s+mỗi\s+câu)?,\s*(?:thí\s+sinh\s+)?chọn\s+đúng\s+hoặc\s+sai/i.test(clean) ||
+    /(?:thí\s+sinh\s+)?chọn\s+đúng\s+hoặc\s+sai/i.test(clean) ||
+    /thí\s+sinh\s+(?:viết|điền|ghi)\s+(?:câu\s+trả\s+lời|đáp\s+số|kết\s+quả)/i.test(clean) ||
+    /thí\s+sinh\s+không\s+được\s+sử\s+dụng\s+tài\s+liệu/i.test(clean) ||
+    /cán\s+bộ\s+coi\s+thi\s+không\s+giải\s+thích/i.test(clean)
+  );
+}
+
+export function stripLeadingExamInstructionFromStem(stemText: string): string {
+  if (!stemText) return stemText;
+  let text = stemText.trim();
+  const leadingInstructionRegex =
+    /^(?:[*#•+\-–—\s]|\[[^\]]{1,15}\]|\([^)\d]{1,15}\))*(?:(?:Thí\s+sinh\s+)?(?:trả\s+lời|làm\s+bài|trình\s+bày(?:\s+lời\s+giải)?(?:\s+chi\s+tiết)?|hoàn\s+thành)\s+từ\s+(?:câu|bài)\s*\d+\s+đến\s+(?:câu|bài)\s*\d+[.:\-–—\s]*|từ\s+(?:câu|bài)\s*\d+\s+đến\s+(?:câu|bài)\s*\d+[.:\-–—\s]*|(?:Mỗi\s+câu\s+hỏi\s+)?thí\s+sinh\s+chỉ\s+chọn\s+một\s+phương\s+án[.:\-–—\s]*|(?:Trong\s+mỗi\s+ý\s+)?a[).:\-\s]*,?\s*b[).:\-\s]*,?\s*c[).:\-\s]*,?\s*d[).:\-\s]*(?:ở\s+mỗi\s+câu)?,\s*(?:thí\s+sinh\s+)?chọn\s+đúng\s+hoặc\s+sai[.:\-–—\s]*)+/i;
+
+  const m = text.match(leadingInstructionRegex);
+  if (m && m[0] && m[0].length < text.length) {
+    const remainder = text.slice(m[0].length).trim();
+    if (remainder.length > 5) {
+      text = remainder;
+    }
+  }
+  return text;
+}
+
+/**
  * Ghép các ô tiêu đề câu hỏi ("Câu 1", "Câu 1. (NB)") hoặc ô nhãn đáp án ("A.", "B.", "a)", "b)")
  * đứng riêng lẻ trong Bảng Word (Cột 1 là nhãn, Cột 2 là nội dung)
  */
@@ -1588,7 +1644,8 @@ function mergeStandaloneTableHeadersAndOptions(
       i + 1 < rawExtractedParagraphs.length &&
       !/^(?:PHẦN\s+(?:I|II|III|IV|1|2|3|4)|(?:Câu|Bài|Question)\s*\d+)/i.test(
         rawExtractedParagraphs[i + 1].fullText
-      )
+      ) &&
+      !isExamInstructionLine(rawExtractedParagraphs[i + 1].fullText)
     ) {
       const nextPara = rawExtractedParagraphs[i + 1];
       const prefixText = `${cleanCurr.replace(/[.:\-–—)]+$/, '')}. `;
@@ -2386,6 +2443,7 @@ function extractParagraphsFromDocxXml(
         const isSectionOrAdminHeading =
           isEssaySectionHeader(joinedPreview) ||
           isAdministrativeExamHeader(joinedPreview) ||
+          isExamInstructionLine(joinedPreview) ||
           /^(?:[*#•+\-–—\s])*(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])\b/i.test(
             joinedPreview
           ) ||
@@ -3252,9 +3310,12 @@ export function normalizeAllQuestionsStrictFourOptions(
   questions: ExamQuestion[],
   resetPerPart = true
 ): ExamQuestion[] {
-  // Lọc bỏ triệt để mọi câu hỏi giả (phantom question) do tiêu đề "PHẦN I/II/III/IV" hoặc "Tự luận" bị lọt vào
+  // Lọc bỏ triệt để mọi câu hỏi giả (phantom question) do tiêu đề "PHẦN I/II/III/IV" hoặc "Tự luận" hoặc câu dẫn làm bài bị lọt vào
   const validQuestions = questions.filter((q) => {
     const rawStem = (q.stemText || '').trim();
+    if (isExamInstructionLine(rawStem)) {
+      return false;
+    }
     const isBareSectionStem =
       /^(?:[*#•+\-–—\s])*(?:(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+\s*[.:\-–—)]*\s*)?(?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])|TỰ\s*LUẬN|TU\s*LUAN)\s*[.:\-–—)]*$/i.test(
         rawStem
@@ -3270,7 +3331,8 @@ export function normalizeAllQuestionsStrictFourOptions(
   });
 
   const cleaned = validQuestions.map((q) => {
-    const healedStem = autoHealScientificAndStemText(q.stemText || '');
+    const strippedStem = stripLeadingExamInstructionFromStem(q.stemText || '');
+    const healedStem = autoHealScientificAndStemText(strippedStem);
     const healedQ: ExamQuestion = {
       ...q,
       stemText: healedStem,
@@ -3543,23 +3605,30 @@ async function loadMediaRelationships(
 function isAdministrativeExamHeader(text: string): boolean {
   const clean = text.trim();
   if (!clean) return false;
+  if (isExamInstructionLine(clean)) return true;
   return /^(?:SỞ\s+GD|UBND\s+|PHÒNG\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|BỘ\s+GIÁO\s+DỤC|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|ĐỀ\s+THI\b|ĐỀ\s+THAM\s+KHẢO|MÔN\s*[:.]|Môn\s+thi\s*[:.]|Thời\s+gian\s+làm\s+bài|Họ\s+và\s+tên|Họ,\s+tên\s+thí\s+sinh|Số\s+báo\s+danh|Mã\s+đề\s*(?:thi)?\s*[:.]|Đề\s+thi\s+gồm\s+có|Không\s+kể\s+thời\s+gian|-----\s*HẾT\s*-----|\(Đề\s+gồm|Thí\s+sinh\s+trả\s+lời\s+từ\s+câu|Mỗi\s+câu\s+hỏi\s+thí\s+sinh\s+chỉ\s+chọn|Trong\s+mỗi\s+ý\s+a\)\s*,\s*b\)\s*,\s*c\)\s*,\s*d\))/i.test(
     clean
   );
 }
 
 /**
- * Loại bỏ tiền tố "Câu X." / "X." bị dính nhầm vào dòng tiêu đề PHẦN I/II/III/IV hoặc TỰ LUẬN
- * (Do giáo viên bấm Enter từ câu trên mà chưa tắt Auto-Numbering trong Word, tạo ra "Câu 5. PHẦN III. Tự luận" hoặc "Câu 5. PHẦN III.")
+ * Loại bỏ tiền tố "Câu X." / "X." bị dính nhầm vào dòng tiêu đề PHẦN I/II/III/IV hoặc TỰ LUẬN hoặc CÂU DẪN
+ * (Do giáo viên bấm Enter từ câu trên mà chưa tắt Auto-Numbering trong Word, tạo ra "Câu 5. PHẦN III. Tự luận" hoặc "Câu 1. Thí sinh trả lời từ câu 1 đến...")
  */
 function stripAccidentalQuestionPrefixFromSectionHeader(rawText: string): string {
   const clean = rawText.trim();
   if (!clean) return clean;
   const match = clean.match(
-    /^(?:[*#•+\-–—\s])*(?:(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+|\d{1,3})\s*[.:\-–—)]+\s*((?:(?:[IVX]+|\d+|[A-D])\s*[.:\-–—)]\s*)?(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])\b.*|(?:TỰ\s*LUẬN|TU\s*LUAN)\b.*))$/i
+    /^(?:[*#•+\-–—\s]|\[[^\]]{1,15}\]|\([^)\d]{1,15}\))*(?:(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*\d+|\d{1,3})\s*[.:\-–—)]+\s*(.*)$/i
   );
   if (match && match[1]) {
-    return match[1].trim();
+    const candidate = match[1].trim();
+    if (
+      /(?:PHẦN\s*(?:IV|III|II|I|4|3|2|1|[A-D])\b|(?:TỰ\s*LUẬN|TU\s*LUAN)\b)/i.test(candidate) ||
+      isExamInstructionLine(candidate)
+    ) {
+      return candidate;
+    }
   }
   return clean;
 }
@@ -3627,6 +3696,9 @@ interface ExtractedLineItem {
 function extractSequentialOptionsFromLine(
   lineText: string
 ): { leadingStem: string; items: ExtractedLineItem[] } {
+  if (isExamInstructionLine(lineText)) {
+    return { leadingStem: lineText, items: [] };
+  }
   const orderedFour = findOrderedFourMarkers(lineText, ['A', 'B', 'C', 'D'], true);
   if (orderedFour) {
     const [mA, mB, mC, mD] = orderedFour;
@@ -3729,6 +3801,9 @@ function extractSequentialOptionsFromLine(
 function extractSequentialSubItemsFromLine(
   lineText: string
 ): { leadingStem: string; items: ExtractedLineItem[] } {
+  if (isExamInstructionLine(lineText)) {
+    return { leadingStem: lineText, items: [] };
+  }
   const orderedFour = findOrderedFourMarkers(lineText, ['a', 'b', 'c', 'd'], true);
   if (orderedFour) {
     const [mA, mB, mC, mD] = orderedFour;
@@ -4240,21 +4315,27 @@ export function buildQuestionsFromParsedParagraphs(
     }
 
     // 2. Nhận diện bắt đầu một câu hỏi mới:
-    const explicitQMatch = text.match(
+    let explicitQMatch = text.match(
       /^(?:[*#•+\-–—\s]|\[(?:NB|TH|VD|VDC|[^\]]{1,12})\]|\((?:NB|TH|VD|VDC|[^)]{1,12})\))*(?:Câu(?:\s+hỏi|\s+số)?|Bài(?:\s+tập)?|Question|Cau)\s*(\d+|[IVX]+)\s*[.:\-–—)]*\s*(?:\([^)]{1,30}\)|\[[^\]]{1,30}\])?\s*[.:\-–—)]*\s*(.*)$/i
     );
+    if (explicitQMatch && isExamInstructionLine(explicitQMatch[2])) {
+      explicitQMatch = null;
+    }
 
     const currentHasCompleteOptions =
       (currentPart === 'PART_1' && (currentQuestion?.options?.length || 0) >= 4) ||
       (currentPart === 'PART_2' && (currentQuestion?.subItems?.length || 0) >= 4);
 
     // Hỗ trợ câu đánh số "1. ...", "2. ...", "1) ..." không có chữ "Câu" (Chỉ kích hoạt khi chưa có câu hỏi đang mở hoặc câu hỏi trước đã đủ 4 phương án)
-    const numberedNoPrefixMatch =
+    let numberedNoPrefixMatch =
       !explicitQMatch &&
       (!currentQuestion || currentHasCompleteOptions) &&
       !/^\s*[*#]?[A-Da-d]\s*[.:)]/.test(text)
         ? text.match(/^\s*(\d{1,3})\s*[.):]\s+([A-ZÀ-Ỹa-zà-ỹ(“"'\d].*)$/)
         : null;
+    if (numberedNoPrefixMatch && isExamInstructionLine(numberedNoPrefixMatch[2])) {
+      numberedNoPrefixMatch = null;
+    }
 
     const qMatch = explicitQMatch || numberedNoPrefixMatch;
 
@@ -4264,9 +4345,10 @@ export function buildQuestionsFromParsedParagraphs(
       !/^\s*[*#]?[A-D]\s*[.:)]/i.test(text) &&
       !/^\s*[*#]?[a-d]\s*[).:]/i.test(text) &&
       !/^(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn)/i.test(text) &&
-      !isAdministrativeExamHeader(text);
+      !isAdministrativeExamHeader(text) &&
+      !isExamInstructionLine(text);
 
-    if (qMatch || isAutoNumberQuestion) {
+    if ((qMatch || isAutoNumberQuestion) && !isExamInstructionLine(text)) {
       const pendingImages = pendingStemParagraphs.flatMap((p) => p.images);
       pushCurrentQuestion();
       pendingStemParagraphs = [];
@@ -4395,7 +4477,8 @@ export function buildQuestionsFromParsedParagraphs(
       optExtraction.items.length === 0 &&
       subExtraction.items.length === 0 &&
       !/^(?:Đáp\s*án|Đáp\s*số|ĐS|Lời\s*giải|Hướng\s*dẫn|HDG|HDC|Giải\b|Chọn\s+[A-D]\b)/i.test(text) &&
-      !isAdministrativeExamHeader(text)
+      !isAdministrativeExamHeader(text) &&
+      !isExamInstructionLine(text)
     ) {
       pushCurrentQuestion();
       startNewQuestionFromPara(para, text);
@@ -4405,17 +4488,20 @@ export function buildQuestionsFromParsedParagraphs(
     // Nếu chưa có currentQuestion (ví dụ file Word bị mất chữ "Câu 1" do macro/field)
     if (!currentQuestion) {
       if (optExtraction.items.length > 0 || subExtraction.items.length > 0) {
-        if (pendingStemParagraphs.length > 0) {
-          const firstPending = pendingStemParagraphs[0];
-          const combinedPendingText = pendingStemParagraphs
+        const nonInstructionPending = pendingStemParagraphs.filter(
+          (p) => !isAdministrativeExamHeader(p.fullText) && !isExamInstructionLine(p.fullText)
+        );
+        if (nonInstructionPending.length > 0) {
+          const firstPending = nonInstructionPending[0];
+          const combinedPendingText = nonInstructionPending
             .map((p) => p.fullText)
             .filter(Boolean)
             .join(' ');
-          const combinedPendingRuns = pendingStemParagraphs.flatMap((p) => [
+          const combinedPendingRuns = nonInstructionPending.flatMap((p) => [
             ...p.runs,
             { text: ' ', isUnderline: false, isRed: false, isBold: false, hasFormula: false },
           ]);
-          const combinedPendingImages = pendingStemParagraphs.flatMap((p) => p.images);
+          const combinedPendingImages = nonInstructionPending.flatMap((p) => p.images);
           startNewQuestionFromPara(
             {
               ...firstPending,
@@ -4428,9 +4514,10 @@ export function buildQuestionsFromParsedParagraphs(
           pendingStemParagraphs = [];
         } else {
           startNewQuestionFromPara(para, '');
+          pendingStemParagraphs = [];
         }
       } else {
-        if (!isAdministrativeExamHeader(text)) {
+        if (!isAdministrativeExamHeader(text) && !isExamInstructionLine(text)) {
           pendingStemParagraphs.push(para);
           if (pendingStemParagraphs.length > 5) {
             pendingStemParagraphs.shift();
@@ -4705,7 +4792,23 @@ export function buildQuestionsFromParsedParagraphs(
     }
   }
 
-  return recalculateQuestionNumbering(questions, resetPerPart);
+  const cleanedQuestions = questions
+    .filter((q) => {
+      const cleanStem = (q.stemText || '').trim();
+      if (!cleanStem) {
+        return (q.images && q.images.length > 0) || (q.options && q.options.length > 0);
+      }
+      return !isExamInstructionLine(cleanStem);
+    })
+    .map((q) => {
+      const stripped = stripLeadingExamInstructionFromStem(q.stemText || '');
+      if (stripped !== q.stemText) {
+        return { ...q, stemText: stripped };
+      }
+      return q;
+    });
+
+  return recalculateQuestionNumbering(cleanedQuestions, resetPerPart);
 }
 
 /**
