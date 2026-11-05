@@ -651,12 +651,12 @@ function buildExamNationalHeaderTableXml(
   hasEmbeddedPhieuQM2025: boolean = false
 ): string {
   const leftCellParagraphs = [
-    buildStandardParagraphXml(config.departmentName.toUpperCase(), '', {
+    buildStandardParagraphXml((config.departmentName || 'SỞ GIÁO DỤC VÀ ĐÀO TẠO').toUpperCase(), '', {
       align: 'center',
       spaceAfterTwips: 40,
       fontSizeHalfPt: 24,
     }),
-    buildStandardParagraphXml(config.schoolName.toUpperCase(), '', {
+    buildStandardParagraphXml((config.schoolName || 'TRƯỜNG THPT').toUpperCase(), '', {
       align: 'center',
       underlinePrefix: true,
       spaceAfterTwips: 60,
@@ -670,19 +670,8 @@ function buildExamNationalHeaderTableXml(
   ].join('\n');
 
   const rightCellParagraphs = [
-    buildStandardParagraphXml(config.nationalHeader.toUpperCase(), '', {
-      align: 'center',
-      spaceAfterTwips: 40,
-      fontSizeHalfPt: 24,
-    }),
-    buildStandardParagraphXml(config.nationalMotto, '', {
-      align: 'center',
-      underlinePrefix: true,
-      spaceAfterTwips: 60,
-      fontSizeHalfPt: 24,
-    }),
     buildStandardParagraphXml(
-      `${config.examTitle.toUpperCase()} (${config.schoolYear})`,
+      (config.nationalHeader || 'CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM').toUpperCase(),
       '',
       {
         align: 'center',
@@ -691,8 +680,27 @@ function buildExamNationalHeaderTableXml(
       }
     ),
     buildStandardParagraphXml(
-      `Môn thi: ${config.subjectName.toUpperCase()}`,
-      ` — Thời gian làm bài: ${config.durationMinutes} phút`,
+      config.nationalMotto || 'Độc lập - Tự do - Hạnh phúc',
+      '',
+      {
+        align: 'center',
+        underlinePrefix: true,
+        spaceAfterTwips: 60,
+        fontSizeHalfPt: 24,
+      }
+    ),
+    buildStandardParagraphXml(
+      `${(config.examTitle || 'ĐỀ KIỂM TRA ĐỊNH KỲ').toUpperCase()} (${config.schoolYear || '2024 - 2025'})`,
+      '',
+      {
+        align: 'center',
+        spaceAfterTwips: 40,
+        fontSizeHalfPt: 24,
+      }
+    ),
+    buildStandardParagraphXml(
+      `Môn thi: ${(config.subjectName || 'TOÁN HỌC').toUpperCase()}`,
+      ` — Thời gian làm bài: ${config.durationMinutes || 90} phút`,
       {
         align: 'center',
         italicBody: true,

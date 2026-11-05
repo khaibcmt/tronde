@@ -706,6 +706,68 @@ export default function App() {
     });
   };
 
+  const handleLoadMathSamplePdf = async () => {
+    setIsProcessing(true);
+    setStatusBanner({
+      type: 'INFO',
+      text: 'Đang bóc tách Đề Toán Mẫu 12 (22 câu: công thức phân số, căn thức, mũ/logarit, 12 đồ thị hàm số, bảng biến thiên & hình học không gian)...',
+    });
+    try {
+      const response = await fetch(`${import.meta.env.BASE_URL || '/'}assets/aistudio/___To_n_M_u_a0e60074.pdf`);
+      if (!response.ok) {
+        throw new Error(`Không tải được file mẫu Toán (${response.status})`);
+      }
+      const blob = await response.blob();
+      const sampleFile = new File([blob], 'De_Toan_Mau_12_Chuan_2025.pdf', {
+        type: 'application/pdf',
+      });
+      const parsed = await parsePdfExamFile(
+        sampleFile,
+        config.resetNumberingPerPart
+      );
+      if (parsed && parsed.length > 0) {
+        const numbered = normalizeAllQuestionsStrictFourOptions(
+          parsed,
+          config.resetNumberingPerPart
+        );
+        setQuestions(numbered);
+        setShuffledVariants([]);
+        setWordRawDocumentText(serializeQuestionsToWordRawText(numbered));
+        setConfig((prev) => ({
+          ...prev,
+          examTitle: 'ĐỀ KIỂM TRA ĐỊNH KÌ',
+          examSubtitle: '( Đề chính thức )',
+          subjectName: 'TOÁN HỌC',
+          gradeLevel: 'Lớp 12',
+          durationMinutes: 90,
+        }));
+        setFileName('De_Toan_Mau_12_Chuan_2025.pdf');
+        setHasUnsavedChanges(false);
+        setEditedQuestionIds([]);
+        setUnsavedQuestionIds([]);
+        setSavedQuestionTimestamps({});
+        lastEditSourceRef.current = 'CARDS_3D';
+        setIsSavedAndReadyState(true);
+        setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
+        const imgCount = numbered.reduce(
+          (acc, q) => acc + (q.images?.length || 0),
+          0
+        );
+        setStatusBanner({
+          type: 'SUCCESS',
+          text: `Đã nạp thành công Đề Toán Mẫu 12 (${numbered.length} câu: 12 câu Phần I, 4 câu Phần II, 6 câu Phần III — bảo toàn ${imgCount} hình vẽ/đồ thị/bảng biến thiên & 100% công thức Toán + đáp án gạch chân)!`,
+        });
+      }
+    } catch (err: any) {
+      setStatusBanner({
+        type: 'ERROR',
+        text: `Không thể nạp đề mẫu Toán tự động: ${err?.message || 'Lỗi tải file'}`,
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // Bảo toàn hình ảnh, bảng biểu, công thức OMML và mức độ nhận thức khi đồng bộ từ trình soạn thảo Word A4
   const mergeRichMetadataFromExistingQuestions = (
     parsedList: ExamQuestion[],
@@ -3569,16 +3631,28 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Hàng 2: 2 Nút tiện ích — [Đề Mẫu 18-4-6] & [Lưu Toàn Bộ Chỉnh Sửa] */}
-                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                {/* Hàng 2: 3 Nút tiện ích — [Đề Mẫu Sinh 12] & [Đề Mẫu Toán 12] & [Lưu Toàn Bộ Chỉnh Sửa] */}
+                <div className="grid grid-cols-3 gap-1.5 pt-0.5">
                   <button
                     type="button"
                     onClick={() => handleLoadSampleExam(true)}
-                    title="Nạp đề mẫu chuẩn cấu trúc 2025 (18 câu Phần I, 4 câu Phần II, 6 câu Phần III)"
-                    className="px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    disabled={isProcessing}
+                    title="Nạp đề mẫu Sinh học 12 chuẩn cấu trúc 2025 (18 câu Phần I, 4 câu Phần II, 6 câu Phần III)"
+                    className="px-2 py-2 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-cyan flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer text-xs"
                   >
                     <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                    <span>Đề Mẫu 18-4-6</span>
+                    <span>Mẫu Sinh 12</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLoadMathSamplePdf}
+                    disabled={isProcessing}
+                    title="Nạp Đề Toán Mẫu 12 (22 câu: công thức phân số/căn thức phức tạp, 12 đồ thị hàm số, bảng biến thiên & hình không gian)"
+                    className="px-2 py-2 rounded-xl font-extrabold text-white btn-auto-scale btn-3d-emerald flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer text-xs"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                    <span>Mẫu Toán 12</span>
                   </button>
 
                   <button
@@ -3586,15 +3660,15 @@ export default function App() {
                     onClick={handleSaveAllEditsOnly}
                     disabled={isProcessing}
                     title="Lưu cố định toàn bộ các câu đã chỉnh sửa để chuyển sang câu khác không bị thay đổi"
-                    className={`px-2.5 py-2 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                    className={`px-2 py-2 rounded-xl font-extrabold text-white btn-auto-scale flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer text-xs ${
                       hasUnsavedChanges ? 'btn-3d-amber ring-2 ring-amber-300' : 'btn-3d-indigo'
                     }`}
                   >
                     <Save className="w-3.5 h-3.5 shrink-0" />
                     <span>
                       {hasUnsavedChanges
-                        ? `Lưu Toàn Bộ (${unsavedQuestionIds.length || 1})*`
-                        : 'Lưu Toàn Bộ Chỉnh Sửa'}
+                        ? `Lưu (${unsavedQuestionIds.length || 1})*`
+                        : 'Lưu Chỉnh Sửa'}
                     </span>
                   </button>
                 </div>

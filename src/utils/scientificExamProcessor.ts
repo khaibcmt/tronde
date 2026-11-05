@@ -431,6 +431,8 @@ const LATEX_SYMBOL_MAP: Record<string, string> = {
   '\\mathbb{Z}': 'ℤ',
   '\\mathbb{Q}': 'ℚ',
   '\\mathbb{C}': 'ℂ',
+  '\\{': '{',
+  '\\}': '}',
 };
 
 const UNICODE_SUB_TO_NORMAL: Record<string, string> = {
@@ -1958,6 +1960,16 @@ export function autoHealScientificAndStemText(rawInput: string): string {
       (match) => `$${match}$`
     );
 
+    // Tự động bọc dấu $...$ cho phân số \frac{...}{...} (hỗ trợ căn thức lồng bên trong tử/mẫu) và căn thức \sqrt{...} đứng ngoài $...$
+    plain = plain.replace(
+      /\\(?:d|t)?frac\s*\{[^{}]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}[^{}]*)*\}\s*\{[^{}]*(?:\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}[^{}]*)*\}(?:\s*[_^]\s*\{?[0-9a-zA-Z+-]+\}?)*/g,
+      (match) => `$${match}$`
+    );
+    plain = plain.replace(
+      /(?<!\$[^$]{0,120})\\sqrt(?:\s*\[[^\]]*\])?\s*\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}(?:\s*[_^]\s*\{?[0-9a-zA-Z+-]+\}?)*/g,
+      (match) => `$${match}$`
+    );
+
     // 3.1. Chuẩn hóa mũi tên điều kiện nhiệt độ, xúc tác gõ thô:
     // VD: "--t°-->", "--(t°, xt)-->", "-> (t°)", "--> (t°, p, xt)" -> $\xrightarrow{t^\circ}$
     plain = plain.replace(
@@ -2098,12 +2110,27 @@ export function autoHealScientificAndStemText(rawInput: string): string {
       .replace(/(?<![<=-])->(?![>])/g, ' → ')
       .replace(/(?<=\$\s*|[A-Za-z0-9)\]}]\s+)=>(?=\s*\$|\s+[A-Za-z0-9(])/g, ' → ');
 
-    // Chuẩn hóa ký hiệu kết tủa / bay hơi viết dạng (kết tủa) / (bay hơi) hoặc v / ^ sát công thức
+    // Chuẩn hóa ký hiệu kết tủa / bay hơi và các ký hiệu Toán học đứng ngoài $...$ (\infty, \le, \ge, \mathbb{R}, \setminus, \{, \})
     plain = plain
       .replace(/\\downarrow\b/g, '↓')
       .replace(/\\uparrow\b/g, '↑')
       .replace(/\\perp\b/g, '⊥')
-      .replace(/\\parallel\b/g, '∥');
+      .replace(/\\parallel\b/g, '∥')
+      .replace(/\\mathbb\{R\}/g, 'ℝ')
+      .replace(/\\mathbb\{N\}/g, 'ℕ')
+      .replace(/\\mathbb\{Z\}/g, 'ℤ')
+      .replace(/\\mathbb\{Q\}/g, 'ℚ')
+      .replace(/\\mathbb\{C\}/g, 'ℂ')
+      .replace(/\\setminus\b/g, '∖')
+      .replace(/\\infty\b/g, '∞')
+      .replace(/\\(?:le|leq)\b/g, '≤')
+      .replace(/\\(?:ge|geq)\b/g, '≥')
+      .replace(/\\(?:ne|neq)\b/g, '≠')
+      .replace(/\\in\b/g, '∈')
+      .replace(/\\notin\b/g, '∉')
+      .replace(/\\pm\b/g, '±')
+      .replace(/\\cdot\b/g, '·')
+      .replace(/\\([{}])/g, '$1');
 
     return plain;
   });
