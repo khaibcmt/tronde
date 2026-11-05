@@ -4116,25 +4116,30 @@ export default function App() {
                                           handleSelectSingleCorrectPart1(q.id, opt.id)
                                         }
                                         title={`Bấm để chọn ${opt.currentLabel} làm đáp án đúng`}
-                                        className={`text-left leading-relaxed cursor-pointer rounded px-1.5 py-0.5 transition-colors ${
+                                        className={`text-left leading-relaxed cursor-pointer rounded px-1.5 py-0.5 transition-colors text-slate-950 ${
                                           opt.isCorrect
-                                            ? 'bg-rose-50/90 text-rose-700 font-bold'
-                                            : 'text-slate-950 hover:bg-sky-50'
+                                            ? 'bg-rose-50/50 hover:bg-rose-50'
+                                            : 'hover:bg-sky-50'
                                         }`}
                                       >
-                                        <strong
-                                          className={`font-bold ${
-                                            opt.isCorrect ? 'underline decoration-2 text-rose-700' : ''
-                                          }`}
-                                        >
-                                          {opt.currentLabel}.{' '}
+                                        <strong className="font-bold">
+                                          <span
+                                            className={
+                                              opt.isCorrect
+                                                ? 'text-red-600 underline decoration-red-600 decoration-2 underline-offset-2 font-extrabold'
+                                                : 'text-slate-950'
+                                            }
+                                          >
+                                            {opt.currentLabel}
+                                          </span>
+                                          <span className="text-slate-950">. </span>
                                         </strong>
                                         <ScientificContentRenderer
                                           text={opt.text}
                                           inline
-                                          isCorrect={opt.isCorrect}
-                                          isUnderline={opt.isUnderline}
-                                          isRed={opt.isRed}
+                                          isCorrect={false}
+                                          isUnderline={false}
+                                          isRed={false}
                                         />
                                       </div>
                                     ))}
@@ -4149,15 +4154,18 @@ export default function App() {
                                         key={sub.id}
                                         className="flex items-start justify-between gap-3 py-0.5 px-1.5 rounded hover:bg-sky-50/60"
                                       >
-                                        <div
-                                          className={`text-left leading-relaxed flex-1 ${
-                                            sub.isTrue
-                                              ? 'text-emerald-900 font-semibold underline decoration-emerald-600/70'
-                                              : 'text-slate-950'
-                                          }`}
-                                        >
+                                        <div className="text-left leading-relaxed flex-1 text-slate-950">
                                           <strong className="font-bold">
-                                            {sub.currentLabel}){' '}
+                                            <span
+                                              className={
+                                                sub.isTrue
+                                                  ? 'text-red-600 underline decoration-red-600 decoration-2 underline-offset-2 font-extrabold'
+                                                  : 'text-slate-950'
+                                              }
+                                            >
+                                              {sub.currentLabel}
+                                            </span>
+                                            <span className="text-slate-950">) </span>
                                           </strong>
                                           <ScientificContentRenderer text={sub.text} inline />
                                         </div>
@@ -4952,17 +4960,21 @@ export default function App() {
                             </p>
 
                             {origQ.part === 'PART_1' && origQ.options && (
-                              <div className="grid grid-cols-2 gap-1.5 pt-1 text-sm text-slate-700">
+                              <div className="grid grid-cols-2 gap-1.5 pt-1 text-sm text-slate-900">
                                 {origQ.options.map((o) => (
-                                  <div
-                                    key={o.id}
-                                    className={
-                                      o.isCorrect
-                                        ? 'text-rose-700 font-bold underline'
-                                        : ''
-                                    }
-                                  >
-                                    <strong>{o.currentLabel}. </strong>
+                                  <div key={o.id} className="text-left">
+                                    <strong className="font-bold">
+                                      <span
+                                        className={
+                                          o.isCorrect
+                                            ? 'text-red-600 underline decoration-red-600 decoration-2 underline-offset-2 font-extrabold'
+                                            : 'text-slate-950'
+                                        }
+                                      >
+                                        {o.currentLabel}
+                                      </span>
+                                      <span className="text-slate-950">. </span>
+                                    </strong>
                                     <ScientificContentRenderer text={o.text} inline />
                                   </div>
                                 ))}
@@ -4970,18 +4982,25 @@ export default function App() {
                             )}
 
                             {origQ.part === 'PART_2' && origQ.subItems && (
-                              <div className="space-y-1 pt-1 text-sm text-slate-700">
+                              <div className="space-y-1 pt-1 text-sm text-slate-900">
                                 {origQ.subItems.map((s) => (
-                                  <div
-                                    key={s.id}
-                                    className={
-                                      s.isTrue
-                                        ? 'text-emerald-800 font-bold underline'
-                                        : ''
-                                    }
-                                  >
-                                    <strong>{s.currentLabel}) </strong>
-                                    <ScientificContentRenderer text={s.text} inline /> ({s.isTrue ? 'Đúng' : 'Sai'})
+                                  <div key={s.id} className="text-left">
+                                    <strong className="font-bold">
+                                      <span
+                                        className={
+                                          s.isTrue
+                                            ? 'text-red-600 underline decoration-red-600 decoration-2 underline-offset-2 font-extrabold'
+                                            : 'text-slate-950'
+                                        }
+                                      >
+                                        {s.currentLabel}
+                                      </span>
+                                      <span className="text-slate-950">) </span>
+                                    </strong>
+                                    <ScientificContentRenderer text={s.text} inline />{' '}
+                                    <span className={s.isTrue ? 'text-emerald-700 font-bold' : 'text-slate-600 font-semibold'}>
+                                      ({s.isTrue ? 'Đúng' : 'Sai'})
+                                    </span>
                                   </div>
                                 ))}
                               </div>
@@ -5012,17 +5031,21 @@ export default function App() {
                             </p>
 
                             {cq.part === 'PART_1' && cq.options && (
-                              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                              <div className="grid grid-cols-2 gap-1.5 pt-1 text-sm text-slate-900">
                                 {cq.options.map((o) => (
-                                  <div
-                                    key={o.id}
-                                    className={`text-sm ${
-                                      o.isCorrect
-                                        ? 'text-rose-600 font-bold underline'
-                                        : 'text-slate-800'
-                                    }`}
-                                  >
-                                    <strong>{o.currentLabel}. </strong>
+                                  <div key={o.id} className="text-left">
+                                    <strong className="font-bold">
+                                      <span
+                                        className={
+                                          o.isCorrect
+                                            ? 'text-red-600 underline decoration-red-600 decoration-2 underline-offset-2 font-extrabold'
+                                            : 'text-slate-950'
+                                        }
+                                      >
+                                        {o.currentLabel}
+                                      </span>
+                                      <span className="text-slate-950">. </span>
+                                    </strong>
                                     <ScientificContentRenderer text={o.text} inline />
                                   </div>
                                 ))}
@@ -5030,18 +5053,25 @@ export default function App() {
                             )}
 
                             {cq.part === 'PART_2' && cq.subItems && (
-                              <div className="space-y-1 pt-1 text-sm">
+                              <div className="space-y-1 pt-1 text-sm text-slate-900">
                                 {cq.subItems.map((s) => (
-                                  <div
-                                    key={s.id}
-                                    className={
-                                      s.isTrue
-                                        ? 'text-emerald-800 font-bold underline'
-                                        : 'text-slate-700'
-                                    }
-                                  >
-                                    <strong>{s.currentLabel}) </strong>
-                                    <ScientificContentRenderer text={s.text} inline /> ({s.isTrue ? 'Đúng' : 'Sai'})
+                                  <div key={s.id} className="text-left">
+                                    <strong className="font-bold">
+                                      <span
+                                        className={
+                                          s.isTrue
+                                            ? 'text-red-600 underline decoration-red-600 decoration-2 underline-offset-2 font-extrabold'
+                                            : 'text-slate-950'
+                                        }
+                                      >
+                                        {s.currentLabel}
+                                      </span>
+                                      <span className="text-slate-950">) </span>
+                                    </strong>
+                                    <ScientificContentRenderer text={s.text} inline />{' '}
+                                    <span className={s.isTrue ? 'text-emerald-700 font-bold' : 'text-slate-600 font-semibold'}>
+                                      ({s.isTrue ? 'Đúng' : 'Sai'})
+                                    </span>
                                   </div>
                                 ))}
                               </div>

@@ -537,6 +537,7 @@ function buildStandardParagraphXml(
     italicBody?: boolean;
     bodyColorHex?: string;
     prefixColorHex?: string;
+    highlightOnlyFirstCharOfPrefix?: boolean;
     align?: 'left' | 'both' | 'center' | 'right';
     spaceBeforeTwips?: number;
     spaceAfterTwips?: number;
@@ -565,8 +566,35 @@ function buildStandardParagraphXml(
     ? 'FF0000'
     : undefined;
 
-  const prefixRunXml = boldPrefix
-    ? `<w:r>
+  let prefixRunXml = '';
+  if (boldPrefix) {
+    if (options?.highlightOnlyFirstCharOfPrefix && boldPrefix.length > 0) {
+      const firstChar = boldPrefix.charAt(0);
+      const restPrefix = boldPrefix.slice(1);
+      prefixRunXml = `<w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+          <w:b/>
+          <w:u w:val="single"/>
+          <w:color w:val="FF0000"/>
+          <w:sz w:val="${fontSize}"/><w:szCs w:val="${fontSize}"/>
+        </w:rPr>
+        <w:t xml:space="preserve">${escapeXml(firstChar)}</w:t>
+      </w:r>${
+        restPrefix
+          ? `\n      <w:r>
+        <w:rPr>
+          <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+          <w:b/>
+          <w:u w:val="none"/>
+          <w:sz w:val="${fontSize}"/><w:szCs w:val="${fontSize}"/>
+        </w:rPr>
+        <w:t xml:space="preserve">${escapeXml(restPrefix)}</w:t>
+      </w:r>`
+          : ''
+      }`;
+    } else {
+      prefixRunXml = `<w:r>
         <w:rPr>
           <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
           <w:b/>
@@ -575,8 +603,9 @@ function buildStandardParagraphXml(
           <w:sz w:val="${fontSize}"/><w:szCs w:val="${fontSize}"/>
         </w:rPr>
         <w:t xml:space="preserve">${escapeXml(boldPrefix)}</w:t>
-      </w:r>`
-    : '';
+      </w:r>`;
+    }
+  }
 
   // Chuyển đổi nội dung thân đoạn văn qua bộ xử lý Toán - Lý - Hóa (OMML + Subscript/Superscript)
   // Hỗ trợ xuống dòng mềm (\n) bên trong thân câu hỏi (ví dụ câu hỏi có nhiều dòng dữ kiện hoặc bảng ghép đôi Cột A - Cột B)
@@ -727,10 +756,7 @@ function buildExamNationalHeaderTableXml(
  * Tự động dàn dòng phương án Phần I bằng ĐOẠN VĂN THUẦN (<w:p>) + TAB STOPS (<w:tabs>):
  * - TUYỆT ĐỐI KHÔNG dùng bảng (<w:tbl>) để giáo viên dễ dàng chỉnh sửa trực tiếp từng đáp án như văn bản thường trong Word.
  * - Không khóa keepNext/keepLines để các câu hỏi chảy liền mạch sát tới cuối trang, triệt tiêu 100% khoảng trắng thừa cuối trang.
- * - Độ rộng vùng in chuẩn A4 (11906 - 2*1134 = 9638 twips = 17.0cm):
- *   + 1_ROW_4_COL: Tab stops tại 2410 (4.25cm), 4820 (8.50cm), 7230 (12.75cm)
- *   + 2_ROW_2_COL: Tab stop tại 4820 (8.50cm)
- *   + 4_ROW_1_COL: 4 đoạn văn <w:p> độc lập
+ * - Khi highlightCorrect = true (Đề gốc / Đề AI gốc): CHỈ tô đỏ và gạch chân duy nhất ký tự chữ cái đáp án đúng (A, B, C, D), tuyệt đối không gạch chân dấu chấm hay nội dung câu trả lời.
  */
 function buildPart1OptionsWithTabStopsXml(
   options: OptionPart1[],
@@ -741,19 +767,38 @@ function buildPart1OptionsWithTabStopsXml(
 
   const buildOptionRunsXml = (opt: OptionPart1): string => {
     const isMarked = highlightCorrect && opt.isCorrect;
-    const prefixRun = `<w:r>
+    const prefixRun = isMarked
+      ? `<w:r>
       <w:rPr>
         <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
         <w:b/>
-        ${isMarked ? '<w:u w:val="single"/><w:color w:val="FF0000"/>' : ''}
+        <w:u w:val="single"/>
+        <w:color w:val="FF0000"/>
         <w:sz w:val="24"/><w:szCs w:val="24"/>
       </w:rPr>
-      <w:t xml:space="preserve">${opt.currentLabel}. </w:t>
+      <w:t xml:space="preserve">${escapeXml(opt.currentLabel)}</w:t>
+    </w:r>
+    <w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:b/>
+        <w:u w:val="none"/>
+        <w:sz w:val="24"/><w:szCs w:val="24"/>
+      </w:rPr>
+      <w:t xml:space="preserve">. </w:t>
+    </w:r>`
+      : `<w:r>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:b/>
+        <w:sz w:val="24"/><w:szCs w:val="24"/>
+      </w:rPr>
+      <w:t xml:space="preserve">${escapeXml(opt.currentLabel)}. </w:t>
     </w:r>`;
 
     const bodyRuns = buildRichScientificRunsAndMathXml(opt.text, {
-      underline: isMarked,
-      colorHex: isMarked ? 'FF0000' : undefined,
+      underline: false,
+      colorHex: undefined,
       fontSizeHalfPt: 24,
     });
 
@@ -825,7 +870,7 @@ function buildPart1OptionsWithTabStopsXml(
     </w:p>`;
   }
 
-  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 đoạn văn riêng biệt, không thuộc tính bảng, không hangingIndent)
+  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 đoạn văn riêng biệt, chỉ gạch chân & tô đỏ ký tự chữ cái đáp án đúng)
   return options
     .map((opt, idx) => {
       const isMarked = highlightCorrect && opt.isCorrect;
@@ -834,10 +879,10 @@ function buildPart1OptionsWithTabStopsXml(
         hangingIndent: false,
         keepNext: false,
         keepLines: false,
-        prefixColorHex: isMarked ? 'FF0000' : undefined,
-        underlinePrefix: isMarked,
-        underlineBody: isMarked,
-        redBody: isMarked,
+        highlightOnlyFirstCharOfPrefix: isMarked,
+        underlinePrefix: false,
+        underlineBody: false,
+        redBody: false,
         align: 'left',
         spaceBeforeTwips: 0,
         spaceAfterTwips: isLast ? 30 : 20,
@@ -1930,10 +1975,10 @@ function buildQuestionsBodyXml(
             hangingIndent: false,
             keepNext: false,
             keepLines: false,
-            prefixColorHex: isMarkedTrue ? 'FF0000' : undefined,
-            underlinePrefix: isMarkedTrue,
-            underlineBody: isMarkedTrue,
-            redBody: isMarkedTrue,
+            highlightOnlyFirstCharOfPrefix: isMarkedTrue,
+            underlinePrefix: false,
+            underlineBody: false,
+            redBody: false,
             align: 'left',
             spaceBeforeTwips: 0,
             spaceAfterTwips: isLast ? 30 : 20,
