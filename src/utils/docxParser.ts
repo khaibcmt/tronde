@@ -135,6 +135,50 @@ export function validateExamQuestions(
         ? 'Phần III'
         : 'Phần IV (Tự luận)';
 
+    // Bắt lỗi MẤT CÔNG THỨC: vị trí công thức bị rơi khi đọc file được đánh dấu
+    // [MẤT CÔNG THỨC] thay vì tự bịa nội dung thay thế — giáo viên phải bổ sung từ đề gốc.
+    const allQuestionTexts = [
+      q.stemText || '',
+      ...(q.options || []).map((o) => o.text),
+      ...(q.subItems || []).map((s) => s.text),
+    ];
+    if (allQuestionTexts.some((t) => t.includes(LOST_FORMULA_MARKER))) {
+      issues.push({
+        id: `issue-${q.id}-formula-lost`,
+        questionId: q.id,
+        part: q.part,
+        questionIndex: q.displayIndex,
+        severity: 'ERROR',
+        code: 'FORMULA_CONTENT_LOST',
+        message: `${partLabel} - Câu ${q.displayIndex}: Có công thức bị mất khi đọc file (đánh dấu ${LOST_FORMULA_MARKER}). Hệ thống không tự bịa công thức thay thế — giáo viên vui lòng bổ sung lại từ đề gốc!`,
+        suggestion: `Mở đề gốc, chép lại công thức tại vị trí có dấu ${LOST_FORMULA_MARKER} rồi xóa dấu đánh dấu.`,
+      });
+    }
+
+    // Câu dẫn có nhắc tới hình vẽ nhưng không có ảnh nào được gắn kèm
+    // (tính cả ảnh ở phương án / ý con) — khi xuất bản hệ thống KHÔNG tự chèn hình giả.
+    const totalAttachedImages =
+      (q.images?.length || 0) +
+      (q.options || []).reduce((acc, o) => acc + (o.images?.length || 0), 0) +
+      (q.subItems || []).reduce((acc, s) => acc + (s.images?.length || 0), 0);
+    if (
+      totalAttachedImages === 0 &&
+      /(?:như\s+hình\s+bên|như\s+Hình\s*\d+|tham\s+khảo\s+hình|nhìn\s+hình|quan\s+sát\s+hình|sơ\s+đồ\s+dưới\s+đây|đồ\s+thị\s+hình\s+bên)/i.test(
+        q.stemText || ''
+      )
+    ) {
+      issues.push({
+        id: `issue-${q.id}-image-missing`,
+        questionId: q.id,
+        part: q.part,
+        questionIndex: q.displayIndex,
+        severity: 'WARNING',
+        code: 'IMAGE_REFERENCED_BUT_MISSING',
+        message: `${partLabel} - Câu ${q.displayIndex}: Câu dẫn có nhắc tới hình vẽ nhưng chưa có ảnh nào được gắn kèm. Khi xuất bản, hệ thống KHÔNG tự chèn hình minh họa giả — giáo viên vui lòng gắn ảnh thật!`,
+        suggestion: 'Gắn ảnh/hình vẽ thật cho câu hỏi này trước khi trộn và xuất bản.',
+      });
+    }
+
     if (q.part === 'PART_1') {
       const opts = q.options || [];
       if (opts.length !== 4) {
@@ -1425,12 +1469,86 @@ function decodeXmlEntities(str: string): string {
  * Miễn nhiễm 100% với lỗi <parsererror> của DOMParser khi file Word có namespace lạ (WPS Office, PDF2Word, McMIX...)
  * Vẫn giữ nguyên nhận diện gạch chân (<w:u>), tô màu đỏ (<w:color>) VÀ trích xuất toàn bộ hình ảnh từ mediaMap!
  */
-function extractParagraphsFromDocxXmlRegex(
+function escapeXmlTextContent(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Chuyển 1 khối XML OMML thô (dạng chuỗi) sang LaTeX bằng cách bọc vào một
+ * tài liệu XML tối thiểu có khai báo namespace đầy đủ rồi dùng lại ommlToLatex.
+ * Dùng cho đường đọc dự phòng bằng Regex, nơi không có cây DOM của cả văn bản.
+ */
+function convertOmmlFragmentToLatex(ommlBlockXml: string): string {
+  try {
+    const prefixes = new Set<string>();
+    const prefixRe = /<([A-Za-z_][\w.-]*):[A-Za-z_]/g;
+    let pm: RegExpExecArray | null;
+    while ((pm = prefixRe.exec(ommlBlockXml)) !== null) {
+      prefixes.add(pm[1]);
+    }
+    const decls = [...prefixes]
+      .map((p) =>
+        p === 'm'
+          ? 'xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"'
+          : p === 'w'
+          ? 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"'
+          : `xmlns:${p}="urn:edumix-frag:${p}"`
+      )
+      .join(' ');
+    const fragDoc = new DOMParser().parseFromString(
+      `<edumixfrag ${decls}>${ommlBlockXml}</edumixfrag>`,
+      'application/xml'
+    );
+    if (fragDoc.getElementsByTagName('parsererror').length > 0) return '';
+    const all = fragDoc.getElementsByTagName('*');
+    for (let i = 0; i < all.length; i++) {
+      const ln = (
+        all[i].localName ||
+        all[i].tagName.split(':').pop() ||
+        ''
+      ).toLowerCase();
+      if (ln === 'omath') return ommlToLatexWithFallback(all[i]);
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * BIẾN mọi khối <m:oMath> trong XML thô thành một run văn bản tổng hợp chứa
+ * chuỗi LaTeX "$...$" (hoặc dấu [MẤT CÔNG THỨC] nếu khối rỗng) NGAY TẠI VỊ TRÍ
+ * của nó trong đoạn văn. Trước đây đường đọc dự phòng bằng Regex chỉ thu thập
+ * <w:t> bên trong <w:r> nên TOÀN BỘ công thức OMML (vốn là thẻ anh em của run)
+ * bị rơi mất không dấu vết, tạo ra các câu bị "đục lỗ".
+ */
+function convertOmmlBlocksToSyntheticRunsInXml(xmlString: string): string {
+  // Gỡ wrapper <m:oMathPara> (chỉ là khối bọc hiển thị) để xử lý thống nhất theo từng <m:oMath>
+  const unwrapped = xmlString.replace(/<\/?(?:\w+:)?oMathPara\b[^>]*>/gi, '');
+  return unwrapped.replace(
+    /<(?:\w+:)?oMath\b[^>]*>([\s\S]*?)<\/(?:\w+:)?oMath\s*>/gi,
+    (fullBlock: string) => {
+      const latex = convertOmmlFragmentToLatex(fullBlock);
+      if (!latex) {
+        recordHollowGapWarning('khối OMML không đọc được ở đường đọc dự phòng (Regex)');
+      }
+      const inner = latex ? ` $${latex}$ ` : ` ${LOST_FORMULA_MARKER} `;
+      return `<w:r><w:t xml:space="preserve">${escapeXmlTextContent(inner)}</w:t></w:r>`;
+    }
+  );
+}
+
+export function extractParagraphsFromDocxXmlRegex(
   xmlString: string,
   mediaMap?: Map<string, { dataUrl: string; fileName: string }>
 ): ParsedParagraph[] {
+  // Chuyển OMML -> run tổng hợp TRƯỚC mọi bước trích xuất để công thức không bị rơi
+  const mathConvertedXml = convertOmmlBlocksToSyntheticRunsInXml(xmlString);
   // Loại bỏ các thẻ tự đóng <w:p .../>, <w:r .../>, <w:t .../> trước để tránh Regex nuốt nhầm thẻ kế tiếp
-  const withoutSelfClosingPRT = xmlString
+  const withoutSelfClosingPRT = mathConvertedXml
     .replace(/^\uFEFF/, '')
     .replace(/<(?:\w+:)?(?:p|r|t)(?:\s[^>]*)?\/>/gi, '');
 
@@ -1560,7 +1678,7 @@ function extractParagraphsFromDocxXmlRegex(
         runs: markedRuns,
         hasUnderline: markedRuns.some((r) => r.isUnderline && r.text.trim().length > 0),
         hasRed: markedRuns.some((r) => r.isRed && r.text.trim().length > 0),
-        hasFormula: false,
+        hasFormula: markedRuns.some((r) => /\$[^$]+\$/.test(r.text)),
         isAutoNumbered,
         images: paraImages,
       };
@@ -1797,8 +1915,9 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
               return;
             }
             if (lTag === 'omath' || lTag === 'omathpara') {
-              const ltx = ommlToLatex(el);
+              const ltx = ommlToLatexWithFallback(el);
               if (ltx) pStr += ` $${ltx}$ `;
+              else pStr += ` ${LOST_FORMULA_MARKER} `;
               return;
             }
           }
@@ -2284,9 +2403,13 @@ function extractParagraphsFromDocxXml(
               }
             } else if (rTag === 'omath' || rTag === 'omathpara') {
               hasInlineMath = true;
-              const latex = ommlToLatex(rChild);
+              const latex = ommlToLatexWithFallback(rChild);
               if (latex) {
                 text += ` $${latex}$ `;
+              } else {
+                // Khối OMML không chứa ký tự đọc được: đánh dấu vị trí mất thay vì nuốt mất không dấu vết
+                text += ` ${LOST_FORMULA_MARKER} `;
+                recordHollowGapWarning('khối OMML rỗng trong run văn bản');
               }
             } else if (rTag === 'object') {
               // ENGINE 2: Bóc tách MathType OLE Object (<w:object>) + Fallback ảnh nhúng của object nếu bị lỗi
@@ -2333,7 +2456,7 @@ function extractParagraphsFromDocxXml(
               if (!extractedMath) {
                 for (let m = 0; m < objSubEls.length; m++) {
                   if (getLocalTagName(objSubEls[m]) === 'omath') {
-                    extractedMath = ommlToLatex(objSubEls[m]);
+                    extractedMath = ommlToLatexWithFallback(objSubEls[m]);
                     break;
                   }
                 }
@@ -2394,7 +2517,7 @@ function extractParagraphsFromDocxXml(
           }
         } else if (localTag === 'omath' || localTag === 'omathpara') {
           hasFormula = true;
-          const latex = ommlToLatex(child);
+          const latex = ommlToLatexWithFallback(child);
           rawFormulaXml = new XMLSerializer().serializeToString(child);
           formulaLatex = latex;
           if (latex) {
@@ -2417,6 +2540,16 @@ function extractParagraphsFromDocxXml(
                 hasFormula: true,
               });
             }
+          } else {
+            // Khối OMML không đọc được ký tự nào: giữ dấu vết vị trí mất công thức
+            runs.push({
+              text: ` ${LOST_FORMULA_MARKER} `,
+              isUnderline: false,
+              isRed: false,
+              isBold: false,
+              hasFormula: true,
+            });
+            recordHollowGapWarning('khối OMML rỗng ở cấp đoạn văn');
           }
         } else {
           if (localTag === 'fldsimple') {
@@ -2709,52 +2842,107 @@ function findOrderedFourMarkers(
 }
 
 /**
- * Vá các khoảng trống ngữ cảnh bị rỗng giữa các từ do MathType/Equation bị rơi
- * Triệt tiêu hoàn toàn câu bị đục lỗ: "Cho đoạn thẳng  và hai điểm  thuộc đoạn thẳng..." hoặc "Độ dài của vectơ  bằng..."
+ * Dấu đánh dấu vị trí công thức đã bị mất trong lúc đọc file (MathType/Equation bị rơi).
+ * NGUYÊN TẮC BẤT DI BẤT DỊCH: Hệ thống TUYỆT ĐỐI KHÔNG tự bịa công thức thay thế
+ * (trước đây bộ vá từng tự chèn $AB$, $\triangle ABC$, $y = f(x)$... vào chỗ trống,
+ * khiến đề in ra sai nội dung). Vị trí mất phải được đánh dấu rõ ràng để giáo viên
+ * nhìn thấy và bổ sung lại từ đề gốc.
+ */
+export const LOST_FORMULA_MARKER = '[MẤT CÔNG THỨC]';
+
+const hollowGapHealWarnings: string[] = [];
+
+/** Danh sách cảnh báo mất công thức đã ghi nhận (kênh báo cáo khi đọc file / khi vá). */
+export function getHollowGapHealWarnings(): string[] {
+  return [...hollowGapHealWarnings];
+}
+
+export function clearHollowGapHealWarnings(): void {
+  hollowGapHealWarnings.length = 0;
+}
+
+function recordHollowGapWarning(contextSnippet: string): void {
+  const msg = `Công thức bị mất khi đọc file tại vị trí "...${contextSnippet.slice(0, 90)}..." — đã chèn dấu ${LOST_FORMULA_MARKER} thay vì tự bịa nội dung, giáo viên vui lòng bổ sung lại công thức từ đề gốc.`;
+  if (!hollowGapHealWarnings.includes(msg)) {
+    hollowGapHealWarnings.push(msg);
+  }
+}
+
+/**
+ * Chuyển 1 khối OMML sang LaTeX; nếu bộ chuyển cho chuỗi rỗng thì lùi về ghép
+ * toàn bộ ký tự <m:t> bên trong (dạng tuyến tính) để không mất trắng nội dung.
+ * Chỉ trả '' khi khối OMML thật sự không chứa ký tự nào đọc được.
+ */
+export function ommlToLatexWithFallback(mathNode: Element): string {
+  const latex = ommlToLatex(mathNode);
+  if (latex && latex.trim()) return latex;
+  const subEls = mathNode.getElementsByTagName('*');
+  let linear = '';
+  for (let i = 0; i < subEls.length; i++) {
+    const ln = (
+      subEls[i].localName ||
+      subEls[i].tagName.split(':').pop() ||
+      ''
+    ).toLowerCase();
+    if (ln === 't') linear += subEls[i].textContent || '';
+  }
+  return linear.trim();
+}
+
+/**
+ * Vá các khoảng trống ngữ cảnh bị rỗng giữa các từ do MathType/Equation bị rơi.
+ * CHỈ được phép: chuẩn hóa khoảng trắng/dấu câu và ĐÁNH DẤU vị trí mất công thức
+ * bằng [MẤT CÔNG THỨC] kèm ghi cảnh báo. TUYỆT ĐỐI KHÔNG chèn công thức mẫu tự bịa.
  */
 export function healHollowedContextGaps(rawText: string): string {
   if (!rawText) return '';
   let healed = rawText;
+  const M = LOST_FORMULA_MARKER;
+  const mark = (fullMatch: string, replacement: string): string => {
+    recordHollowGapWarning(fullMatch.replace(/\s+/g, ' ').trim());
+    return replacement;
+  };
 
   healed = healed.replace(
     /\b(Cho\s+đoạn\s+thẳng)\s{2,}(và\s+hai\s+điểm)\s{2,}(thuộc\s+đoạn\s+thẳng)\s{2,}/gi,
-    '$1 $AB$ $2 $M, N$ $3 $AB$ '
+    (m: string, g1: string, g2: string, g3: string) =>
+      mark(m, `${g1} ${M} ${g2} ${M} ${g3} ${M} `)
   );
   healed = healed.replace(
     /\b(Cho\s+đoạn\s+thẳng)\s{2,}(và)/gi,
-    '$1 $AB$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(hai\s+điểm)\s{2,}(thuộc)/gi,
-    '$1 $M, N$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(thuộc\s+đoạn\s+thẳng)\s{2,}([.,;:\s]|$)/gi,
-    '$1 $AB$$2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M}${g2}`)
   );
   healed = healed.replace(
     /\b(Độ\s+dài\s+của\s+(?:vectơ|véc-tơ|vecto))\s{2,}(bằng)/gi,
-    '$1 $\\vec{u}$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(tam\s+giác)\s{2,}(vuông|cân|đều|nhọn|tù|có)/gi,
-    '$1 $\\triangle ABC$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(góc)\s{2,}(bằng|có\s+số\s+đo|là\s+góc)/gi,
-    '$1 $\\widehat{BAC}$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(hàm\s+số)\s{2,}(đồng\s+biến|nghịch\s+biến|liên\s+tục|có\s+đạo\s+hàm|xác\s+định)/gi,
-    '$1 $y = f(x)$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(tích\s+vô\s+hướng)\s{2,}(bằng|của)/gi,
-    '$1 $\\vec{a} \\cdot \\vec{b}$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
   healed = healed.replace(
     /\b(hệ\s+phương\s+trình)\s{2,}(có|vô|thỏa)/gi,
-    '$1 $\\begin{cases} a_1 x + b_1 y = c_1 \\\\ a_2 x + b_2 y = c_2 \\end{cases}$ $2'
+    (m: string, g1: string, g2: string) => mark(m, `${g1} ${M} ${g2}`)
   );
 
   healed = healed.replace(/[ \t]{2,}/g, ' ');
@@ -5163,6 +5351,7 @@ export async function parseDocxExamFile(
   file: File,
   resetPerPart = true
 ): Promise<ExamQuestion[]> {
+  clearHollowGapHealWarnings();
   const arrayBuffer = await file.arrayBuffer();
   const headerBytes = new Uint8Array(arrayBuffer.slice(0, 4));
   const isZipArchive =

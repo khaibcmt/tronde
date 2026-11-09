@@ -1731,9 +1731,39 @@ function buildChemicalAndSubSupRunsXml(
  * và các công thức Hóa học H2SO4, Fe(NO3)3, Fe^{3+}, SO4^{2-}, kiểu gen Sinh học AB/ab, X^A X^a)
  * sang chuỗi XML gồm các <w:r> và <m:oMath>...</m:oMath> nhúng trực tiếp vào <w:p> của file .docx!
  */
+/**
+ * Chuẩn hóa một chuỗi LaTeX để đối chiếu "cùng một công thức" giữa bản lưu khi
+ * đọc file (formulaLatex) và đoạn $...$ tìm thấy trong stem lúc xuất bản:
+ * thống nhất dấu trừ Unicode U+2212 về '-', gộp khoảng trắng thừa.
+ */
+export function normalizeLatexForOmmlMatch(latex: string): string {
+  return (latex || '')
+    .replace(/−/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Đưa khối OMML gốc (đã serialize từ file Word khi đọc) về dạng dùng được bên
+ * trong một đoạn văn khi xuất: bỏ khai báo XML, nếu là <m:oMathPara> thì gỡ
+ * wrapper và chỉ giữ (các) khối <m:oMath> bên trong.
+ */
+export function unwrapRawOmmlXmlForInlineUse(rawOmmlXml: string): string {
+  if (!rawOmmlXml) return '';
+  const cleaned = rawOmmlXml.replace(/<\?xml[^>]*\?>/g, '').trim();
+  if (/<(?:\w+:)?oMathPara\b/i.test(cleaned)) {
+    const blocks = cleaned.match(
+      /<(?:\w+:)?oMath\b[^>]*>[\s\S]*?<\/(?:\w+:)?oMath\s*>/gi
+    );
+    return blocks ? blocks.join('') : '';
+  }
+  return cleaned;
+}
+
 export function buildRichScientificRunsAndMathXml(
   rawText: string,
-  baseStyle: WordRunStyleOptions
+  baseStyle: WordRunStyleOptions,
+  rawOmmlReuse?: { latex: string; ommlXml: string }
 ): string {
   if (!rawText) return '';
 
@@ -1768,11 +1798,26 @@ export function buildRichScientificRunsAndMathXml(
       .replace(/^\\\[|\\\]$/g, '')
       .trim();
 
-    const ommlXml = buildOmmlElementFromLatex(mathRaw, baseStyle);
-    if (ommlXml) {
-      segments.push(ommlXml);
+    // ƯU TIÊN TUYỆT ĐỐI: nếu đoạn công thức này chính là công thức gốc của câu hỏi
+    // (khớp LaTeX đã lưu khi đọc file) thì phát lại nguyên khối OMML gốc thay vì
+    // đi đường vòng LaTeX -> MathML -> OMML vốn làm méo/rơi cấu trúc ít gặp.
+    const reusedRawOmml =
+      rawOmmlReuse && rawOmmlReuse.ommlXml && rawOmmlReuse.latex
+        ? normalizeLatexForOmmlMatch(mathRaw) ===
+          normalizeLatexForOmmlMatch(rawOmmlReuse.latex)
+          ? unwrapRawOmmlXmlForInlineUse(rawOmmlReuse.ommlXml)
+          : ''
+        : '';
+
+    if (reusedRawOmml) {
+      segments.push(reusedRawOmml);
     } else {
-      segments.push(buildChemicalAndSubSupRunsXml(mathRaw, baseStyle));
+      const ommlXml = buildOmmlElementFromLatex(mathRaw, baseStyle);
+      if (ommlXml) {
+        segments.push(ommlXml);
+      } else {
+        segments.push(buildChemicalAndSubSupRunsXml(mathRaw, baseStyle));
+      }
     }
 
     lastIdx = m.index + m[0].length;

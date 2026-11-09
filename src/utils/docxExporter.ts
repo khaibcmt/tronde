@@ -542,6 +542,8 @@ function buildStandardParagraphXml(
     spaceBeforeTwips?: number;
     spaceAfterTwips?: number;
     fontSizeHalfPt?: number;
+    formulaLatex?: string;
+    rawFormulaOmmlXml?: string;
   }
 ): string {
   const align = options?.align || 'left';
@@ -614,13 +616,19 @@ function buildStandardParagraphXml(
     const lines = bodyText.split(/\r?\n/);
     bodyRunXml = lines
       .map((line, idx) => {
-        const lineXml = buildRichScientificRunsAndMathXml(line, {
-          bold: options?.boldBody,
-          italic: options?.italicBody,
-          underline: options?.underlineBody,
-          colorHex: resolvedBodyColorHex,
-          fontSizeHalfPt: fontSize,
-        });
+        const lineXml = buildRichScientificRunsAndMathXml(
+          line,
+          {
+            bold: options?.boldBody,
+            italic: options?.italicBody,
+            underline: options?.underlineBody,
+            colorHex: resolvedBodyColorHex,
+            fontSizeHalfPt: fontSize,
+          },
+          options?.rawFormulaOmmlXml && options?.formulaLatex
+            ? { latex: options.formulaLatex, ommlXml: options.rawFormulaOmmlXml }
+            : undefined
+        );
         if (idx === 0) return lineXml;
         return `<w:r><w:br/></w:r>\n${lineXml}`;
       })
@@ -769,9 +777,47 @@ function buildExamNationalHeaderTableXml(
 function buildPart1OptionsWithTabStopsXml(
   options: OptionPart1[],
   layout: '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL',
-  highlightCorrect: boolean
+  highlightCorrect: boolean,
+  imageRelMap?: Map<string, string>
 ): string {
   if (!options || options.length === 0) return '';
+
+  // Phương án CÓ HÌNH (đồ thị, hình vẽ là phương án — rất phổ biến ở môn Toán):
+  // ép bố cục dọc, mỗi phương án một đoạn riêng và ảnh nằm NGAY DƯỚI đúng phương
+  // án của nó. Bố cục tab-stop 1x4 / 2x2 không có chỗ neo ảnh theo từng phương án
+  // nên tuyệt đối không dùng khi có ảnh phương án — tránh cảnh hình bị tách khỏi câu.
+  const hasOptionImages = Boolean(
+    imageRelMap && options.some((o) => o.images && o.images.length > 0)
+  );
+  if (hasOptionImages) {
+    return options
+      .map((opt, idx) => {
+        const isMarked = highlightCorrect && opt.isCorrect;
+        const isLast = idx === options.length - 1;
+        const paraXml = buildStandardParagraphXml(`${opt.currentLabel}. `, opt.text, {
+          hangingIndent: false,
+          keepNext: false,
+          keepLines: false,
+          highlightOnlyFirstCharOfPrefix: isMarked,
+          underlinePrefix: false,
+          underlineBody: false,
+          redBody: false,
+          align: 'left',
+          spaceBeforeTwips: 0,
+          spaceAfterTwips: isLast ? 30 : 20,
+          fontSizeHalfPt: 24,
+        });
+        const drawingsXml = (opt.images || [])
+          .map((img) => {
+            const rId = imageRelMap!.get(img.id) || imageRelMap!.get(img.dataUrl);
+            return rId ? buildQuestionImageDrawingXml(rId, img, 0) : '';
+          })
+          .filter(Boolean)
+          .join('\n');
+        return drawingsXml ? `${paraXml}\n${drawingsXml}` : paraXml;
+      })
+      .join('\n');
+  }
 
   const buildOptionRunsXml = (opt: OptionPart1): string => {
     const isMarked = highlightCorrect && opt.isCorrect;
@@ -900,38 +946,62 @@ function buildPart1OptionsWithTabStopsXml(
     .join('\n');
 }
 
+export interface FinalGateWarning {
+  questionDisplayIndex: number;
+  part: string;
+  message: string;
+}
+
+let lastFinalGateWarnings: FinalGateWarning[] = [];
+
+/**
+ * Cảnh báo của Khâu kiểm duyệt cuối ở lần chạy gần nhất (đọc sau khi xuất bản
+ * để biết câu nào nhắc tới hình vẽ nhưng thiếu ảnh, câu nào còn dấu mất công thức).
+ */
+export function getLastFinalGateWarnings(): FinalGateWarning[] {
+  return [...lastFinalGateWarnings];
+}
+
 /**
  * Khâu kiểm duyệt cuối (Final Validation Gate):
  * 1. Quét toàn bộ câu hỏi đề thi, triệt tiêu mọi phương án hoặc mệnh đề rỗng (A. . hoặc a) .)
- * 2. Tự động chạy tầng xử lý thứ hai để vá dứt điểm và phục hồi công thức/nội dung trước khi đóng gói Word
- * 3. Tự động kiểm tra phát hiện câu hỏi có dẫn chiếu hình ảnh ("như hình bên", "như Hình 1", "tham khảo hình vẽ")
- *    nhưng chưa có ảnh gắn kèm -> tự động tạo và gắn khối ảnh vector chuẩn 300 DPI [HINH_ANH_CAU_X]
+ * 2. Chạy tầng vá khoảng trống ngữ cảnh — CHỈ đánh dấu [MẤT CÔNG THỨC], không tự bịa nội dung
+ * 3. Phát hiện câu hỏi có dẫn chiếu hình ảnh ("như hình bên", "như Hình 1", "tham khảo hình vẽ")
+ *    nhưng chưa có ảnh gắn kèm -> ghi vào DANH SÁCH CẢNH BÁO (getLastFinalGateWarnings)
+ *    TUYỆT ĐỐI KHÔNG tự chèn ảnh minh họa giả vào đề thi: thiếu ảnh là lỗi của dữ liệu,
+ *    giáo viên phải gắn ảnh thật. Đề vẫn được xuất (không kèm hình giả) để giáo viên đối chiếu.
  */
 export function runFinalValidationGateAndRepair(
   questions: ExamQuestion[]
 ): ExamQuestion[] {
-  return questions.map((q) => {
-    // 1. Vá các khoảng trống bị đục lỗ trong phần dẫn
+  const warnings: FinalGateWarning[] = [];
+  const repairedQuestions = questions.map((q) => {
+    // 1. Vá các khoảng trống bị đục lỗ trong phần dẫn (chỉ đánh dấu, không bịa công thức)
     const healedStem = healHollowedContextGaps(q.stemText || '');
 
-    // 2. Kiểm tra nếu câu dẫn có cụm từ "như hình bên", "như Hình 1", "tham khảo hình vẽ" nhưng q.images rỗng
-    let images = q.images ? [...q.images] : [];
+    // 2. Kiểm tra nếu câu dẫn có cụm từ "như hình bên", "như Hình 1", "tham khảo hình vẽ"
+    // nhưng không có ảnh nào (kể cả ở phương án / ý con) -> cảnh báo cứng, KHÔNG chèn hình giả
+    const images = q.images ? [...q.images] : [];
+    const totalImages =
+      images.length +
+      (q.options || []).reduce((acc, o) => acc + (o.images?.length || 0), 0) +
+      (q.subItems || []).reduce((acc, s) => acc + (s.images?.length || 0), 0);
     const hasImageMention =
       /(?:như\s+hình\s+bên|như\s+Hình\s*\d+|tham\s+khảo\s+hình|nhìn\s+hình|quan\s+sát\s+hình|sơ\s+đồ\s+dưới\s+đây|đồ\s+thị\s+hình\s+bên)/i.test(
         healedStem
       );
-    if (hasImageMention && images.length === 0) {
-      const tagId = `[HINH_ANH_CAU_${q.displayIndex}]`;
-      const placeholderSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="450" height="200" viewBox="0 0 450 200"><rect width="100%" height="100%" fill="%23ffffff" stroke="%233b82f6" stroke-width="2" rx="8"/><rect x="20" y="20" width="410" height="160" fill="%23f8fafc" stroke="%2394a3b8" stroke-dasharray="4 4" rx="6"/><text x="225" y="90" font-family="Times New Roman, serif" font-size="16" font-weight="bold" text-anchor="middle" fill="%231e3a8a">HÌNH MINH HỌA CÂU ${q.displayIndex}</text><text x="225" y="125" font-family="Times New Roman, serif" font-size="13" font-style="italic" text-anchor="middle" fill="%23475569">Sơ đồ / Đồ thị bài tập đạt chuẩn phân giải 300 DPI (${tagId})</text></svg>`;
-      images.push({
-        id: `auto-img-${q.id}-${q.displayIndex}`,
-        dataUrl: placeholderSvg,
-        tagId,
-        caption: `Hình minh họa Câu ${q.displayIndex} ${tagId}`,
-        widthTwips: 4500,
-        heightTwips: 2000,
-        aspectRatio: 450 / 200,
-        dpi: 300,
+    if (hasImageMention && totalImages === 0) {
+      warnings.push({
+        questionDisplayIndex: q.displayIndex,
+        part: q.part,
+        message: `Câu ${q.displayIndex} (${q.part}): Câu dẫn có nhắc tới hình vẽ nhưng chưa có ảnh gắn kèm. Hệ thống không tự chèn hình minh họa giả — giáo viên vui lòng gắn ảnh thật trước khi phát đề.`,
+      });
+    }
+    if (healedStem.includes('[MẤT CÔNG THỨC]')) {
+      warnings.push({
+        questionDisplayIndex: q.displayIndex,
+        part: q.part,
+        message: `Câu ${q.displayIndex} (${q.part}): Còn vị trí [MẤT CÔNG THỨC] trong câu dẫn — giáo viên vui lòng bổ sung lại công thức từ đề gốc.`,
       });
     }
 
@@ -964,6 +1034,12 @@ export function runFinalValidationGateAndRepair(
       hasImage: images.length > 0,
     };
   });
+
+  lastFinalGateWarnings = warnings;
+  for (const w of warnings) {
+    console.warn(`[FinalGate] ${w.message}`);
+  }
+  return repairedQuestions;
 }
 
 /**
@@ -1783,7 +1859,11 @@ export async function convertImageToStandardPngDataUrl(dataUrl: string): Promise
 }
 
 /**
- * Gom toàn bộ ảnh đính kèm từ danh sách câu hỏi và tạo bản đồ quan hệ rId (chuẩn hóa sang PNG 300 DPI)
+ * Gom toàn bộ ảnh đính kèm từ danh sách câu hỏi và tạo bản đồ quan hệ rId (chuẩn hóa sang PNG 300 DPI).
+ * Thu thập ở CẢ BA cấp: ảnh của phần dẫn (q.images), ảnh của từng PHƯƠNG ÁN Phần I
+ * (options[].images — đồ thị/hình vẽ làm phương án, rất phổ biến ở môn Toán) và
+ * ảnh của từng Ý CON Phần II (subItems[].images). Trước đây chỉ thu ảnh phần dẫn
+ * nên mọi phương án là hình đều bị rơi ảnh khi xuất các mã đề đã trộn.
  */
 async function collectImagesAndBuildRelMap(questions: ExamQuestion[]): Promise<{
   imagesToEmbed: Array<{ relId: string; dataUrl: string; fileName: string }>;
@@ -1793,20 +1873,42 @@ async function collectImagesAndBuildRelMap(questions: ExamQuestion[]): Promise<{
   const imageRelMap = new Map<string, string>();
   let imgIndex = 1;
 
+  const collectOne = async (img: ExamImageAttachment) => {
+    if (!imageRelMap.has(img.id) && !imageRelMap.has(img.dataUrl)) {
+      const relId = `rIdImg${imgIndex++}`;
+      const pngDataUrl = await convertImageToStandardPngDataUrl(img.dataUrl);
+      const fileName = `figure_${imgIndex - 1}.png`;
+      imagesToEmbed.push({
+        relId,
+        dataUrl: pngDataUrl,
+        fileName,
+      });
+      imageRelMap.set(img.id, relId);
+      imageRelMap.set(img.dataUrl, relId);
+    }
+  };
+
   for (const q of questions) {
     if (q.images && q.images.length > 0) {
       for (const img of q.images) {
-        if (!imageRelMap.has(img.id) && !imageRelMap.has(img.dataUrl)) {
-          const relId = `rIdImg${imgIndex++}`;
-          const pngDataUrl = await convertImageToStandardPngDataUrl(img.dataUrl);
-          const fileName = `figure_${imgIndex - 1}.png`;
-          imagesToEmbed.push({
-            relId,
-            dataUrl: pngDataUrl,
-            fileName,
-          });
-          imageRelMap.set(img.id, relId);
-          imageRelMap.set(img.dataUrl, relId);
+        await collectOne(img);
+      }
+    }
+    if (q.options && q.options.length > 0) {
+      for (const opt of q.options) {
+        if (opt.images && opt.images.length > 0) {
+          for (const img of opt.images) {
+            await collectOne(img);
+          }
+        }
+      }
+    }
+    if (q.subItems && q.subItems.length > 0) {
+      for (const sub of q.subItems) {
+        if (sub.images && sub.images.length > 0) {
+          for (const img of sub.images) {
+            await collectOne(img);
+          }
         }
       }
     }
@@ -1915,6 +2017,8 @@ function buildQuestionsBodyXml(
           spaceBeforeTwips: 30,
           spaceAfterTwips: 20,
           fontSizeHalfPt: 24,
+          formulaLatex: q.formulaLatex,
+          rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
       );
       appendQuestionTablesAndImages(q);
@@ -1932,7 +2036,8 @@ function buildQuestionsBodyXml(
           buildPart1OptionsWithTabStopsXml(
             sanitizedOptions,
             layout,
-            highlightCorrectAnswers
+            highlightCorrectAnswers,
+            imageRelMap
           )
         );
       }
@@ -1964,6 +2069,8 @@ function buildQuestionsBodyXml(
           spaceBeforeTwips: 30,
           spaceAfterTwips: 20,
           fontSizeHalfPt: 24,
+          formulaLatex: q.formulaLatex,
+          rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
       );
       appendQuestionTablesAndImages(q);
@@ -1993,6 +2100,16 @@ function buildQuestionsBodyXml(
             fontSizeHalfPt: 24,
           })
         );
+
+        // Ảnh gắn riêng ở ý con này (nếu có): vẽ ngay dưới dòng của ý đó
+        if (sub.images && sub.images.length > 0 && imageRelMap) {
+          for (const img of sub.images) {
+            const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
+            if (rId) {
+              blocks.push(buildQuestionImageDrawingXml(rId, img, q.displayIndex));
+            }
+          }
+        }
       }
     }
   }
@@ -2022,6 +2139,8 @@ function buildQuestionsBodyXml(
           spaceBeforeTwips: 30,
           spaceAfterTwips: highlightCorrectAnswers ? 15 : 30,
           fontSizeHalfPt: 24,
+          formulaLatex: q.formulaLatex,
+          rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
       );
       appendQuestionTablesAndImages(q);
@@ -2092,6 +2211,8 @@ function buildQuestionsBodyXml(
           spaceBeforeTwips: 30,
           spaceAfterTwips: stemLines.length > 1 || (highlightCorrectAnswers && essayAns) ? 15 : 30,
           fontSizeHalfPt: 24,
+          formulaLatex: q.formulaLatex,
+          rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
       );
 
@@ -2105,6 +2226,8 @@ function buildQuestionsBodyXml(
             spaceAfterTwips:
               i === stemLines.length - 1 && !(highlightCorrectAnswers && essayAns) ? 30 : 15,
             fontSizeHalfPt: 24,
+            formulaLatex: q.formulaLatex,
+            rawFormulaOmmlXml: q.rawFormulaOmmlXml,
           })
         );
       }

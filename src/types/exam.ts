@@ -119,7 +119,9 @@ export interface ValidationIssue {
     | 'P2_ALL_FALSE'
     | 'P3_MISSING_SHORT_ANSWER'
     | 'P3_EXCEEDS_MAX_LENGTH'
-    | 'P3_INVALID_FORMAT';
+    | 'P3_INVALID_FORMAT'
+    | 'FORMULA_CONTENT_LOST'
+    | 'IMAGE_REFERENCED_BUT_MISSING';
   message: string;
   suggestion: string;
 }
