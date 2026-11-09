@@ -20,6 +20,8 @@ import {
   sanitizeSpecialCharsToUtf8,
 } from './scientificExamProcessor';
 import { defaultDocxAutoHealEngine } from './docxAutoHeal';
+import { extractMathTypeTex } from './mathTypeTex';
+import { convertWmfToSvg } from './wmfToSvg';
 
 const RED_COLOR_HEXES = new Set([
   'FF0000',
@@ -2377,6 +2379,10 @@ function extractParagraphsFromDocxXml(
 
           let text = '';
           let hasInlineMath = false;
+          // dataUrl của các ảnh preview thuộc về MathType object đã khôi phục
+          // được LaTeX trong chính run này — phải loại khỏi ảnh của run/đoạn
+          // để công thức không hiển thị trùng hai lần (vừa chữ vừa hình)
+          const suppressedImageDataUrls = new Set<string>();
 
           for (let k = 0; k < child.childNodes.length; k++) {
             const rChild = child.childNodes[k] as Element;
@@ -2464,6 +2470,17 @@ function extractParagraphsFromDocxXml(
 
               if (extractedMath) {
                 text += ` $${extractedMath}$ `;
+                // Công thức đã thành LaTeX thật: gỡ ảnh preview của chính
+                // object này khỏi ảnh đoạn văn (tránh trùng lặp hiển thị)
+                const ownPreviewImgs = extractImagesFromElement(rChild, mediaMap);
+                for (const pv of ownPreviewImgs) {
+                  suppressedImageDataUrls.add(pv.dataUrl);
+                  for (let pi = paragraphImages.length - 1; pi >= 0; pi--) {
+                    if (paragraphImages[pi].dataUrl === pv.dataUrl) {
+                      paragraphImages.splice(pi, 1);
+                    }
+                  }
+                }
               } else {
                 // FALLBACK BẤT TỬ: Nếu đối tượng MathType không có chuỗi LaTeX nhúng,
                 // tự động trích xuất ảnh preview (v:imagedata) của chính object đó gắn vào paragraphImages
@@ -2496,7 +2513,11 @@ function extractParagraphsFromDocxXml(
             }
           }
 
-          const runImages = extractImagesFromElement(child, mediaMap);
+          const runImagesAll = extractImagesFromElement(child, mediaMap);
+          const runImages =
+            suppressedImageDataUrls.size > 0
+              ? runImagesAll.filter((im) => !suppressedImageDataUrls.has(im.dataUrl))
+              : runImagesAll;
 
           if (text || runImages.length > 0 || hasInlineMath) {
             const formattedText =
@@ -2959,7 +2980,7 @@ export function sanitizeAndEnforceNonEmptyOptionText(
   label: 'A' | 'B' | 'C' | 'D',
   _slotIdx: number,
   _stemText: string,
-  questionRuns?: ParsedRun[]
+  _questionRuns?: ParsedRun[]
 ): string {
   let clean = (rawText || '').trim();
   clean = clean.replace(new RegExp(`^[*#]?\\s*${label}\\s*[.:)]\\s*`, 'i'), '').trim();
@@ -2969,16 +2990,11 @@ export function sanitizeAndEnforceNonEmptyOptionText(
     /^[.\-_:,;?!]+$/.test(clean);
 
   if (isInvalid) {
-    if (questionRuns && questionRuns.length > 0) {
-      const mathChunk = questionRuns
-        .filter((r) => r.hasFormula || r.text.includes('$') || r.vertAlign)
-        .map((r) => r.text)
-        .join(' ')
-        .trim();
-      if (mathChunk.length > 0) {
-        return mathChunk;
-      }
-    }
+    // Nội dung thật của phương án có thể nằm ở ẢNH đính kèm của chính phương án
+    // đó (công thức MathType dạng hình SVG). TUYỆT ĐỐI không lấy công thức của
+    // toàn bộ câu hỏi lấp vào phương án rỗng như trước đây — đó là bịa nội dung
+    // sai vị trí (mọi phương án đều hiển thị công thức của thân câu). Phương án
+    // không có chữ thì để rỗng trung thực, phần hình của nó vẫn còn nguyên.
     return '';
   }
 
@@ -2994,7 +3010,7 @@ export function sanitizeAndEnforceNonEmptySubItemText(
   label: 'a' | 'b' | 'c' | 'd',
   _slotIdx: number,
   _stemText: string,
-  questionRuns?: ParsedRun[]
+  _questionRuns?: ParsedRun[]
 ): string {
   let clean = (rawText || '').trim();
   clean = clean.replace(new RegExp(`^[*#]?\\s*${label}\\s*[).:]\\s*`, 'i'), '').trim();
@@ -3004,16 +3020,8 @@ export function sanitizeAndEnforceNonEmptySubItemText(
     /^[.\-_:,;?!]+$/.test(clean);
 
   if (isInvalid) {
-    if (questionRuns && questionRuns.length > 0) {
-      const mathChunk = questionRuns
-        .filter((r) => r.hasFormula || r.text.includes('$') || r.vertAlign)
-        .map((r) => r.text)
-        .join(' ')
-        .trim();
-      if (mathChunk.length > 0) {
-        return mathChunk;
-      }
-    }
+    // Như Phần I: không lấp công thức của toàn câu hỏi vào ý rỗng (bịa nội dung
+    // sai vị trí). Ý không có chữ thì để rỗng trung thực; ảnh của ý vẫn còn.
     return '';
   }
 
@@ -3105,7 +3113,15 @@ export function enforceStrictFourOptionsPart1(
       const [mA, mB, mC, mD] = orderedFour;
       const extractedStem = combinedText.slice(0, mA.markerStart).trim();
       if (extractedStem) {
-        finalStem = healHollowedContextGaps(extractedStem);
+        // Nếu câu hỏi đã có ảnh đính kèm (công thức/hình đã khôi phục dạng
+        // ảnh), khoảng trắng kép trong thân nhiều khả năng chính là vị trí
+        // của ảnh đó — không chèn [MẤT CÔNG THỨC] oan vào thân câu
+        const hasRecoveredImages =
+          (question.images?.length || 0) > 0 ||
+          existingOpts.some((o) => (o.images?.length || 0) > 0);
+        finalStem = hasRecoveredImages
+          ? extractedStem.replace(/[ \t]{2,}/g, ' ')
+          : healHollowedContextGaps(extractedStem);
       }
 
       const rawSegments: {
@@ -3169,6 +3185,7 @@ export function enforceStrictFourOptionsPart1(
           originalLabel: seg.label,
           currentLabel: seg.label,
           text: safeText,
+          images: prevOpt?.images,
           isUnderline,
           isRed,
           isCorrect,
@@ -3221,6 +3238,7 @@ export function enforceStrictFourOptionsPart1(
           originalLabel: lbl,
           currentLabel: lbl,
           text: safeText,
+          images: prevOpt?.images,
           isUnderline,
           isRed,
           isCorrect,
@@ -3274,7 +3292,13 @@ export function enforceStrictFourSubItemsPart2(
     /(?:\t+|\s{2,}|[.;?!]\s*)[*#]?\s*[b-d]\s*[).:]\s+\S/.test(s.text)
   );
 
-  let finalStem = healHollowedContextGaps(question.stemText.trim());
+  // Như Phần I: câu hỏi đã có ảnh khôi phục thì không vá khoảng trống oan
+  const p2HasRecoveredImages =
+    (question.images?.length || 0) > 0 ||
+    existingSubs.some((s) => (s.images?.length || 0) > 0);
+  let finalStem = p2HasRecoveredImages
+    ? question.stemText.trim().replace(/[ \t]{2,}/g, ' ')
+    : healHollowedContextGaps(question.stemText.trim());
   let finalSubs: SubItemPart2[] = [];
 
   if (
@@ -3345,7 +3369,11 @@ export function enforceStrictFourSubItemsPart2(
       const [mA, mB, mC, mD] = orderedFour;
       const extractedStem = combinedText.slice(0, mA.markerStart).trim();
       if (extractedStem) {
-        finalStem = healHollowedContextGaps(extractedStem);
+        // Câu hỏi đã có ảnh khôi phục: khoảng trắng kép là vị trí của ảnh,
+        // không chèn [MẤT CÔNG THỨC] oan (dùng lại cờ đã tính ở đầu hàm)
+        finalStem = p2HasRecoveredImages
+          ? extractedStem.replace(/[ \t]{2,}/g, ' ')
+          : healHollowedContextGaps(extractedStem);
       }
 
       const rawSegments: {
@@ -3424,6 +3452,7 @@ export function enforceStrictFourSubItemsPart2(
           originalLabel: seg.label,
           currentLabel: seg.label,
           text: safeText,
+          images: prevSub?.images,
           isUnderline,
           isRed,
           isTrue,
@@ -3471,6 +3500,7 @@ export function enforceStrictFourSubItemsPart2(
           originalLabel: lbl,
           currentLabel: lbl,
           text: safeText,
+          images: existingSubs[idx]?.images,
           isUnderline: item ? Boolean(item.isUnderline) : false,
           isRed: item ? Boolean(item.isRed) : false,
           isTrue: item ? Boolean(item.isTrue) : false,
@@ -3569,23 +3599,22 @@ export function normalizeAllQuestionsStrictFourOptions(
 
 /**
  * ENGINE 2.1b: Giải mã stream nhị phân MathType OLE / MTEF trong word/embeddings/*.bin
- * Trích xuất chuỗi LaTeX/MathType nhúng bên trong OLE2 container (nếu có)
+ * Chỉ chấp nhận luồng "TeX Input Language" mà MathType nhúng khi giáo viên bật
+ * translator TeX: quét dấu ngoặc cân bằng ngay sau marker và kiểm chứng ứng viên
+ * là văn bản TeX sạch, in được (cùng thuật toán đã kiểm chứng trên trang kiểm tra
+ * online: 68/122 object MathType của đề thật khôi phục được LaTeX nguyên vẹn).
+ * TUYỆT ĐỐI không dùng regex "mò mảnh" trên nhị phân OLE nữa: mảnh vỡ nhị phân
+ * (ký tự rác kiểu "Lu@", "AppsMFCC", "Design Science…") không bao giờ được lọt
+ * vào nội dung câu hỏi. Object không có luồng TeX sẽ đi đường ảnh WMF→SVG.
  */
 function extractLatexFromMathTypeOleBytes(bytes: Uint8Array): string {
   if (!bytes || bytes.length < 32) return '';
   try {
-    const asciiText = new TextDecoder('latin1').decode(bytes);
-    // Kiểm tra xem OLE object có chứa chuỗi LaTeX nhúng sẵn từ MathType translator hay không
-    const texMatch = asciiText.match(
-      /\\(?:frac|dfrac|sqrt|vec|overrightarrow|int|sum|lim|alpha|beta|gamma|Delta|Omega|lambda|mu|pi|sin|cos|tan|begin)\b[\x20-\x7E]{1,180}/
-    );
-    if (texMatch) {
-      return texMatch[0].replace(/[^\x20-\x7E]+/g, ' ').trim();
-    }
+    return extractMathTypeTex(bytes) || '';
   } catch {
     // Bỏ qua nếu không giải mã được text từ OLE binary
+    return '';
   }
-  return '';
 }
 
 async function loadOleEmbeddingsMap(zip: JSZip): Promise<Map<string, string>> {
@@ -3696,7 +3725,39 @@ async function loadMediaRelationships(
     const rawFileName = mediaFile.name.split('/').pop() || 'image.png';
     const ext = rawFileName.split('.').pop()?.toLowerCase() || 'png';
 
-    if (ext === 'emf' || ext === 'wmf') {
+    if (ext === 'wmf') {
+      const uint8 = await mediaFile.async('uint8array');
+      // ENGINE 2.1c: Ảnh xem trước WMF của MathType là metafile vector thuần mà
+      // trình duyệt không hiển thị được. Chuyển thẳng sang SVG bằng bộ chuyển
+      // tập con (ExtTextOut theo từng glyph, nét phân số/căn, font Symbol) —
+      // cùng bộ chuyển đã kiểm chứng trên trang kiểm tra online (121/122 WMF
+      // của đề thật chuyển thành công). Không còn đường "đoán chữ trong WMF".
+      const conv = convertWmfToSvg(uint8);
+      if (conv) {
+        const svgBytes = new TextEncoder().encode(conv.svg);
+        let binary = '';
+        const CHUNK = 0x8000;
+        for (let i = 0; i < svgBytes.length; i += CHUNK) {
+          binary += String.fromCharCode(...svgBytes.subarray(i, i + CHUNK));
+        }
+        mediaMap.set(id, {
+          dataUrl: `data:image/svg+xml;base64,${btoa(binary)}`,
+          fileName: rawFileName.replace(/\.wmf$/i, '.svg'),
+        });
+        return;
+      }
+      // WMF không chuyển được sang SVG: lùi về bộ chữa ảnh (bitmap nhúng nếu có,
+      // nếu không thì khung báo trung thực — tuyệt đối không in chữ rác lên ảnh)
+      const healedPngDataUrl =
+        await defaultDocxAutoHealEngine.convertMetafileBytesToPngDataUrl(
+          uint8,
+          rawFileName
+        );
+      mediaMap.set(id, {
+        dataUrl: healedPngDataUrl,
+        fileName: rawFileName.replace(/\.wmf$/i, '.png'),
+      });
+    } else if (ext === 'emf') {
       const uint8 = await mediaFile.async('uint8array');
       const healedPngDataUrl =
         await defaultDocxAutoHealEngine.convertMetafileBytesToPngDataUrl(
@@ -3705,7 +3766,7 @@ async function loadMediaRelationships(
         );
       mediaMap.set(id, {
         dataUrl: healedPngDataUrl,
-        fileName: rawFileName.replace(/\.(emf|wmf)$/i, '.png'),
+        fileName: rawFileName.replace(/\.emf$/i, '.png'),
       });
     } else {
       let mime = 'image/png';
@@ -4083,6 +4144,57 @@ function extractSequentialSubItemsFromLine(
     leadingStem: acceptedMarkers.length > 0 ? lineText.slice(0, acceptedMarkers[0].markerStart).trim() : '',
     items,
   };
+}
+
+/**
+ * Phân bổ ảnh của các run trong MỘT đoạn văn cho từng phương án/ý theo thứ tự
+ * marker: run nào nằm sau marker "A."/"B."/… (hoặc "a)"/"b)"/…) thì ảnh của
+ * run thuộc về phương án/ý đó. Đây là đường duy nhất để nội dung dạng hình
+ * (công thức MathType đã chuyển SVG, hình vẽ trong phương án) bám chặt vào
+ * đúng phương án của nó thay vì dồn hết lên thân câu hỏi — điều kiện tiên
+ * quyết để trộn phương án mà công thức không tách rời phương án.
+ * Trả về map label -> ảnh và danh sách dataUrl đã phân bổ (để loại khỏi
+ * ảnh cấp câu hỏi, tránh trùng lặp).
+ */
+function distributeRunImagesByMarker(
+  runs: ParsedRun[],
+  labelsInOrder: string[],
+  markerPattern: RegExp
+): { byLabel: Map<string, ExamImageAttachment[]>; distributedUrls: string[] } {
+  const byLabel = new Map<string, ExamImageAttachment[]>();
+  const distributedUrls: string[] = [];
+  if (!runs || runs.length === 0 || labelsInOrder.length === 0) {
+    return { byLabel, distributedUrls };
+  }
+  let current: string | null = null;
+  let nextIdx = 0;
+  for (let ri = 0; ri < runs.length; ri++) {
+    const run = runs[ri];
+    if (nextIdx < labelsInOrder.length) {
+      const lbl = labelsInOrder[nextIdx];
+      const m = run.text.match(markerPattern);
+      let matched = Boolean(m && m[1] === lbl);
+      if (!matched && ri + 1 < runs.length) {
+        // Marker bị Word tách thành 2 run: run "D" (hoặc "*D" nếu là đáp án
+        // được đánh dấu) + run ". " — dấu chấm nằm ở run kế tiếp
+        const bareLetter = run.text.trim().replace(/^[*#]\s*/, '');
+        if (bareLetter === lbl && /^\s*[.:)]/.test(runs[ri + 1].text)) {
+          matched = true;
+        }
+      }
+      if (matched) {
+        current = lbl;
+        nextIdx++;
+      }
+    }
+    if (current && run.images && run.images.length > 0) {
+      const bucket = byLabel.get(current) || [];
+      bucket.push(...run.images);
+      byLabel.set(current, bucket);
+      for (const im of run.images) distributedUrls.push(im.dataUrl);
+    }
+  }
+  return { byLabel, distributedUrls };
 }
 
 /**
@@ -4726,9 +4838,46 @@ export function buildQuestionsFromParsedParagraphs(
     });
     currentQuestionRuns.push(...para.runs);
 
+    // Phân bổ ảnh của đoạn văn cho từng phương án/ý theo thứ tự marker (nếu
+    // đoạn này chứa phương án/ý): ảnh thuộc về phương án thì bám vào phương
+    // án, không dồn lên thân câu hỏi — trừ phần ảnh đã phân bổ khỏi ảnh câu
+    let paraItemImages = new Map<string, ExamImageAttachment[]>();
+    let distributedParaImageUrls: string[] = [];
+    if (optExtraction.items.length > 0) {
+      const dist = distributeRunImagesByMarker(
+        para.runs,
+        optExtraction.items.map((i) => i.label),
+        /^\s*[*#]?\s*([A-D])\s*[.:)]/
+      );
+      paraItemImages = dist.byLabel;
+      distributedParaImageUrls = dist.distributedUrls;
+    } else if (subExtraction.items.length > 0) {
+      const dist = distributeRunImagesByMarker(
+        para.runs,
+        subExtraction.items.map((i) => i.label),
+        /^\s*[*#]?\s*([a-d])\s*[).:]/
+      );
+      paraItemImages = dist.byLabel;
+      distributedParaImageUrls = dist.distributedUrls;
+    }
+
     if (para.images.length > 0) {
-      currentQuestion.hasImage = true;
-      currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+      let keptParaImages = para.images;
+      if (distributedParaImageUrls.length > 0) {
+        const remainingDistributed = [...distributedParaImageUrls];
+        keptParaImages = para.images.filter((im) => {
+          const ix = remainingDistributed.indexOf(im.dataUrl);
+          if (ix >= 0) {
+            remainingDistributed.splice(ix, 1);
+            return false;
+          }
+          return true;
+        });
+      }
+      if (keptParaImages.length > 0) {
+        currentQuestion.hasImage = true;
+        currentQuestion.images = [...(currentQuestion.images || []), ...keptParaImages];
+      }
     }
 
     if (!text) continue;
@@ -4757,6 +4906,7 @@ export function buildQuestionsFromParsedParagraphs(
             originalLabel: label,
             currentLabel: label,
             text: item.text,
+            images: paraItemImages.get(label),
             isUnderline: hl.isUnderline || item.isStarred,
             isRed: hl.isRed || item.isStarred,
             isCorrect,
@@ -4786,6 +4936,7 @@ export function buildQuestionsFromParsedParagraphs(
             originalLabel: label,
             currentLabel: label,
             text: item.text,
+            images: paraItemImages.get(label),
             isUnderline: hl.isUnderline || item.isStarred,
             isRed: hl.isRed || item.isStarred,
             isTrue,
@@ -4818,6 +4969,7 @@ export function buildQuestionsFromParsedParagraphs(
             originalLabel: label,
             currentLabel: label,
             text: item.text,
+            images: paraItemImages.get(label),
             isUnderline: hl.isUnderline || item.isStarred,
             isRed: hl.isRed || item.isStarred,
             isTrue,

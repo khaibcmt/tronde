@@ -329,31 +329,6 @@ export class DocxAutoHealEngine {
   }
 
   /**
-   * Trích xuất chuỗi văn bản ASCII/UTF-16 bên trong WMF/EMF (ví dụ nhãn đồ thị hoặc biểu thức MathType)
-   */
-  extractReadableTextFromMetafile(bytes: Uint8Array): string {
-    const tokens: string[] = [];
-    let current = '';
-    for (let i = 0; i < bytes.length; i++) {
-      const b = bytes[i];
-      if (b >= 32 && b <= 126) {
-        current += String.fromCharCode(b);
-      } else {
-        const trimmed = current.trim();
-        if (
-          trimmed.length >= 2 &&
-          !/^(?:EMF|WMF|GDIC|MathType|Times New Roman|Symbol|Arial|Courier|Cambria)/i.test(trimmed) &&
-          /[A-Za-z0-9+\-=<>()[\]/^_]/.test(trimmed)
-        ) {
-          tokens.push(trimmed);
-        }
-        current = '';
-      }
-    }
-    return tokens.slice(0, 6).join(' ').slice(0, 48);
-  }
-
-  /**
    * Chuyển đổi file WMF / EMF sang DataURL ảnh PNG sắc nét (hoạt động cả trên Web <img> và khi đóng gói .docx)
    */
   async convertMetafileBytesToPngDataUrl(
@@ -411,43 +386,11 @@ export class DocxAutoHealEngine {
       }
     }
 
-    // Bước 4: Kết xuất khung PNG chuẩn độ phân giải cao từ Canvas (an toàn tuyệt đối cho cả Web và Word .docx)
-    const hintText = this.extractReadableTextFromMetafile(bytes);
-    return this.createCanvasPngPlaceholder(fileName, hintText);
-  }
-
-  /**
-   * Tạo ảnh PNG sắc nét trên Canvas cho các đối tượng WMF/EMF cổ điển không có bitmap
-   */
-  createCanvasPngPlaceholder(fileName: string, hintText?: string): string {
-    if (typeof document !== 'undefined') {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = 360;
-        canvas.height = 84;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.strokeStyle = '#94A3B8';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(3, 3, canvas.width - 6, canvas.height - 6);
-
-          ctx.fillStyle = '#0F172A';
-          ctx.font = 'bold 16px "Times New Roman", Times, serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(
-            hintText ? hintText : `[Hình vẽ / Biểu thức: ${fileName}]`,
-            canvas.width / 2,
-            canvas.height / 2
-          );
-          return canvas.toDataURL('image/png', 1.0);
-        }
-      } catch {
-        // Fallback nếu không có DOM Canvas
-      }
-    }
+    // Bước 4: Không đọc được nội dung metafile này bằng bất kỳ đường thật nào
+    // ở trên. Trả về khung vector TRUNG THỰC "[Công thức/Hình]" — TUYỆT ĐỐI
+    // không trích "chuỗi đọc được" từ byte nhị phân rồi in lên ảnh như thể đó
+    // là nội dung công thức (lỗi cũ: chữ rác "Lu@", "AppsMFCC", "Design
+    // Science…" bị đóng khung thành ảnh công thức giả trong đề).
     return this.createVectorPlaceholder(fileName);
   }
 
