@@ -11,6 +11,7 @@ import {
 import {
   buildRichScientificRunsAndMathXml,
   buildStructuredStemTableXml,
+  parseSvgIntrinsicSize,
   sanitizeSpecialCharsToUtf8,
 } from './scientificExamProcessor';
 import {
@@ -1741,16 +1742,25 @@ function buildQuestionImageDrawingXml(
   img: ExamImageAttachment,
   questionNumber: number
 ): string {
-  // 1 Twip = 635 EMUs. Giới hạn chiều rộng tối đa ~5200 Twips (3,302,000 EMUs ~ 3.61 inch) để vừa đẹp khung trang A4
-  const rawWTwips = img.widthTwips && img.widthTwips > 400 ? img.widthTwips : 4500;
+  // 1 Twip = 635 EMUs. Giới hạn chiều rộng tối đa ~5400 Twips để vừa khung trang A4.
+  // QUAN TRỌNG (sửa lỗi "vỡ công thức"): phải tôn trọng KÍCH THƯỚC + TỈ LỆ THẬT
+  // của ảnh. Bản cũ ép mọi ảnh về tối thiểu 1800 twips và tỉ lệ mặc định 1.5
+  // khi thiếu dữ liệu -> công thức nhỏ bị phình to và kéo giãn sai tỉ lệ.
+  // Thứ tự ưu tiên: kích thước đã lưu trên ảnh -> đọc trực tiếp từ SVG -> mặc định hình lớn.
+  const svgSize = parseSvgIntrinsicSize(img.dataUrl);
   const aspect =
     img.aspectRatio && img.aspectRatio > 0.1
       ? img.aspectRatio
-      : img.heightTwips && img.heightTwips > 300
-      ? rawWTwips / img.heightTwips
+      : svgSize.aspectRatio
+      ? svgSize.aspectRatio
+      : img.widthTwips && img.heightTwips && img.heightTwips > 0
+      ? img.widthTwips / img.heightTwips
       : 1.5;
 
-  const clampedWTwips = Math.min(5400, Math.max(1800, rawWTwips));
+  const knownWTwips =
+    img.widthTwips && img.widthTwips > 0 ? img.widthTwips : svgSize.widthTwips;
+  const rawWTwips = knownWTwips && knownWTwips > 0 ? knownWTwips : 4500;
+  const clampedWTwips = Math.min(5400, Math.max(60, rawWTwips));
   let clampedHTwips = Math.round(clampedWTwips / aspect);
   if (clampedHTwips > 4000) {
     clampedHTwips = 4000;
@@ -1774,7 +1784,12 @@ function buildQuestionImageDrawingXml(
           <wp:extent cx="${cx}" cy="${cy}"/>
           <wp:effectExtent l="0" t="0" r="0" b="0"/>
           <wp:docPr id="${docPrId}" name="${escapeXml(tagLabel)}" descr="${escapeXml(
-    img.caption || tagLabel
+    // Gỡ thẻ nội bộ [HINH_ANH_CAU_X] khỏi descr: bộ đọc file của chính app
+    // từng hiểu nhầm descr chứa thẻ này (có dấu _) + chữ "Câu N" thành một
+    // câu hỏi mới khi giáo viên nạp lại file đã xuất -> tách thừa hàng
+    // loạt câu ma. descr chỉ nên là chú thích người đọc được.
+    (img.caption || 'Hình minh họa').replace(/\[HINH_ANH_CAU[^\]]*\]/g, '').trim() ||
+      'Hình minh họa'
   )}"/>
           <wp:cNvGraphicFramePr>
             <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>

@@ -2323,6 +2323,122 @@ export function renderGroupedShapesToFlatPngDataUrl(
 }
 
 /**
+ * Đọc kích thước hiển thị THẬT của một ảnh SVG (data URL) từ chính nội dung SVG:
+ * thuộc tính width/height (pt/px) nếu có, nếu không thì tỉ lệ từ viewBox.
+ * Trả về widthTwips/heightTwips/aspectRatio đúng với bản gốc — TUYỆT ĐỐI không
+ * dùng kích thước mặc định chung cho mọi công thức (lỗi cũ: ép mọi SVG về
+ * 4200x2600 twips, tỉ lệ 1.615, khiến công thức bị kéo giãn/bóp méo khi in).
+ */
+export function parseSvgIntrinsicSize(dataUrl: string): {
+  widthTwips?: number;
+  heightTwips?: number;
+  aspectRatio?: number;
+} {
+  if (!dataUrl || !dataUrl.startsWith('data:image/svg+xml')) return {};
+  try {
+    let svg = '';
+    const commaIdx = dataUrl.indexOf(',');
+    const payload = commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : '';
+    if (/;base64/i.test(dataUrl.slice(0, commaIdx))) {
+      svg = atob(payload);
+    } else {
+      svg = decodeURIComponent(payload);
+    }
+    const head = svg.slice(0, 1024);
+    const lenToTwips = (v: number, unit: string): number => {
+      const u = (unit || 'px').toLowerCase();
+      if (u === 'pt') return Math.round(v * 20);
+      if (u === 'in') return Math.round(v * 1440);
+      if (u === 'cm') return Math.round((v / 2.54) * 1440);
+      if (u === 'mm') return Math.round((v / 25.4) * 1440);
+      return Math.round(v * 15); // px @96dpi: 1px = 15 twips
+    };
+    const wM = head.match(/\bwidth\s*=\s*"([\d.]+)\s*(pt|px|in|cm|mm)?"/i);
+    const hM = head.match(/\bheight\s*=\s*"([\d.]+)\s*(pt|px|in|cm|mm)?"/i);
+    if (wM && hM) {
+      const widthTwips = lenToTwips(parseFloat(wM[1]), wM[2] || 'px');
+      const heightTwips = lenToTwips(parseFloat(hM[1]), hM[2] || 'px');
+      if (widthTwips > 0 && heightTwips > 0) {
+        return { widthTwips, heightTwips, aspectRatio: widthTwips / heightTwips };
+      }
+    }
+    const vb = head.match(/viewBox\s*=\s*"([\d.\-]+)\s+([\d.\-]+)\s+([\d.]+)\s+([\d.]+)"/i);
+    if (vb) {
+      const vbW = parseFloat(vb[3]);
+      const vbH = parseFloat(vb[4]);
+      if (vbW > 0 && vbH > 0) {
+        // Chỉ chắc chắn về TỈ LỆ từ viewBox; chiều cao danh nghĩa của một công
+        // thức inline ~ 300 twips (15pt) làm căn cứ suy ra chiều rộng.
+        const aspectRatio = vbW / vbH;
+        const heightTwips = 300;
+        return {
+          widthTwips: Math.round(heightTwips * aspectRatio),
+          heightTwips,
+          aspectRatio,
+        };
+      }
+    }
+  } catch {
+    // SVG không đọc được kích thước -> để trống, khâu xuất sẽ dùng mặc định an toàn
+  }
+  return {};
+}
+
+/**
+ * Đọc kích thước pixel thật của ảnh raster (PNG/JPEG/GIF) từ header trong
+ * data URL — thuần JS, không cần canvas. Dùng làm phương án dự phòng khi
+ * canvas không khả dụng/lỗi: thà giữ đúng TỈ LỆ gốc còn hơn ép khung mặc
+ * định 4200x2600 sai tỉ lệ (nguyên nhân "vỡ công thức" với ảnh raster).
+ */
+export function parseRasterIntrinsicSize(dataUrl: string): {
+  widthPx: number;
+  heightPx: number;
+  aspectRatio: number;
+} | null {
+  if (!dataUrl || !dataUrl.startsWith('data:image/')) return null;
+  try {
+    const commaIdx = dataUrl.indexOf(',');
+    if (commaIdx < 0 || !/;base64/i.test(dataUrl.slice(0, commaIdx))) return null;
+    const bin = atob(dataUrl.slice(commaIdx + 1, commaIdx + 1 + 32768));
+    const b = (i: number) => bin.charCodeAt(i) & 0xff;
+    const u32 = (i: number) => ((b(i) << 24) | (b(i + 1) << 16) | (b(i + 2) << 8) | b(i + 3)) >>> 0;
+    const u16 = (i: number) => (b(i) << 8) | b(i + 1);
+    // PNG: chữ ký 8 byte, IHDR ở offset 8, width/height ở 16/20
+    if (b(0) === 0x89 && b(1) === 0x50 && b(2) === 0x4e && b(3) === 0x47) {
+      const w = u32(16);
+      const h = u32(20);
+      if (w > 0 && h > 0) return { widthPx: w, heightPx: h, aspectRatio: w / h };
+    }
+    // GIF: width/height little-endian ở offset 6/8
+    if (bin.startsWith('GIF8')) {
+      const w = b(6) | (b(7) << 8);
+      const h = b(8) | (b(9) << 8);
+      if (w > 0 && h > 0) return { widthPx: w, heightPx: h, aspectRatio: w / h };
+    }
+    // JPEG: quét các marker tới SOF0/SOF2 (0xC0/0xC2)
+    if (b(0) === 0xff && b(1) === 0xd8) {
+      let i = 2;
+      while (i + 8 < bin.length) {
+        if (b(i) !== 0xff) { i++; continue; }
+        const marker = b(i + 1);
+        if (marker === 0xc0 || marker === 0xc2) {
+          const h = u16(i + 5);
+          const w = u16(i + 7);
+          if (w > 0 && h > 0) return { widthPx: w, heightPx: h, aspectRatio: w / h };
+          break;
+        }
+        const segLen = u16(i + 2);
+        if (segLen < 2) break;
+        i += 2 + segLen;
+      }
+    }
+  } catch {
+    // Không đọc được header -> null, khâu gọi dùng mặc định an toàn
+  }
+  return null;
+}
+
+/**
  * ENGINE 1.1c: CHỐNG BIẾN DẠNG TỈ LỆ & XỬ LÝ ẢNH THÔNG MINH (ASPECT RATIO PRESERVER)
  * 1. Tự động phát hiện ảnh bị người dùng kéo dãn méo mó -> reset về tỉ lệ khung hình gốc (Original Aspect Ratio = naturalWidth / naturalHeight)
  * 2. Ép giới hạn: chiều rộng tối đa 100% khung câu hỏi, không tràn viền
@@ -2350,13 +2466,43 @@ export async function enhanceAndCropExamImage(
     dpi: 300,
   };
 
-  if (typeof window === 'undefined' || typeof document === 'undefined' || !rawDataUrl) {
+  // Ảnh vector SVG: KHÔNG crop, và PHẢI trả về kích thước/tỉ lệ THẬT đọc từ
+  // chính SVG. Trước đây nhánh này trả defaultResult 4200x2600 (tỉ lệ 1.615)
+  // cho mọi công thức SVG -> khi xuất Word mọi công thức ở thân câu đều bị
+  // kéo giãn/bóp méo theo một khung sai ("vỡ công thức").
+  if (rawDataUrl && rawDataUrl.startsWith('data:image/svg+xml')) {
+    const svgSize = parseSvgIntrinsicSize(rawDataUrl);
+    if (svgSize.widthTwips && svgSize.heightTwips && svgSize.aspectRatio) {
+      return {
+        dataUrl: rawDataUrl,
+        widthTwips: svgSize.widthTwips,
+        heightTwips: svgSize.heightTwips,
+        aspectRatio: svgSize.aspectRatio,
+        tagId,
+        dpi: 300,
+      };
+    }
     return defaultResult;
   }
 
-  // Không crop nếu là ảnh vector SVG
-  if (rawDataUrl.startsWith('data:image/svg+xml')) {
-    return defaultResult;
+  // Dự phòng cho ảnh raster khi canvas không khả dụng/lỗi: giữ đúng TỈ LỆ
+  // pixel thật đọc từ header ảnh thay vì khung mặc định 4200x2600 sai tỉ lệ.
+  const rasterSize = rawDataUrl ? parseRasterIntrinsicSize(rawDataUrl) : null;
+  const fallbackResult = (() => {
+    if (!rasterSize) return defaultResult;
+    const w = Math.min(5200, Math.max(360, Math.round(rasterSize.widthPx * 11)));
+    return {
+      dataUrl: rawDataUrl,
+      widthTwips: w,
+      heightTwips: Math.max(160, Math.round(w / rasterSize.aspectRatio)),
+      aspectRatio: rasterSize.aspectRatio,
+      tagId,
+      dpi: 300,
+    };
+  })();
+
+  if (typeof window === 'undefined' || typeof document === 'undefined' || !rawDataUrl) {
+    return fallbackResult;
   }
 
   return new Promise((resolve) => {
@@ -2367,7 +2513,7 @@ export async function enhanceAndCropExamImage(
         const srcW = img.naturalWidth || img.width;
         const srcH = img.naturalHeight || img.height;
         if (srcW < 8 || srcH < 8) {
-          resolve(defaultResult);
+          resolve(fallbackResult);
           return;
         }
 
@@ -2376,7 +2522,7 @@ export async function enhanceAndCropExamImage(
         tempCanvas.height = srcH;
         const ctx = tempCanvas.getContext('2d');
         if (!ctx) {
-          resolve(defaultResult);
+          resolve(fallbackResult);
           return;
         }
 
@@ -2469,7 +2615,7 @@ export async function enhanceAndCropExamImage(
         outCanvas.height = outH;
         const outCtx = outCanvas.getContext('2d');
         if (!outCtx) {
-          resolve(defaultResult);
+          resolve(fallbackResult);
           return;
         }
 
@@ -2507,10 +2653,10 @@ export async function enhanceAndCropExamImage(
           dpi: 300,
         });
       } catch {
-        resolve(defaultResult);
+        resolve(fallbackResult);
       }
     };
-    img.onerror = () => resolve(defaultResult);
+    img.onerror = () => resolve(fallbackResult);
     img.src = rawDataUrl;
   });
 }
@@ -2527,11 +2673,34 @@ export function assignDeterministicImageTagsToQuestions(
     const taggedImages: ExamImageAttachment[] = q.images.map((img, idx) => {
       const suffix = q.images && q.images.length > 1 ? `_${idx + 1}` : '';
       const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
-      const w = img.widthTwips && img.widthTwips > 240 ? img.widthTwips : 4500;
+      // Tôn trọng MỌI chiều rộng thật đã biết (kể cả công thức nhỏ < 240 twips):
+      // trước đây ảnh nào rộng <= 240 twips cũng bị phình thành 4500 twips.
+      // Ảnh chưa có kích thước (thường từ đường đọc dự phòng Regex): suy ra từ
+      // chính dữ liệu ảnh — SVG đọc viewBox/width/height, raster đọc header
+      // pixel — thay vì đóng dấu tỉ lệ giả 4500/2800 cho mọi ảnh.
+      const svgSize =
+        img.widthTwips && img.widthTwips > 0
+          ? undefined
+          : parseSvgIntrinsicSize(img.dataUrl);
+      const rasterSize =
+        img.widthTwips && img.widthTwips > 0
+          ? undefined
+          : parseRasterIntrinsicSize(img.dataUrl);
+      const w =
+        img.widthTwips && img.widthTwips > 0
+          ? img.widthTwips
+          : svgSize?.widthTwips ||
+            (rasterSize
+              ? Math.min(5200, Math.max(360, Math.round(rasterSize.widthPx * 11)))
+              : 4500);
       const preservedAspect =
         img.aspectRatio && img.aspectRatio > 0.05
           ? img.aspectRatio
-          : img.heightTwips && img.heightTwips > 120
+          : svgSize?.aspectRatio
+          ? svgSize.aspectRatio
+          : rasterSize?.aspectRatio
+          ? rasterSize.aspectRatio
+          : img.heightTwips && img.heightTwips > 0
           ? w / img.heightTwips
           : 4500 / 2800;
       // Luôn tính lại chiều cao dựa trên Original Aspect Ratio để chống ảnh bị kéo dãn méo mó
@@ -2539,7 +2708,10 @@ export function assignDeterministicImageTagsToQuestions(
       return {
         ...img,
         tagId,
-        caption: img.caption || `Hình minh họa Câu ${q.displayIndex} ${tagId}`,
+        // Caption mặc định KHÔNG chứa "Câu <số>": caption này được ghi vào
+        // wp:docPr descr khi xuất Word và từng bị chính bộ đọc của app hiểu
+        // nhầm thành đầu một câu hỏi mới khi nạp lại file đã xuất.
+        caption: img.caption || 'Hình minh họa',
         widthTwips: w,
         heightTwips: h,
         aspectRatio: preservedAspect,

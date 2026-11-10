@@ -679,6 +679,149 @@ export async function generateShuffledVariants(
   return variants;
 }
 
+export interface ShuffleAuditFailure {
+  examCode: string;
+  part: string;
+  questionNumber: number;
+  message: string;
+}
+
+const countQuestionAssets = (q: ExamQuestion): number =>
+  (q.images?.length || 0) +
+  (q.options || []).reduce((acc, o) => acc + (o.images?.length || 0), 0) +
+  (q.subItems || []).reduce((acc, s) => acc + (s.images?.length || 0), 0);
+
+/**
+ * KIỂM CHỨNG SAU TRỘN (Post-Shuffle Integrity Audit) — chốt trung thực:
+ * Đối chiếu TỪNG mã đề vừa trộn với đề gốc (khớp theo id câu hỏi):
+ *  - Số câu từng phần phải bằng đề gốc; mọi câu gốc phải có mặt trong mã đề.
+ *  - Số tài sản hình/công thức (thân câu + từng phương án + từng ý con) của
+ *    mỗi câu phải bằng đúng đề gốc — thiếu 1 cũng là lỗi.
+ *  - Phần I: đúng 1 phương án đúng và answerKey khớp nhãn của phương án đó.
+ *  - Phần II: đủ 4 ý, chuỗi Đ/S trong answerKey khớp cờ isTrue của các ý.
+ *  - Phần III: đáp án không rỗng và answerKey khớp đáp án của câu.
+ * Trả về danh sách lỗi rỗng = bộ đề trộn đạt chuẩn thật. Giao diện CHỈ được
+ * báo "trộn thành công / sẵn sàng xuất" khi danh sách này rỗng; có lỗi thì
+ * phải nêu rõ mã đề + số câu (không còn cảnh báo 100% trong khi đề đã vỡ).
+ */
+export function auditShuffledVariants(
+  sourceQuestions: ExamQuestion[],
+  variants: ShuffledVariant[]
+): ShuffleAuditFailure[] {
+  const failures: ShuffleAuditFailure[] = [];
+  const sourceById = new Map(sourceQuestions.map((q) => [q.id, q]));
+  const parts = ['PART_1', 'PART_2', 'PART_3', 'PART_4'] as const;
+
+  for (const variant of variants) {
+    for (const part of parts) {
+      const srcCount = sourceQuestions.filter((q) => q.part === part).length;
+      const varCount = variant.questions.filter((q) => q.part === part).length;
+      if (srcCount !== varCount) {
+        failures.push({
+          examCode: variant.examCode,
+          part,
+          questionNumber: 0,
+          message: `Mã ${variant.examCode}: ${part} có ${varCount} câu, đề gốc có ${srcCount} câu.`,
+        });
+      }
+    }
+
+    for (const vq of variant.questions) {
+      const sq = sourceById.get(vq.id);
+      const label = `Mã ${variant.examCode}: Câu ${vq.displayIndex} (${vq.part})`;
+      if (!sq) {
+        failures.push({
+          examCode: variant.examCode,
+          part: vq.part,
+          questionNumber: vq.displayIndex,
+          message: `${label}: không khớp được với câu nào trong đề gốc.`,
+        });
+        continue;
+      }
+
+      const srcAssets = countQuestionAssets(sq);
+      const varAssets = countQuestionAssets(vq);
+      if (srcAssets !== varAssets) {
+        failures.push({
+          examCode: variant.examCode,
+          part: vq.part,
+          questionNumber: vq.displayIndex,
+          message: `${label}: còn ${varAssets}/${srcAssets} hình/công thức so với đề gốc (bị mất ${srcAssets - varAssets}).`,
+        });
+      }
+
+      if (vq.part === 'PART_1') {
+        const correct = (vq.options || []).filter((o) => o.isCorrect);
+        if (correct.length !== 1) {
+          failures.push({
+            examCode: variant.examCode,
+            part: vq.part,
+            questionNumber: vq.displayIndex,
+            message: `${label}: có ${correct.length} phương án được đánh dấu đúng (phải đúng 1).`,
+          });
+        } else {
+          const keyEntry = variant.answerKey.part1.find(
+            (k) => k.questionNumber === vq.displayIndex
+          );
+          if (!keyEntry || keyEntry.answer !== correct[0].currentLabel) {
+            failures.push({
+              examCode: variant.examCode,
+              part: vq.part,
+              questionNumber: vq.displayIndex,
+              message: `${label}: bảng đáp án (${keyEntry?.answer ?? 'thiếu'}) không khớp phương án đúng (${correct[0].currentLabel}).`,
+            });
+          }
+        }
+      } else if (vq.part === 'PART_2') {
+        const subs = vq.subItems || [];
+        if (subs.length !== 4 || subs.some((s) => typeof s.isTrue !== 'boolean')) {
+          failures.push({
+            examCode: variant.examCode,
+            part: vq.part,
+            questionNumber: vq.displayIndex,
+            message: `${label}: ý con chưa đủ 4 hoặc chưa xác định Đúng/Sai.`,
+          });
+        } else {
+          const keyEntry = variant.answerKey.part2.find(
+            (k) => k.questionNumber === vq.displayIndex
+          );
+          const ds = subs.map((s) => (s.isTrue ? 'Đ' : 'S')).join('');
+          if (!keyEntry || keyEntry.dsString !== ds) {
+            failures.push({
+              examCode: variant.examCode,
+              part: vq.part,
+              questionNumber: vq.displayIndex,
+              message: `${label}: bảng đáp án (${keyEntry?.dsString ?? 'thiếu'}) không khớp các ý Đ/S (${ds}).`,
+            });
+          }
+        }
+      } else if (vq.part === 'PART_3') {
+        const ans = (vq.shortAnswer || '').trim();
+        const keyEntry = variant.answerKey.part3.find(
+          (k) => k.questionNumber === vq.displayIndex
+        );
+        if (!ans) {
+          failures.push({
+            examCode: variant.examCode,
+            part: vq.part,
+            questionNumber: vq.displayIndex,
+            message: `${label}: chưa có đáp án trả lời ngắn.`,
+          });
+        } else if (!keyEntry || keyEntry.answer !== ans) {
+          failures.push({
+            examCode: variant.examCode,
+            part: vq.part,
+            questionNumber: vq.displayIndex,
+            message: `${label}: bảng đáp án (${keyEntry?.answer ?? 'thiếu'}) không khớp đáp án (${ans}).`,
+          });
+        }
+      }
+    }
+  }
+
+  return failures;
+}
+
 export const MAX_CODES_PER_SINGLE_QR = 8;
 
 /**

@@ -63,6 +63,7 @@ import {
 } from './utils/sampleExamData';
 import {
   computeAutoLayoutForOptions,
+  mergeRichMetadataFromExistingQuestions,
   normalizeAllQuestionsStrictFourOptions,
   parseClipboardHtmlToExamQuestions,
   parseDocxExamFile,
@@ -74,6 +75,7 @@ import {
 import { parsePdfExamFile } from './utils/pdfParser';
 import { enhanceAndCropExamImage } from './utils/scientificExamProcessor';
 import {
+  auditShuffledVariants,
   exportGradingExcelXlsx,
   generateMasterMultiQrCode,
   generateSequentialExamCodesFromRoot,
@@ -768,36 +770,10 @@ export default function App() {
     }
   };
 
-  // Bảo toàn hình ảnh, bảng biểu, công thức OMML và mức độ nhận thức khi đồng bộ từ trình soạn thảo Word A4
-  const mergeRichMetadataFromExistingQuestions = (
-    parsedList: ExamQuestion[],
-    existingList: ExamQuestion[]
-  ): ExamQuestion[] => {
-    return parsedList.map((pq, idx) => {
-      const matched =
-        existingList.find(
-          (eq) => eq.part === pq.part && eq.displayIndex === pq.displayIndex
-        ) || existingList[idx];
-      if (!matched) return pq;
-      return {
-        ...pq,
-        id: matched.id || pq.id,
-        bloomLevel: matched.bloomLevel || pq.bloomLevel,
-        hasImage: Boolean(
-          (pq.images && pq.images.length > 0) ||
-            (matched.images && matched.images.length > 0)
-        ),
-        images:
-          pq.images && pq.images.length > 0 ? pq.images : matched.images,
-        stemTables:
-          pq.stemTables && pq.stemTables.length > 0
-            ? pq.stemTables
-            : matched.stemTables,
-        rawFormulaOmmlXml: pq.rawFormulaOmmlXml || matched.rawFormulaOmmlXml,
-        formulaLatex: pq.formulaLatex || matched.formulaLatex,
-      };
-    });
-  };
+  // Hàm ghép tài sản đồ họa khi đồng bộ từ Trang Word A4 nay dùng bản DÙNG CHUNG
+  // mergeRichMetadataFromExistingQuestions trong utils/docxParser (ghép ở cả 3 cấp:
+  // thân câu + từng phương án + từng ý con — bản cũ tại đây chỉ ghép thân câu nên
+  // mọi ảnh phương án/ý con đều mất sau một vòng đồng bộ).
 
   // Đồng bộ từ trình soạn thảo trang giấy Word A4 sang danh sách câu hỏi chuẩn 4 đáp án & Tự luận
   const handleSyncFromWordA4Editor = async () => {
@@ -1575,6 +1551,23 @@ export default function App() {
         setSelectedVariantCode(variants[0].examCode);
       }
       setActiveRightTab('SHUFFLED_PREVIEW');
+      // KIỂM CHỨNG SAU TRỘN: chỉ được báo thành công khi TỪNG mã đề giữ đủ
+      // hình/công thức và đáp án so với đề gốc. Có lỗi là báo lỗi nêu rõ
+      // mã đề + số câu, tuyệt đối không báo "thành công 100%" như trước.
+      const auditFailures = auditShuffledVariants(sourceQuestions, variants);
+      if (auditFailures.length > 0) {
+        setIsSavedAndReadyState(false);
+        const shown = auditFailures.slice(0, 3).map((f) => f.message).join(' ');
+        const more =
+          auditFailures.length > 3
+            ? ` (và ${auditFailures.length - 3} lỗi nữa)`
+            : '';
+        setStatusBanner({
+          type: 'ERROR',
+          text: `Đã trộn ${variants.length} mã đề NHƯNG kiểm chứng sau trộn phát hiện ${auditFailures.length} lỗi toàn vẹn: ${shown}${more} Bộ đề CHƯA đạt chuẩn — vui lòng kiểm tra lại các câu trên ở đề gốc trước khi xuất file.`,
+        });
+        return;
+      }
       setStatusBanner({
         type: 'SUCCESS',
         text:
@@ -1962,6 +1955,30 @@ export default function App() {
         if (targetVariants.length > 0 && !selectedVariantCode) {
           setSelectedVariantCode(targetVariants[0].examCode);
         }
+      }
+
+      // CHỐT XUẤT FILE: kiểm chứng lại toàn vẹn của chính các mã đề sắp xuất.
+      // Có bất kỳ câu nào mất hình/công thức hoặc lệch đáp án so với đề gốc
+      // thì CHẶN xuất và nêu rõ mã đề + số câu (không xuất bộ đề đã vỡ).
+      const zipAuditFailures = auditShuffledVariants(
+        normalizedQuestions,
+        targetVariants
+      );
+      if (zipAuditFailures.length > 0) {
+        const shown = zipAuditFailures
+          .slice(0, 3)
+          .map((f) => f.message)
+          .join(' ');
+        const more =
+          zipAuditFailures.length > 3
+            ? ` (và ${zipAuditFailures.length - 3} lỗi nữa)`
+            : '';
+        setIsSavedAndReadyState(false);
+        setStatusBanner({
+          type: 'ERROR',
+          text: `ĐÃ CHẶN XUẤT FILE: kiểm chứng phát hiện ${zipAuditFailures.length} lỗi toàn vẹn trong các mã đề: ${shown}${more} Vui lòng trộn lại từ đề gốc đạt chuẩn.`,
+        });
+        return;
       }
 
       const blob = await exportAllVariantsZipBundle(

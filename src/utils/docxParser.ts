@@ -1940,8 +1940,10 @@ function tryExtractDataOrMatchingTable(tblEl: Element): ExamStemTable | null {
               return;
             }
           }
-          for (let z = 0; z < n.childNodes.length; z++) {
-            walkCellNode(n.childNodes[z]);
+          const childList = n.childNodes;
+          if (!childList) return;
+          for (let z = 0; z < childList.length; z++) {
+            walkCellNode(childList[z]);
           }
         };
         walkCellNode(pNode);
@@ -2517,7 +2519,7 @@ function extractParagraphsFromDocxXml(
                   if (
                     descr &&
                     /[\\^_]|\\(?:frac|sqrt|vec|int|sum|lim|alpha|beta|Delta|Omega)/.test(descr) &&
-                    !/\.(?:png|jpe?g|gif|bmp|svg|wmf|emf|webp|tiff?)\b|https?:\/\/|^[a-zA-Z]:\\|^QR_Code|^figure_|picture|image|screenshot|diagram/i.test(
+                    !/\.(?:png|jpe?g|gif|bmp|svg|wmf|emf|webp|tiff?)\b|https?:\/\/|^[a-zA-Z]:\\|^QR_Code|^figure_|picture|image|screenshot|diagram|HINH_ANH|Hình minh họa|Câu\s+\d+/i.test(
                       descr
                     )
                   ) {
@@ -2825,7 +2827,7 @@ function findOrderedFourMarkers(
     const flags = caseSensitive ? 'g' : 'gi';
     // Với ý a), b), c), d) ở Phần II: Không cho phép đứng ngay sau chữ cái hoặc dấu '(' để tránh bắt nhầm kiểu gen (aa), (bb), (ab)
     const boundaryPattern = isLowerTarget
-      ? `(?:^|[\\s\\t\\n.;:?!])([*#]?\\s*(${lbl})\\s*[).:])\\s+`
+      ? `(?:^|[\\s\\t\\n.;:?!])([*#]?\\s*(${lbl})\\s*[).:])(?:\\s+|$)`
       : `(?:^|[\\s\\t\\n.;:?!)"'”’\\]]|(?<=[a-zà-ỹ0-9%°]))([*#]?\\s*(${lbl})\\s*[.:)])\\s*`;
 
     const regex = new RegExp(boundaryPattern, flags);
@@ -4004,12 +4006,16 @@ function extractSequentialOptionsFromLine(
   }
 
   // Trường hợp dòng bắt đầu bằng 1 phương án A., B., C., D. (hoặc có 2 phương án trên 1 dòng chia bằng tab / khoảng trắng)
-  const startMatch = lineText.match(/^\s*([*#]?\s*([A-D])\s*[.:)])\s+/);
+  // Marker được phép đứng ở CUỐI DÒNG với nội dung rỗng (phương án chỉ chứa
+  // hình/công thức -> khi serialize qua văn bản thô chỉ còn "*C."). Bản cũ đòi
+  // buộc phải có khoảng trắng + nội dung sau marker nên phương án rỗng bị rơi
+  // hẳn, các phương án sau bị DỊCH LÊN và đáp án biến mất.
+  const startMatch = lineText.match(/^\s*([*#]?\s*([A-D])\s*[.:)])(?:\s+|$)/);
   if (!startMatch) {
     return { leadingStem: '', items: [] };
   }
 
-  const candidateRegex = /(?:^|\t+|\s{2,}|(?<=[.;?!])\s+)([*#]?\s*([A-D])\s*[.:)])\s+/g;
+  const candidateRegex = /(?:^|\t+|\s{2,}|(?<=[.;?!])\s+)([*#]?\s*([A-D])\s*[.:)])(?:\s+|$)/g;
   const acceptedMarkers: {
     label: string;
     markerStart: number;
@@ -5172,6 +5178,16 @@ export function buildQuestionsFromParsedParagraphs(
  * Phân tích văn bản thô (từ khung Soạn thảo trực tiếp như Word hoặc dán từ Clipboard)
  * Tự động tách câu hỏi dính chùm và ép chuẩn 4 đáp án cho Phần I & Phần II
  */
+/**
+ * Ký hiệu giữ chỗ cho phương án/ý mà nội dung CHỈ nằm ở ảnh đính kèm
+ * (công thức MathType dạng hình, đồ thị làm phương án...). Khi serialize đề
+ * sang văn bản thô (khung Trang Word A4), phương án như vậy không có chữ để
+ * ghi — nếu ghi rỗng thì dòng marker bị các bộ tách câu đánh rơi (và đáp án
+ * biến mất). Ký hiệu này giữ cho dòng tồn tại đúng vị trí; sau khi tách câu
+ * nó được gỡ về rỗng trung thực, ảnh thật do khâu merge ghép lại.
+ */
+export const MEDIA_ONLY_OPTION_PLACEHOLDER = '⟦HÌNH⟧';
+
 export function parseRawTextToExamQuestions(
   rawText: string,
   resetPerPart = true
@@ -5204,7 +5220,18 @@ export function parseRawTextToExamQuestions(
     rawParas.push(...splitClumpedParagraphIntoLogicalParagraphs(p));
   }
 
-  return buildQuestionsFromParsedParagraphs(rawParas, resetPerPart);
+  const built = buildQuestionsFromParsedParagraphs(rawParas, resetPerPart);
+  // Gỡ ký hiệu giữ chỗ ⟦HÌNH⟧ về nội dung chữ rỗng trung thực (nội dung thật
+  // nằm ở ảnh đính kèm; khâu merge của App sẽ ghép ảnh lại từ bản đồ họa).
+  return built.map((q) => ({
+    ...q,
+    options: q.options?.map((o) =>
+      o.text.trim() === MEDIA_ONLY_OPTION_PLACEHOLDER ? { ...o, text: '' } : o
+    ),
+    subItems: q.subItems?.map((s) =>
+      s.text.trim() === MEDIA_ONLY_OPTION_PLACEHOLDER ? { ...s, text: '' } : s
+    ),
+  }));
 }
 
 /**
@@ -5400,7 +5427,12 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
     sections.push('PHẦN I. Câu trắc nghiệm nhiều phương án lựa chọn.');
     for (const q of p1) {
       const optsLine = (q.options || [])
-        .map((o) => `${o.isCorrect ? '*' : ''}${o.currentLabel}. ${o.text}`)
+        .map((o) => {
+          const txt =
+            (o.text || '').trim() ||
+            (o.images && o.images.length > 0 ? MEDIA_ONLY_OPTION_PLACEHOLDER : '');
+          return `${o.isCorrect ? '*' : ''}${o.currentLabel}. ${txt}`;
+        })
         .join('\n');
       sections.push(`Câu ${q.displayIndex}. ${q.stemText}\n${optsLine}`);
     }
@@ -5410,7 +5442,12 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
     sections.push('\nPHẦN II. Câu trắc nghiệm đúng sai.');
     for (const q of p2) {
       const subsLine = (q.subItems || [])
-        .map((s) => `${s.isTrue ? '*' : ''}${s.currentLabel}) ${s.text} (${s.isTrue ? 'Đ' : 'S'})`)
+        .map((s) => {
+          const txt =
+            (s.text || '').trim() ||
+            (s.images && s.images.length > 0 ? MEDIA_ONLY_OPTION_PLACEHOLDER : '');
+          return `${s.isTrue ? '*' : ''}${s.currentLabel}) ${txt} (${s.isTrue ? 'Đ' : 'S'})`;
+        })
         .join('\n');
       sections.push(`Câu ${q.displayIndex}. ${q.stemText}\n${subsLine}`);
     }
@@ -5444,6 +5481,77 @@ export function serializeQuestionsToWordRawText(questions: ExamQuestion[]): stri
   }
 
   return sections.join('\n\n');
+}
+
+/**
+ * Ghép lại tài sản đồ họa (ảnh/bảng/công thức) từ danh sách câu hỏi HIỆN CÓ
+ * (bản đồ họa đầy đủ) vào danh sách câu hỏi vừa tách lại từ VĂN BẢN THÔ
+ * (khung Trang Word A4). Văn bản thô không mang theo ảnh nên nếu chỉ ghép ở
+ * cấp thân câu như trước đây, MỌI ảnh của phương án Phần I và ý con Phần II
+ * đều bị mất sau một vòng đồng bộ (đo được: mất 32/71 tài sản và đáp án của
+ * 6 câu trên đề Toán MathType thật). Hàm này ghép ở CẢ BA CẤP:
+ * thân câu (images, stemTables, stemRichHtml, OMML/LaTeX), từng phương án
+ * (images, richHtml) và từng ý con (images, richHtml) — khớp theo
+ * (part, displayIndex) rồi theo originalLabel/vị trí.
+ */
+export function mergeRichMetadataFromExistingQuestions(
+  parsedList: ExamQuestion[],
+  existingList: ExamQuestion[]
+): ExamQuestion[] {
+  return parsedList.map((pq, idx) => {
+    const matched =
+      existingList.find(
+        (eq) => eq.part === pq.part && eq.displayIndex === pq.displayIndex
+      ) || existingList[idx];
+    if (!matched) return pq;
+
+    const mergedOptions = pq.options?.map((po, oi) => {
+      const mo =
+        matched.options?.find((o) => o.originalLabel === po.originalLabel) ||
+        matched.options?.[oi];
+      if (!mo) return po;
+      return {
+        ...po,
+        images:
+          po.images && po.images.length > 0 ? po.images : mo.images,
+        richHtml: po.richHtml || mo.richHtml,
+      };
+    });
+
+    const mergedSubItems = pq.subItems?.map((ps, si) => {
+      const ms =
+        matched.subItems?.find((s) => s.originalLabel === ps.originalLabel) ||
+        matched.subItems?.[si];
+      if (!ms) return ps;
+      return {
+        ...ps,
+        images:
+          ps.images && ps.images.length > 0 ? ps.images : ms.images,
+        richHtml: ps.richHtml || ms.richHtml,
+      };
+    });
+
+    return {
+      ...pq,
+      id: matched.id || pq.id,
+      bloomLevel: matched.bloomLevel || pq.bloomLevel,
+      hasImage: Boolean(
+        (pq.images && pq.images.length > 0) ||
+          (matched.images && matched.images.length > 0)
+      ),
+      images:
+        pq.images && pq.images.length > 0 ? pq.images : matched.images,
+      stemTables:
+        pq.stemTables && pq.stemTables.length > 0
+          ? pq.stemTables
+          : matched.stemTables,
+      stemRichHtml: pq.stemRichHtml || matched.stemRichHtml,
+      rawFormulaOmmlXml: pq.rawFormulaOmmlXml || matched.rawFormulaOmmlXml,
+      formulaLatex: pq.formulaLatex || matched.formulaLatex,
+      options: mergedOptions,
+      subItems: mergedSubItems,
+    };
+  });
 }
 
 /**
@@ -5574,17 +5682,32 @@ export async function parseDocxExamFile(
                 const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
                 // ENGINE 1.1c: Khóa chặt tỉ lệ khung hình gốc (Original Aspect Ratio = processed.aspectRatio)
                 // Nếu ảnh bị người dùng kéo dãn méo mó trong Word, tự động reset chiều cao theo đúng tỉ lệ gốc!
-                const finalWidthTwips = processed.widthTwips;
+                // NGOẠI LỆ: nếu khâu xử lý ảnh trả về đúng khung mặc định 4200x2600
+                // (ảnh raster lỗi tải/không canvas) mà ảnh gốc ĐÃ có kích thước
+                // thật đọc từ file (wp:extent / v:shape) thì giữ kích thước gốc,
+                // tuyệt đối không ghi đè bằng khung mặc định sai tỉ lệ.
+                const processedIsFallbackDefault =
+                  processed.widthTwips === 4200 && processed.heightTwips === 2600;
+                const keepOriginalSize =
+                  processedIsFallbackDefault &&
+                  Boolean(img.widthTwips && img.widthTwips > 0) &&
+                  Boolean(img.aspectRatio && img.aspectRatio > 0.05);
+                const finalWidthTwips = keepOriginalSize
+                  ? (img.widthTwips as number)
+                  : processed.widthTwips;
+                const finalAspect = keepOriginalSize
+                  ? (img.aspectRatio as number)
+                  : processed.aspectRatio;
                 const finalHeightTwips = Math.max(
                   160,
-                  Math.round(finalWidthTwips / Math.max(0.1, processed.aspectRatio))
+                  Math.round(finalWidthTwips / Math.max(0.1, finalAspect))
                 );
                 return {
                   ...img,
                   dataUrl: processed.dataUrl,
                   widthTwips: finalWidthTwips,
                   heightTwips: finalHeightTwips,
-                  aspectRatio: processed.aspectRatio,
+                  aspectRatio: finalAspect,
                   tagId,
                   dpi: 300,
                 };
