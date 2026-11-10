@@ -120,6 +120,31 @@ export function recalculateQuestionNumbering(
 /**
  * Bộ kiểm tra lỗi thông minh (Validator)
  */
+/**
+ * Một phương án / ý con có nội dung THẬT hay không:
+ * - Có chữ (không phải chỉ dấu câu), HOẶC
+ * - Có ảnh đính kèm (công thức MathType dạng hình SVG, đồ thị, hình vẽ...), HOẶC
+ * - richHtml chứa ảnh hoặc chữ có nghĩa.
+ * Phương án chỉ chứa công thức/hình (text rỗng vì nội dung nằm ở ảnh) thì
+ * KHÔNG bị coi là "bỏ trống" — báo trống trong trường hợp đó là báo oan.
+ */
+export function hasMeaningfulOptionContent(item: {
+  text?: string;
+  richHtml?: string;
+  images?: unknown[];
+}): boolean {
+  const t = (item.text || '').trim();
+  if (t && !/^[.\-_:,;?!]+$/.test(t)) return true;
+  if (item.images && item.images.length > 0) return true;
+  const html = item.richHtml || '';
+  if (html) {
+    if (/<img\b/i.test(html)) return true;
+    const plain = html.replace(/<[^>]+>/g, '').trim();
+    if (plain && !/^[.\-_:,;?!]+$/.test(plain)) return true;
+  }
+  return false;
+}
+
 export function validateExamQuestions(
   questions: ExamQuestion[]
 ): ValidationIssue[] {
@@ -195,11 +220,7 @@ export function validateExamQuestions(
           suggestion: 'Bổ sung đủ 4 phương án A, B, C, D cho câu hỏi.',
         });
       }
-      const emptyOpt = opts.find(
-        (o) =>
-          !o.text.trim() ||
-          /^[.\-_:,;?!]+$/.test(o.text.trim())
-      );
+      const emptyOpt = opts.find((o) => !hasMeaningfulOptionContent(o));
       if (emptyOpt) {
         issues.push({
           id: `issue-${q.id}-opt-empty-${emptyOpt.currentLabel}`,
@@ -252,11 +273,7 @@ export function validateExamQuestions(
           suggestion: 'Bổ sung đủ 4 ý a), b), c), d) cho câu hỏi Đúng/Sai.',
         });
       } else {
-        const emptySub = subs.find(
-          (s) =>
-            !s.text.trim() ||
-            /^[.\-_:,;?!]+$/.test(s.text.trim())
-        );
+        const emptySub = subs.find((s) => !hasMeaningfulOptionContent(s));
         if (emptySub) {
           issues.push({
             id: `issue-${q.id}-p2-empty`,

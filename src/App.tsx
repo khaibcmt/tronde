@@ -4215,6 +4215,28 @@ export default function App() {
                                           isUnderline={false}
                                           isRed={false}
                                         />
+                                        {opt.images && opt.images.length > 0 && (
+                                          <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                                            {opt.images.map((img) => (
+                                              <img
+                                                key={img.id}
+                                                src={img.dataUrl}
+                                                alt={
+                                                  img.caption ||
+                                                  `Hình phương án ${opt.currentLabel} — Câu ${q.displayIndex}`
+                                                }
+                                                className="inline-block max-h-14 object-contain rounded border border-slate-200 bg-white cursor-pointer"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setPreviewModalImage({
+                                                    src: img.dataUrl,
+                                                    caption: `Câu ${q.displayIndex} — Phương án ${opt.currentLabel}`,
+                                                  });
+                                                }}
+                                              />
+                                            ))}
+                                          </span>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -4242,6 +4264,27 @@ export default function App() {
                                             <span className="text-slate-950">) </span>
                                           </strong>
                                           <ScientificContentRenderer text={sub.text} inline />
+                                          {sub.images && sub.images.length > 0 && (
+                                            <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                                              {sub.images.map((img) => (
+                                                <img
+                                                  key={img.id}
+                                                  src={img.dataUrl}
+                                                  alt={
+                                                    img.caption ||
+                                                    `Hình ý ${sub.currentLabel} — Câu ${q.displayIndex}`
+                                                  }
+                                                  className="inline-block max-h-14 object-contain rounded border border-slate-200 bg-white cursor-pointer"
+                                                  onClick={() =>
+                                                    setPreviewModalImage({
+                                                      src: img.dataUrl,
+                                                      caption: `Câu ${q.displayIndex} — Ý ${sub.currentLabel}`,
+                                                    })
+                                                  }
+                                                />
+                                              ))}
+                                            </span>
+                                          )}
                                         </div>
 
                                         <div className="flex items-center gap-1 shrink-0 pt-0.5">
@@ -4401,8 +4444,9 @@ export default function App() {
                                     {q.options.map((opt) => (
                                       <div
                                         key={opt.id}
-                                        className="p-2 rounded-lg bg-white border border-sky-200 flex items-center gap-2"
+                                        className="p-2 rounded-lg bg-white border border-sky-200 flex flex-col gap-1.5"
                                       >
+                                        <div className="flex items-center gap-2">
                                         <button
                                           type="button"
                                           onClick={() =>
@@ -4426,6 +4470,25 @@ export default function App() {
                                           }
                                           className="flex-1 px-2 py-1 text-left bg-transparent border-b border-slate-200 focus:border-blue-600 focus:outline-none"
                                         />
+                                        </div>
+                                        {opt.images && opt.images.length > 0 && (
+                                          <div className="flex flex-wrap items-center gap-2 pl-9">
+                                            {opt.images.map((img) => (
+                                              <img
+                                                key={img.id}
+                                                src={img.dataUrl}
+                                                alt={
+                                                  img.caption ||
+                                                  `Hình phương án ${opt.currentLabel} — Câu ${q.displayIndex}`
+                                                }
+                                                className="max-h-16 object-contain rounded border border-slate-200 bg-white"
+                                              />
+                                            ))}
+                                            <span className="text-[11px] italic text-slate-500">
+                                              (Nội dung phương án nằm ở công thức/hình phía trên — ô chữ để trống là đúng, không phải lỗi)
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -4436,8 +4499,9 @@ export default function App() {
                                     {q.subItems.map((sub) => (
                                       <div
                                         key={sub.id}
-                                        className="p-2 rounded-lg bg-white border border-sky-200 flex items-center gap-2"
+                                        className="p-2 rounded-lg bg-white border border-sky-200 flex flex-col gap-1.5"
                                       >
+                                        <div className="flex items-center gap-2">
                                         <span className="font-bold w-5 shrink-0">
                                           {sub.currentLabel})
                                         </span>
@@ -4479,6 +4543,25 @@ export default function App() {
                                         >
                                           Sai
                                         </button>
+                                        </div>
+                                        {sub.images && sub.images.length > 0 && (
+                                          <div className="flex flex-wrap items-center gap-2 pl-7">
+                                            {sub.images.map((img) => (
+                                              <img
+                                                key={img.id}
+                                                src={img.dataUrl}
+                                                alt={
+                                                  img.caption ||
+                                                  `Hình ý ${sub.currentLabel} — Câu ${q.displayIndex}`
+                                                }
+                                                className="max-h-16 object-contain rounded border border-slate-200 bg-white"
+                                              />
+                                            ))}
+                                            <span className="text-[11px] italic text-slate-500">
+                                              (Nội dung ý nằm ở công thức/hình phía trên — ô chữ để trống là đúng, không phải lỗi)
+                                            </span>
+                                          </div>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -5050,6 +5133,18 @@ export default function App() {
                                       <span className="text-slate-950">. </span>
                                     </strong>
                                     <ScientificContentRenderer text={o.text} inline />
+                                    {o.images && o.images.length > 0 && (
+                                      <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                                        {o.images.map((img) => (
+                                          <img
+                                            key={img.id}
+                                            src={img.dataUrl}
+                                            alt={img.caption || `Hình phương án ${o.currentLabel} — Câu ${origQ.displayIndex}`}
+                                            className="inline-block max-h-14 object-contain rounded border border-slate-200 bg-white"
+                                          />
+                                        ))}
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -5072,6 +5167,18 @@ export default function App() {
                                       <span className="text-slate-950">) </span>
                                     </strong>
                                     <ScientificContentRenderer text={s.text} inline />{' '}
+                                    {s.images && s.images.length > 0 && (
+                                      <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                                        {s.images.map((img) => (
+                                          <img
+                                            key={img.id}
+                                            src={img.dataUrl}
+                                            alt={img.caption || `Hình ý ${s.currentLabel} — Câu ${origQ.displayIndex}`}
+                                            className="inline-block max-h-14 object-contain rounded border border-slate-200 bg-white"
+                                          />
+                                        ))}
+                                      </span>
+                                    )}
                                     <span className={s.isTrue ? 'text-emerald-700 font-bold' : 'text-slate-600 font-semibold'}>
                                       ({s.isTrue ? 'Đúng' : 'Sai'})
                                     </span>
@@ -5121,6 +5228,18 @@ export default function App() {
                                       <span className="text-slate-950">. </span>
                                     </strong>
                                     <ScientificContentRenderer text={o.text} inline />
+                                    {o.images && o.images.length > 0 && (
+                                      <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                                        {o.images.map((img) => (
+                                          <img
+                                            key={img.id}
+                                            src={img.dataUrl}
+                                            alt={img.caption || `Hình phương án ${o.currentLabel} — Câu ${cq.displayIndex}`}
+                                            className="inline-block max-h-14 object-contain rounded border border-slate-200 bg-white"
+                                          />
+                                        ))}
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -5143,6 +5262,18 @@ export default function App() {
                                       <span className="text-slate-950">) </span>
                                     </strong>
                                     <ScientificContentRenderer text={s.text} inline />{' '}
+                                    {s.images && s.images.length > 0 && (
+                                      <span className="ml-1 inline-flex flex-wrap items-center gap-1 align-middle">
+                                        {s.images.map((img) => (
+                                          <img
+                                            key={img.id}
+                                            src={img.dataUrl}
+                                            alt={img.caption || `Hình ý ${s.currentLabel} — Câu ${cq.displayIndex}`}
+                                            className="inline-block max-h-14 object-contain rounded border border-slate-200 bg-white"
+                                          />
+                                        ))}
+                                      </span>
+                                    )}
                                     <span className={s.isTrue ? 'text-emerald-700 font-bold' : 'text-slate-600 font-semibold'}>
                                       ({s.isTrue ? 'Đúng' : 'Sai'})
                                     </span>
