@@ -509,7 +509,11 @@ ${JSON.stringify(questions, null, 2)}`;
   // 3. Vite Middleware cho môi trường Development hoặc phục vụ tĩnh cho Production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        watch: process.env.DISABLE_HMR === 'true' ? null : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -521,8 +525,16 @@ ${JSON.stringify(questions, null, 2)}`;
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const httpServer = app.listen(PORT, '0.0.0.0', () => {
     console.log(`EduMix 2025 Server running on http://localhost:${PORT}`);
+  });
+
+  httpServer.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`Port ${PORT} is already in use by an existing server instance.`);
+    } else {
+      console.error('Server error:', err);
+    }
   });
 }
 
