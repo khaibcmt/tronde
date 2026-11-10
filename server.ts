@@ -531,7 +531,10 @@ ${JSON.stringify(questions, null, 2)}`;
 
   httpServer.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
-      console.warn(`Port ${PORT} is already in use by an existing server instance.`);
+      setTimeout(() => {
+        httpServer.close();
+        httpServer.listen(PORT, '0.0.0.0');
+      }, 500);
     } else {
       console.error('Server error:', err);
     }
