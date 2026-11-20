@@ -15,6 +15,8 @@
 // - File gốc lớn hơn MAX_ORIGINAL_FILE_BYTES thì bỏ qua có chủ đích:
 //   Apps Script giới hạn thân POST khoảng 50 MB, mà base64 phình ~1,37 lần,
 //   nên 30 MB file gốc (~41 MB dữ liệu gửi) là ngưỡng an toàn.
+// - Phía Google: cần hàm xử lý action "luu_de_goc" trong Apps Script
+//   QuanLy_TronDe (xem HUONG_DAN_DAN_APPS_SCRIPT.md trong thư mục bàn giao).
 // ============================================================================
 
 export const TRONDE_GOOGLE_SCRIPT_URL =
