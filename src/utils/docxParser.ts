@@ -1732,11 +1732,27 @@ export function isExamInstructionLine(rawText: string): boolean {
 
   if (!clean) return false;
 
+  // BỔ SUNG THEO CHUẨN BỘ CẮT ĐỀ TROCHOI (20/11/2026):
+  // Mọi dòng chứa cụm "từ câu N đến câu N" đều là câu dẫn/hướng dẫn của phần,
+  // bất kể chủ ngữ hay cách mở đầu ("Thí sinh...", "Học sinh...", "Đọc đoạn
+  // thông tin sau và trả lời các câu hỏi từ câu..."), miễn dòng không quá dài
+  // và không kết thúc bằng dấu "?" (câu hỏi thật thường kết thúc bằng "?").
+  if (
+    clean.length <= 320 &&
+    !/\?\s*$/.test(clean) &&
+    /từ\s+câu\s+\d+\s+đến\s+câu\s+\d+/i.test(clean)
+  ) {
+    return true;
+  }
+  // Mảnh tiêu đề phần bị tách dòng ("Câu trắc nghiệm nhiều phương án lựa
+  // chọn...", không có số câu) — không bao giờ là thân câu hỏi.
+  if (/^câu\s+trắc\s+nghiệm\b/i.test(clean)) return true;
+
   return (
-    /^(?:Thí\s+sinh\s+)?(?:trả\s+lời|làm\s+bài|hoàn\s+thành|trình\s+bày(?:\s+lời\s+giải)?(?:\s+chi\s+tiết)?)\s+từ\s+(?:câu|bài)\s*\d+/i.test(clean) ||
+    /^(?:(?:Thí\s+sinh|Học\s+sinh)\s+)?(?:trả\s+lời|làm\s+bài|hoàn\s+thành|trình\s+bày(?:\s+lời\s+giải)?(?:\s+chi\s+tiết)?)\s+từ\s+(?:câu|bài)\s*\d+/i.test(clean) ||
     /thí\s+sinh\s+trình\s+bày\s+lời\s+giải(?:\s+chi\s+tiết)?/i.test(clean) ||
     /^(?:Từ|từ)\s+(?:câu|bài)\s*\d+\s+(?:đến|–|-)\s*(?:câu|bài)?\s*\d+/i.test(clean) ||
-    /^(?:Mỗi\s+câu\s+hỏi\s+)?(?:thí\s+sinh\s+)?chỉ\s+chọn\s+một\s+phương\s+án/i.test(clean) ||
+    /^(?:Mỗi\s+câu\s+hỏi\s+)?(?:(?:thí\s+sinh|học\s+sinh)\s+)?chỉ\s+chọn\s+một\s+phương\s+án/i.test(clean) ||
     /^(?:Trong\s+mỗi\s+ý\s+)?a[).:\-\s]*,?\s*b[).:\-\s]*,?\s*c[).:\-\s]*,?\s*d[).:\-\s]*(?:ở\s+mỗi\s+câu)?,\s*(?:thí\s+sinh\s+)?chọn\s+đúng\s+hoặc\s+sai/i.test(clean) ||
     /(?:thí\s+sinh\s+)?chọn\s+đúng\s+hoặc\s+sai/i.test(clean) ||
     /thí\s+sinh\s+(?:viết|điền|ghi)\s+(?:câu\s+trả\s+lời|đáp\s+số|kết\s+quả)/i.test(clean) ||
@@ -3874,7 +3890,7 @@ function isAdministrativeExamHeader(text: string): boolean {
   const clean = text.trim();
   if (!clean) return false;
   if (isExamInstructionLine(clean)) return true;
-  return /^(?:SỞ\s+GD|UBND\s+|PHÒNG\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|BỘ\s+GIÁO\s+DỤC|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|ĐỀ\s+THI\b|ĐỀ\s+THAM\s+KHẢO|MÔN\s*[:.]|Môn\s+thi\s*[:.]|Thời\s+gian\s+làm\s+bài|Họ\s+và\s+tên|Họ,\s+tên\s+thí\s+sinh|Số\s+báo\s+danh|Mã\s+đề\s*(?:thi)?\s*[:.]|Đề\s+thi\s+gồm\s+có|Không\s+kể\s+thời\s+gian|-----\s*HẾT\s*-----|\(Đề\s+gồm|Thí\s+sinh\s+trả\s+lời\s+từ\s+câu|Mỗi\s+câu\s+hỏi\s+thí\s+sinh\s+chỉ\s+chọn|Trong\s+mỗi\s+ý\s+a\)\s*,\s*b\)\s*,\s*c\)\s*,\s*d\))/i.test(
+  return /^(?:SỞ\s+GD|UBND\s+|PHÒNG\s+GD|TRƯỜNG\s+THPT|TRƯỜNG\s+THCS|TRƯỜNG\s|BỘ\s+GIÁO\s+DỤC|CỘNG\s+HÒA\s+XÃ\s+HỘI|Độc\s+lập\s*[-–—]\s*Tự\s+do|NĂM\s+HỌC\s+\d{4}|ĐỀ\s+CHÍNH\s+THỨC|ĐỀ\s+KIỂM\s+TRA|ĐỀ\s+THI\b|ĐỀ\s+THAM\s+KHẢO|MÔN\s*[:.]|Môn\s+thi\s*[:.]|Thời\s+gian\s+làm\s+bài|Thời\s+gian\s*[:.]|Họ\s+và\s+tên|Họ\s+tên|Họ,\s+tên\s+thí\s+sinh|Lớp\s*[:.]\s*\d|Số\s+báo\s+danh|Mã\s+đề\s*(?:thi)?\s*[:.]|Đề\s+thi\s+gồm\s+có|Không\s+kể\s+thời\s+gian|-----\s*HẾT\s*-----|\(Đề\s+gồm|Thí\s+sinh\s+trả\s+lời\s+từ\s+câu|Mỗi\s+câu\s+hỏi\s+thí\s+sinh\s+chỉ\s+chọn|Trong\s+mỗi\s+ý\s+a\)\s*,\s*b\)\s*,\s*c\)\s*,\s*d\))/i.test(
     clean
   );
 }
@@ -3947,6 +3963,74 @@ export function isEssaySectionHeader(text: string): boolean {
   }
 
   return false;
+}
+
+/**
+ * Nhận diện dòng TIÊU ĐỀ PHẦN dùng chung (gộp mọi biến thể đã hỗ trợ trong
+ * vòng lặp phân tích + bổ sung 20/11/2026 theo chuẩn bộ cắt đề trochoi):
+ * kiểu ghi KHÔNG có chữ PHẦN — "I. TRẮC NGHIỆM NHIỀU PHƯƠNG ÁN LỰA CHỌN",
+ * "II. TRẮC NGHIỆM ĐÚNG SAI", "III. TRẮC NGHIỆM TRẢ LỜI NGẮN",
+ * "A. TRẮC NGHIỆM..." — rất phổ biến ở đề trường, trước đây bị nhận lầm
+ * thành câu hỏi hoặc bị dính vào thân câu trước.
+ * Trả về PartType tương ứng, hoặc null nếu không phải tiêu đề phần.
+ * ƯU TIÊN TUYỆT ĐỐI: dòng có chữ "TỰ LUẬN" -> PART_4 (qua isEssaySectionHeader).
+ */
+export function detectPartHeaderType(text: string): PartType | null {
+  const clean = stripAccidentalQuestionPrefixFromSectionHeader(text || '');
+  if (!clean) return null;
+  if (isEssaySectionHeader(clean)) return 'PART_4';
+  const stripped = clean.replace(/^[*#•\-–—\s]+/, '');
+  if (/\b(?:tự\s*luận|tu\s*luan)\b/i.test(stripped)) return null;
+  if (
+    (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(stripped) &&
+      !/PHẦN\s+(IV|III|II)/i.test(stripped)) ||
+    /^(?:(?:PHẦN\s*(?:I|1)|[IVX]+|\d+|[A-D])\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+nhiều\s+phương\s+án\s+lựa\s+chọn/i.test(
+      stripped
+    )
+  ) {
+    return 'PART_1';
+  }
+  if (
+    (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(stripped) &&
+      !/PHẦN\s+(IV|III)/i.test(stripped)) ||
+    /^(?:(?:PHẦN\s*(?:II|2)|[IVX]+|\d+|[A-D])\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+đúng\s*[\/\-–—\s]*sai/i.test(
+      stripped
+    )
+  ) {
+    return 'PART_2';
+  }
+  if (
+    (/^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(stripped) &&
+      !/PHẦN\s+(IV|III)/i.test(stripped)) ||
+    /^(?:(?:PHẦN\s*(?:III|3)|[IVX]+|\d+|[A-D])\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+trả\s+lời\s+ngắn/i.test(
+      stripped
+    )
+  ) {
+    return 'PART_3';
+  }
+  return null;
+}
+
+/**
+ * Dòng này có đủ tin cậy để làm MỐC CẮT VÙNG ĐỀ (mọi đoạn trước nó bị loại
+ * khỏi vòng lặp phân tích) hay không? Với dòng có chữ PHẦN, phần chữ còn lại
+ * sau "PHẦN X" phải mang tính tiêu đề (rỗng, hoặc chứa từ khoá dạng câu
+ * hỏi/điểm) — tránh cắt nhầm thân câu bắt đầu bằng "Phần I..." (VD: "Phần I
+ * của bài thơ gồm..."). Kiểu tiêu đề không có chữ PHẦN ("I. TRẮC NGHIỆM...")
+ * thì bản thân cụm tiêu đề đã đủ đặc trưng.
+ */
+function isPartHeaderAnchorLine(text: string): boolean {
+  const t = stripAccidentalQuestionPrefixFromSectionHeader(text || '').trim();
+  if (!t || !detectPartHeaderType(t)) return false;
+  const m = t
+    .replace(/^[*#•\-–—\s]+/, '')
+    .match(/^PHẦN\s*(?:IV|III|II|I|1|2|3|4)\b[.\:\-–—)]*\s*(.*)$/i);
+  if (m) {
+    const rest = (m[1] || '').trim();
+    if (!rest) return true;
+    return /(?:trắc\s*nghiệm|đúng|sai|trả\s*lời|tự\s*luận|câu\s+hỏi|điểm)/i.test(rest);
+  }
+  return true;
 }
 
 interface ExtractedLineItem {
@@ -4243,6 +4327,11 @@ export function buildQuestionsFromParsedParagraphs(
   const trailingAnswerKeyPart4 = new Map<number, string>();
   let trailingKeyCurrentPart: PartType = 'PART_1';
   let currentTrailingEssayQNum: number | null = null;
+  // Ngữ liệu/đoạn dẫn đang chờ gắn vào câu hỏi theo sau (đoạn đọc hiểu, đoạn
+  // văn dẫn của chùm câu...). Đoạn chờ KHÔNG bao giờ tự thành câu hỏi: gặp
+  // câu hỏi thật thì nó thành phần mở đầu của thân câu đó; gặp tiêu đề phần
+  // hoặc mốc HẾT thì bị bỏ. (Chuẩn bộ cắt đề trochoi, 20/11/2026.)
+  let deferredContextParas: ParsedParagraph[] = [];
 
   const parseTrailingAnswerTextLine = (lineStr: string) => {
     const cleanLine = normalizeVietnameseExamText(lineStr).trim();
@@ -4503,7 +4592,28 @@ export function buildQuestionsFromParsedParagraphs(
     currentQuestionRuns = [];
   };
 
-  for (const para of paragraphs) {
+  // BỘ CẮT VÙNG ĐỀ (chuẩn trochoi, 20/11/2026): chỉ phân tích từ tiêu đề PHẦN
+  // đầu tiên trở đi. Toàn bộ khối đoạn trước mốc đó (quốc hiệu "CỘNG HÒA XÃ
+  // HỘI CHỦ NGHĨA VIỆT NAM / Độc lập – Tự do – Hạnh phúc", tên sở/trường,
+  // tiêu đề đề, năm học, dòng họ tên thí sinh...) bị loại khỏi vòng lặp nên
+  // KHÔNG BAO GIỜ thành câu hỏi. Không tìm thấy mốc phần tin cậy nào -> giữ
+  // nguyên toàn bộ danh sách đoạn (đề tự do không có tiêu đề phần).
+  let workingParagraphs = paragraphs;
+  let regionCutApplied = false;
+  for (let i = 0; i < paragraphs.length; i++) {
+    const probe = stripAccidentalQuestionPrefixFromSectionHeader(
+      normalizeVietnameseExamText(paragraphs[i].fullText)
+    );
+    if (isPartHeaderAnchorLine(probe)) {
+      if (i > 0) {
+        workingParagraphs = paragraphs.slice(i);
+        regionCutApplied = true;
+      }
+      break;
+    }
+  }
+
+  for (const para of workingParagraphs) {
     // Nếu đang ở phần Bảng đáp án / Hướng dẫn chấm cuối đề: đọc dữ liệu đáp án từ bảng (nếu có) nhưng tuyệt đối không gắn bảng vào đề thi
     if (inTrailingAnswerKeySection && para.attachedTable) {
       const rows = para.attachedTable.rows || [];
@@ -4554,8 +4664,12 @@ export function buildQuestionsFromParsedParagraphs(
         text
       );
 
-    if ((questions.length >= 1 || currentQuestion) && (isEndMarkerLine || isTrailingAnswerHeading)) {
+    if (
+      (regionCutApplied || questions.length >= 1 || currentQuestion) &&
+      (isEndMarkerLine || isTrailingAnswerHeading)
+    ) {
       pushCurrentQuestion();
+      deferredContextParas = [];
       inTrailingAnswerKeySection = true;
       continue;
     }
@@ -4570,54 +4684,17 @@ export function buildQuestionsFromParsedParagraphs(
     // 1. Nhận diện linh hoạt tiêu đề chuyển PHẦN I, PHẦN II, PHẦN III, PHẦN IV (Tự luận)
     // ƯU TIÊN SỐ 1 TUYỆT ĐỐI: Bất kể ghi Phần III hay Phần IV (hoặc Phần II, Phần 2, Phần 3, Phần 4, B. Tự luận...),
     // MIỄN CÓ CHỮ "TỰ LUẬN" LÀ HỆ THỐNG XÁC ĐỊNH NGAY LÀ PHẦN TỰ LUẬN (PART_4)!
-    if (isEssaySectionHeader(text)) {
+    // Gộp về một điểm duy nhất detectPartHeaderType (20/11/2026): nhận thêm kiểu
+    // tiêu đề không có chữ PHẦN ("I. TRẮC NGHIỆM...", "II. TRẮC NGHIỆM ĐÚNG
+    // SAI", "A. TRẮC NGHIỆM...") — trước đây các dòng đó lọt qua mọi khối nhận
+    // diện, bị mở thành câu hỏi rác hoặc dính vào thân câu trước.
+    const partHeaderType = detectPartHeaderType(text);
+    if (partHeaderType) {
       pushCurrentQuestion();
       pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
+      deferredContextParas = [];
       inIgnoredEssaySection = false;
-      currentPart = 'PART_4';
-      continue;
-    }
-
-    const strippedHeaderPrefix = text.replace(/^[*#•\-–—\s]+/, '');
-    if (
-      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedHeaderPrefix) &&
-        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(I|1)\b/i.test(strippedHeaderPrefix) &&
-        !/PHẦN\s+(IV|III|II)/i.test(strippedHeaderPrefix)) ||
-      /^(?:PHẦN\s*(?:I|1)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+nhiều\s+phương\s+án\s+lựa\s+chọn/i.test(
-        strippedHeaderPrefix
-      )
-    ) {
-      pushCurrentQuestion();
-      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
-      inIgnoredEssaySection = false;
-      currentPart = 'PART_1';
-      continue;
-    }
-    if (
-      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedHeaderPrefix) &&
-        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(II|2)\b/i.test(strippedHeaderPrefix) &&
-        !/PHẦN\s+(IV|III)/i.test(strippedHeaderPrefix)) ||
-      /^(?:PHẦN\s*(?:II|2)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+đúng\s*[\/\-–—\s]*sai/i.test(
-        strippedHeaderPrefix
-      )
-    ) {
-      pushCurrentQuestion();
-      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
-      inIgnoredEssaySection = false;
-      currentPart = 'PART_2';
-      continue;
-    }
-    if (
-      (!/\b(?:tự\s*luận|tu\s*luan)\b/i.test(strippedHeaderPrefix) &&
-        /^(?:(?:[IVX]+|\d+)\s*[.:\-–—)]\s*)?PHẦN\s+(III|3)\b/i.test(strippedHeaderPrefix)) ||
-      /^(?:PHẦN\s*(?:III|3)\s*[.:\-–—)]*\s*)?(?:Câu\s+)?trắc\s+nghiệm\s+trả\s+lời\s+ngắn/i.test(
-        strippedHeaderPrefix
-      )
-    ) {
-      pushCurrentQuestion();
-      pendingStemParagraphs = para.images.length > 0 ? [{ ...para, fullText: '', runs: [] }] : [];
-      inIgnoredEssaySection = false;
-      currentPart = 'PART_3';
+      currentPart = partHeaderType;
       continue;
     }
 
@@ -4672,10 +4749,24 @@ export function buildQuestionsFromParsedParagraphs(
       !isExamInstructionLine(text);
 
     if ((qMatch || isAutoNumberQuestion) && !isExamInstructionLine(text)) {
-      const pendingImages = pendingStemParagraphs.flatMap((p) => p.images);
+      const pendingImages = [
+        ...deferredContextParas.flatMap((p) => p.images),
+        ...pendingStemParagraphs.flatMap((p) => p.images),
+      ];
       pushCurrentQuestion();
       pendingStemParagraphs = [];
-      const stemContent = qMatch ? qMatch[2].trim() : text;
+      const baseStemContent = qMatch ? qMatch[2].trim() : text;
+      // Ngữ liệu/đoạn dẫn đứng ngay trước câu hỏi (đoạn đọc hiểu của chùm câu)
+      // được gắn làm phần mở đầu của thân câu này — KHÔNG thành câu hỏi riêng
+      // và KHÔNG làm tăng số câu (chuẩn trochoi).
+      const deferredText = deferredContextParas
+        .map((p) => p.fullText.trim())
+        .filter(Boolean)
+        .join(' ');
+      deferredContextParas = [];
+      const stemContent = deferredText
+        ? `${deferredText} ${baseStemContent}`.trim()
+        : baseStemContent;
       const mergedParaForNewQ: ParsedParagraph =
         pendingImages.length > 0
           ? { ...para, images: [...pendingImages, ...para.images] }
@@ -4791,7 +4882,14 @@ export function buildQuestionsFromParsedParagraphs(
         ? extractSequentialSubItemsFromLine(text)
         : { leadingStem: '', items: [] };
 
-    // Nếu câu hỏi hiện tại đã đủ 4 phương án A,B,C,D (hoặc 4 ý a,b,c,d) mà gặp đoạn văn có chữ mới không phải là phương án hay lời giải -> tự động mở câu hỏi mới!
+    // Nếu câu hỏi hiện tại đã đủ 4 phương án A,B,C,D (hoặc 4 ý a,b,c,d) mà gặp đoạn văn có chữ mới không phải là phương án hay lời giải:
+    // KHÔNG mở câu hỏi mới ngay (sửa 20/11/2026 theo chuẩn trochoi). Đoạn văn ở
+    // vị trí này rất hay là ĐOẠN DẪN/ngữ liệu của chùm câu tiếp theo hoặc thân
+    // câu không nhãn của câu tiếp theo — mở câu ngay tại đây từng biến đoạn dẫn
+    // thành câu hỏi rác (thân là đoạn dẫn + 4 phương án rỗng bịa thêm). Nay
+    // đoạn được giữ làm NGỮ LIỆU CHỜ: câu hỏi thật theo sau (có nhãn "Câu N",
+    // tự đánh số Word, hoặc dòng phương án) sẽ nhận nó làm phần mở đầu của
+    // thân câu; gặp tiêu đề phần/mốc HẾT thì ngữ liệu chờ bị bỏ.
     if (
       currentQuestion &&
       currentHasCompleteOptions &&
@@ -4804,14 +4902,41 @@ export function buildQuestionsFromParsedParagraphs(
       !isExamInstructionLine(text)
     ) {
       pushCurrentQuestion();
-      startNewQuestionFromPara(para, text);
+      deferredContextParas.push(para);
+      if (deferredContextParas.length > 5) {
+        deferredContextParas.shift();
+      }
       continue;
+    }
+
+    // Câu trả lời ngắn KHÔNG nhãn câu và KHÔNG tự đánh số Word (thân câu chỉ là
+    // đoạn văn thường): thân câu đang nằm ở ngữ liệu chờ, khi dòng "Đáp số: ..."
+    // tới thì dựng câu hỏi từ ngữ liệu chờ rồi để dòng đáp số chảy tiếp xuống
+    // nhánh xử lý Phần III bên dưới để nhận đáp án.
+    if (
+      !currentQuestion &&
+      deferredContextParas.length > 0 &&
+      currentPart === 'PART_3' &&
+      /(?:Đáp\s*án|Đáp\s*số|ĐS|Kết\s*quả)\s*[:=]/i.test(text)
+    ) {
+      const deferredText = deferredContextParas
+        .map((p) => p.fullText.trim())
+        .filter(Boolean)
+        .join(' ');
+      const deferredImages = deferredContextParas.flatMap((p) => p.images);
+      const firstDeferred = deferredContextParas[0];
+      startNewQuestionFromPara(
+        { ...firstDeferred, images: [...deferredImages, ...para.images] },
+        deferredText
+      );
+      deferredContextParas = [];
+      pendingStemParagraphs = [];
     }
 
     // Nếu chưa có currentQuestion (ví dụ file Word bị mất chữ "Câu 1" do macro/field)
     if (!currentQuestion) {
       if (optExtraction.items.length > 0 || subExtraction.items.length > 0) {
-        const nonInstructionPending = pendingStemParagraphs.filter(
+        const nonInstructionPending = [...deferredContextParas, ...pendingStemParagraphs].filter(
           (p) => !isAdministrativeExamHeader(p.fullText) && !isExamInstructionLine(p.fullText)
         );
         if (nonInstructionPending.length > 0) {
@@ -4835,15 +4960,26 @@ export function buildQuestionsFromParsedParagraphs(
             combinedPendingText
           );
           pendingStemParagraphs = [];
+          deferredContextParas = [];
         } else {
           startNewQuestionFromPara(para, '');
           pendingStemParagraphs = [];
+          deferredContextParas = [];
         }
       } else {
         if (!isAdministrativeExamHeader(text) && !isExamInstructionLine(text)) {
-          pendingStemParagraphs.push(para);
-          if (pendingStemParagraphs.length > 5) {
-            pendingStemParagraphs.shift();
+          if (deferredContextParas.length > 0) {
+            // Đang có ngữ liệu chờ (đoạn dẫn/thân câu không nhãn nhiều đoạn):
+            // đoạn thường tiếp theo thuộc cùng ngữ liệu đó.
+            deferredContextParas.push(para);
+            if (deferredContextParas.length > 5) {
+              deferredContextParas.shift();
+            }
+          } else {
+            pendingStemParagraphs.push(para);
+            if (pendingStemParagraphs.length > 5) {
+              pendingStemParagraphs.shift();
+            }
           }
         }
         continue;
@@ -5128,8 +5264,8 @@ export function buildQuestionsFromParsedParagraphs(
   // Cơ chế dự phòng cuối cùng (Zero-Failure Fallback):
   // Nếu tệp Word có nội dung đoạn văn nhưng hoàn toàn không theo chuẩn Câu 1 / A. B. C. D. thông thường,
   // tự động gom các đoạn văn có nội dung thành câu hỏi để giáo viên vẫn xem và chỉnh sửa được trên giao diện!
-  if (questions.length === 0 && paragraphs.length > 0) {
-    const meaningfulParas = paragraphs.filter(
+  if (questions.length === 0 && workingParagraphs.length > 0) {
+    const meaningfulParas = workingParagraphs.filter(
       (p) =>
         (p.fullText.trim().length > 2 || p.images.length > 0) &&
         !isAdministrativeExamHeader(p.fullText)

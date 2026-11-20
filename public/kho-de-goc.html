@@ -41,6 +41,9 @@
   td.filename{word-break:break-all;min-width:170px}
   .dl{background:var(--accent2);border:none;color:#052e12;font-weight:700;white-space:nowrap}
   .dl:hover{filter:brightness(1.1)}
+  .del{background:transparent;border:1px solid var(--danger);color:var(--danger);font-weight:700;white-space:nowrap;margin-left:6px}
+  .del:hover{background:rgba(248,113,113,.12)}
+  .del:disabled{opacity:.5;cursor:wait}
   h2{font-size:18px;margin:10px 0 2px;word-break:break-all}
   .count-note{color:var(--muted);font-size:13px;margin:0 0 6px}
   footer{color:var(--muted);font-size:12px;margin-top:18px;text-align:center}
@@ -301,12 +304,58 @@
         "<td class='filename'>" + esc(r.f || "—") + "</td>" +
         "<td>" + esc(fmtKB(r.s)) + "</td>" +
         "<td>" + esc(r.q == null ? "—" : r.q) + "</td>" +
-        "<td><button type='button' class='dl' data-dl='" + esc(r.__key) + "'>⬇ Tải file gốc</button></td>" +
+        "<td><button type='button' class='dl' data-dl='" + esc(r.__key) + "'>⬇ Tải file gốc</button>" +
+        "<button type='button' class='del' data-del='" + esc(r.__key) + "'>🗑 Xoá</button></td>" +
         "</tr>";
     }).join("");
     Array.prototype.forEach.call(recordBody.querySelectorAll("[data-dl]"), function(el){
       el.addEventListener("click", function(){ downloadRecord(el.getAttribute("data-dl")); });
     });
+    Array.prototype.forEach.call(recordBody.querySelectorAll("[data-del]"), function(el){
+      el.addEventListener("click", function(){ deleteRecord(el.getAttribute("data-del"), el); });
+    });
+  }
+
+  function deleteRecord(key, btn){
+    var rec = null;
+    for(var i=0;i<currentRecords.length;i++){
+      if(currentRecords[i].__key === key){ rec = currentRecords[i]; break; }
+    }
+    if(!rec || !currentDevice){
+      alert("Không tìm thấy bản ghi này trong danh sách hiện tại.");
+      return;
+    }
+    var fname = rec.f || "(không tên file)";
+    if(!window.confirm("Xoá hẳn đề gốc này khỏi kho?\n\nFile: " + fname + "\nMã máy: " + currentDevice + "\n\nĐã xoá là không khôi phục được.")){
+      return;
+    }
+    if(btn) btn.disabled = true;
+    fetch(RTDB + "/" + ROOT + "/" + encodeURIComponent(currentDevice) + "/" + encodeURIComponent(key) + ".json",
+      { method: "DELETE" })
+      .then(function(r){
+        if(!r.ok) throw new Error("HTTP " + r.status);
+        // Xoá thật thành công mới cập nhật giao diện.
+        currentRecords = currentRecords.filter(function(x){ return x.__key !== key; });
+        // Cập nhật luôn số đếm của mã máy trong bộ nhớ (danh sách mã máy nạp lại khi quay lại).
+        for(var j=0;j<devices.length;j++){
+          if(devices[j].id === currentDevice && typeof devices[j].count === "number" && devices[j].count > 0){
+            devices[j].count -= 1;
+          }
+        }
+        if(!currentRecords.length){
+          tableWrap.hidden = true;
+          recordCount.textContent = "Tổng: 0 đề gốc.";
+          recordStatus.hidden = false;
+          recordStatus.className = "status";
+          recordStatus.textContent = "Mã máy này không còn đề gốc nào. Quay lại danh sách mã máy sẽ thấy mã này biến mất.";
+          return;
+        }
+        renderRecords();
+      })
+      .catch(function(err){
+        if(btn) btn.disabled = false;
+        alert("Xoá chưa được (lỗi mạng hoặc máy chủ: " + (err && err.message ? err.message : err) + "). Bản ghi vẫn còn nguyên, thầy thử lại sau.");
+      });
   }
 
   function downloadRecord(key){
@@ -343,6 +392,8 @@
     devicesSection.hidden = false;
     currentDevice = null;
     currentRecords = [];
+    // Nạp lại danh sách mã máy: mã nào vừa xoá sạch đề sẽ tự biến mất.
+    loadDevices();
   });
   deviceSearch.addEventListener("input", renderDevices);
   recordSearch.addEventListener("input", renderRecords);

@@ -14,8 +14,11 @@
 //   ~13,7 MB JSON trong MỘT lần ghi đã là rất nặng cho RTDB; file thực tế
 //   chỉ vài trăm KB tới vài MB nên trần 10 MB vừa thừa sức chứa nhu cầu
 //   thật, vừa bảo vệ hệ thống khỏi các payload khổng lồ.
-// - Đường ĐĂNG KÝ giáo viên về Apps Script / Sheet QuanLy_TronDe nằm ở
-//   TeacherAuthGateModal, KHÔNG liên quan và không bị đụng tới ở đây.
+// - Đường ĐĂNG KÝ giáo viên nay đi Firebase (node tronde_requests /
+//   tronde_licenses, xem utils/teacherLicense.ts) — kể từ 20/11/2026 app
+//   KHÔNG còn dùng Apps Script / Sheet QuanLy_TronDe cho xác thực nữa.
+//   Metadata g/n/sc trong bản ghi dưới đây lấy từ hồ sơ giáo viên đã đăng
+//   ký (localStorage 'tronde_current_user') do luồng trộn truyền vào.
 // ============================================================================
 
 export const TRONDE_FIREBASE_RTDB_URL =

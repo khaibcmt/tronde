@@ -118,7 +118,7 @@ import { UserGuideModal } from './components/UserGuideModal';
 import { BuyCoffeeModal, FloatingCoffeeButton } from './components/BuyCoffeeModal';
 import { ScientificContentRenderer } from './components/ScientificContentRenderer';
 import {
-  TeacherAuthGateModal,
+  useTeacherAuthGate,
   TeacherAuthUser,
 } from './components/TeacherAuthGateModal';
 
@@ -355,32 +355,29 @@ export default function App() {
   const [selectedVariantCode, setSelectedVariantCode] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
-  // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp & Xác thực Giáo viên (QuanLy_TronDe)
+  // 5. State Cẩm nang hướng dẫn tự động điền khi nâng cấp & Xác thực Giáo viên
+  // (mẫu bản quyền Firebase như trochoi: đăng ký 1 lần → tự duyệt → mở khoá
+  // vĩnh viễn theo mã máy; Admin 2 khoá; xem utils/teacherLicense.ts)
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isCoffeeModalOpen, setIsCoffeeModalOpen] = useState<boolean>(false);
-  const [currentTeacherUser, setCurrentTeacherUser] =
-    useState<TeacherAuthUser | null>(() => {
-      try {
-        const raw = localStorage.getItem('tronde_current_user');
-        if (!raw) return null;
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.gmail && parsed.name) {
-          return parsed as TeacherAuthUser;
-        }
-        return null;
-      } catch {
-        return null;
-      }
-    });
-  const [isAuthGateModalOpen, setIsAuthGateModalOpen] = useState<boolean>(
-    () => {
-      try {
-        return !localStorage.getItem('tronde_current_user');
-      } catch {
-        return true;
-      }
-    }
-  );
+  const auth = useTeacherAuthGate({
+    onAuthenticated: (user) => {
+      setConfig((prev) => ({
+        ...prev,
+        schoolName: user.school
+          ? user.school.toUpperCase().startsWith('TRƯỜNG')
+            ? user.school.toUpperCase()
+            : `TRƯỜNG ${user.school.toUpperCase()}`
+          : prev.schoolName,
+        teacherName: prev.teacherName?.trim() ? prev.teacherName : user.name,
+      }));
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Chào mừng Thầy/Cô ${user.name} (${user.school}) đã đăng nhập hệ thống EduMix Pro2025!`,
+      });
+    },
+  });
+  const currentTeacherUser: TeacherAuthUser | null = auth.user;
   const [featureRegistry, setFeatureRegistry] = useState<FeatureReleaseItem[]>(
     DYNAMIC_FEATURE_REGISTRY
   );
@@ -2705,19 +2702,50 @@ export default function App() {
             </a>
 
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsAuthGateModalOpen(true)}
-                className="px-3 py-1 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                title="Xem hoặc cập nhật thông tin Giáo viên đăng nhập hệ thống (Đồng bộ QuanLy_TronDe)"
+              <span
+                className="px-3 py-1 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 shadow-2xs"
+                title="Giáo viên đã đăng ký kích hoạt cho máy này (hệ thống Firebase — đăng ký 1 lần, tự động duyệt)"
               >
                 <i className="fa-solid fa-user-check text-emerald-300" />
                 <span>
                   {currentTeacherUser
                     ? `GV: ${currentTeacherUser.name} (${currentTeacherUser.school})`
-                    : 'Đăng nhập Giáo viên'}
+                    : 'Chưa đăng ký Giáo viên'}
                 </span>
-              </button>
+              </span>
+
+              {!auth.isAdmin ? (
+                <button
+                  type="button"
+                  onClick={auth.openAdmin}
+                  className="px-3 py-1 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  title="Đăng nhập Admin (2 lớp khoá: mã chủ + mã Admin của thầy)"
+                >
+                  <i className="fa-solid fa-key text-amber-300" />
+                  <span>Admin</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={auth.openMachines}
+                    className="px-3 py-1 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Panel Admin: danh sách máy đã đăng ký, Khoá lại / Mở lại, xuất CSV minh chứng"
+                  >
+                    <i className="fa-solid fa-lock text-amber-300" />
+                    <span>Quản lý máy</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={auth.openAdmin}
+                    className="px-3 py-1 rounded-xl text-xs font-black text-white btn-3d-indigo flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    title="Đang ở quyền Admin — bấm để thoát Admin"
+                  >
+                    <i className="fa-solid fa-crown text-amber-300" />
+                    <span>Admin ✓</span>
+                  </button>
+                </>
+              )}
 
               <span
                 className="text-xs font-mono font-bold text-emerald-950 bg-emerald-100/90 px-3 py-1 rounded-xl border border-emerald-300 truncate max-w-[340px] shadow-2xs"
@@ -6912,29 +6940,9 @@ export default function App() {
         onClose={() => setIsCoffeeModalOpen(false)}
       />
 
-      {/* Hộp thoại Xác thực & Đăng nhập Giáo viên 3D (Đồng bộ Google Apps Script QuanLy_TronDe) */}
-      <TeacherAuthGateModal
-        isOpen={isAuthGateModalOpen}
-        currentUser={currentTeacherUser}
-        onCloseIfAuthenticated={() => setIsAuthGateModalOpen(false)}
-        onAuthenticated={(user) => {
-          setCurrentTeacherUser(user);
-          setIsAuthGateModalOpen(false);
-          setConfig((prev) => ({
-            ...prev,
-            schoolName: user.school
-              ? user.school.toUpperCase().startsWith('TRƯỜNG')
-                ? user.school.toUpperCase()
-                : `TRƯỜNG ${user.school.toUpperCase()}`
-              : prev.schoolName,
-            teacherName: prev.teacherName?.trim() ? prev.teacherName : user.name,
-          }));
-          setStatusBanner({
-            type: 'SUCCESS',
-            text: `Chào mừng Thầy/Cô ${user.name} (${user.school}) đã đăng nhập hệ thống EduMix Pro2025!`,
-          });
-        }}
-      />
+      {/* Cổng Xác thực Giáo viên + Admin 2 khoá + Panel Quản lý máy
+          (mẫu bản quyền Firebase như trochoi — hook useTeacherAuthGate) */}
+      {auth.modals}
 
       {/* ================= CHÂN TRANG SIÊU GỌN CHỈ GỒM 1 HÀNG DUY NHẤT (CHIẾM DIỆN TÍCH NHỎ NHẤT CÓ THỂ) ================= */}
       <footer className="fixed bottom-0 left-0 right-0 z-40 footer-fixed-3d px-2.5 py-1 text-white">
