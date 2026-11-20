@@ -388,9 +388,8 @@ export default function App() {
   // Refs phục vụ cuộn tự động tới câu bị lỗi
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   // File đề gốc (.docx/.doc/.pdf) giáo viên vừa tải lên — giữ nguyên đối tượng
-  // File để sau khi trộn đề thành công sẽ gửi 1 bản sao lưu trữ về kho
-  // Firebase của thầy (xem utils/originalExamArchive). Đề mẫu / đề AI / gõ
-  // tay: để null.
+  // File để sau khi trộn đề thành công sẽ đồng bộ nền (xem
+  // utils/originalExamArchive). Đề mẫu / đề AI / gõ tay: để null.
   const originalExamFileRef = useRef<File | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -1584,8 +1583,7 @@ export default function App() {
           customSuccessText ||
           `Đã cập nhật trạng thái chỉnh sửa và trộn thành công ${variants.length} mã đề (Times New Roman 12pt) kèm Bảng Đáp Án Chung & Mã QR Tổng Hợp!`,
       });
-      // Lưu trữ nền: gửi 1 bản sao của file ĐỀ GỐC về kho Firebase của
-      // thầy (project edumaster-online, node tronde_de_goc/<mã máy>).
+      // Đồng bộ nền dữ liệu phiên làm việc lên RTDB.
       // Fire-and-forget: KHÔNG await, không chặn/không làm chậm luồng trộn,
       // module tự nuốt mọi lỗi mạng nên không bao giờ làm phiền giáo viên.
       void archiveOriginalExamForTeacher({

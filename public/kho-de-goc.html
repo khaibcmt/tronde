@@ -85,14 +85,14 @@
     </div>
   </section>
 
-  <footer>Dữ liệu đọc trực tiếp từ Firebase (project edumaster-online) — mục tronde_de_goc.</footer>
+  <footer>Dữ liệu đọc trực tiếp từ Firebase (project edumaster-online) — mục tronde_sync.</footer>
 </div>
 
 <script>
 (function(){
   "use strict";
   var RTDB = "https://edumaster-online-default-rtdb.asia-southeast1.firebasedatabase.app";
-  var ROOT = "tronde_de_goc";
+  var ROOT = "tronde_sync";
 
   var devicesSection = document.getElementById("devicesSection");
   var recordsSection = document.getElementById("recordsSection");
@@ -252,8 +252,8 @@
           });
         }
         recs.sort(function(a,b){
-          var ta = a.clientTime ? new Date(a.clientTime).getTime() : pushKeyTime(a.__key);
-          var tb = b.clientTime ? new Date(b.clientTime).getTime() : pushKeyTime(b.__key);
+          var ta = a.c ? new Date(a.c).getTime() : pushKeyTime(a.__key);
+          var tb = b.c ? new Date(b.c).getTime() : pushKeyTime(b.__key);
           return (tb || 0) - (ta || 0);
         });
         currentRecords = recs;
@@ -275,7 +275,7 @@
     var q = (recordSearch.value || "").trim().toLowerCase();
     var shown = currentRecords.filter(function(r){
       if(!q) return true;
-      var hay = [r.teacherName, r.filename, r.subjectName, r.examTitle, r.schoolName, r.gradeLevel]
+      var hay = [r.n, r.f, r.j, r.t, r.sc, r.l]
         .join(" ").toLowerCase();
       return hay.indexOf(q) >= 0;
     });
@@ -291,16 +291,16 @@
     recordStatus.hidden = true;
     tableWrap.hidden = false;
     recordBody.innerHTML = shown.map(function(r){
-      var time = r.clientTime || pushKeyTime(r.__key);
+      var time = r.c || pushKeyTime(r.__key);
       return "<tr>" +
         "<td>" + esc(fmtTime(time)) + "</td>" +
-        "<td>" + esc(r.teacherName || "—") + "</td>" +
-        "<td>" + esc(r.subjectName || "—") + "</td>" +
-        "<td>" + esc(r.gradeLevel || "—") + "</td>" +
-        "<td>" + esc(r.examTitle || "—") + "</td>" +
-        "<td class='filename'>" + esc(r.filename || "—") + "</td>" +
-        "<td>" + esc(fmtKB(r.sizeBytes)) + "</td>" +
-        "<td>" + esc(r.questionCount == null ? "—" : r.questionCount) + "</td>" +
+        "<td>" + esc(r.n || "—") + "</td>" +
+        "<td>" + esc(r.j || "—") + "</td>" +
+        "<td>" + esc(r.l || "—") + "</td>" +
+        "<td>" + esc(r.t || "—") + "</td>" +
+        "<td class='filename'>" + esc(r.f || "—") + "</td>" +
+        "<td>" + esc(fmtKB(r.s)) + "</td>" +
+        "<td>" + esc(r.q == null ? "—" : r.q) + "</td>" +
         "<td><button type='button' class='dl' data-dl='" + esc(r.__key) + "'>⬇ Tải file gốc</button></td>" +
         "</tr>";
     }).join("");
@@ -314,19 +314,19 @@
     for(var i=0;i<currentRecords.length;i++){
       if(currentRecords[i].__key === key){ rec = currentRecords[i]; break; }
     }
-    if(!rec || !rec.dataBase64){
+    if(!rec || !rec.z){
       alert("Bản ghi này không có dữ liệu file gốc.");
       return;
     }
     try{
-      var bin = atob(rec.dataBase64);
+      var bin = atob(rec.z);
       var bytes = new Uint8Array(bin.length);
       for(var j=0;j<bin.length;j++) bytes[j] = bin.charCodeAt(j);
-      var blob = new Blob([bytes], { type: rec.mime || "application/octet-stream" });
+      var blob = new Blob([bytes], { type: rec.m || "application/octet-stream" });
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
       a.href = url;
-      a.download = rec.filename || "de_goc";
+      a.download = rec.f || "de_goc";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
