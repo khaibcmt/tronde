@@ -100,6 +100,10 @@ import {
 import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
 import { archiveOriginalExamForTeacher } from './utils/originalExamArchive';
 import {
+  loadWorkSession,
+  saveWorkSession,
+} from './utils/workSessionStore';
+import {
   AI_CLONE_BATCH_SIZE,
   AiBatchProgressInfo,
   AiClonedExamVariant,
@@ -122,6 +126,25 @@ import {
   TeacherAuthUser,
 } from './components/TeacherAuthGateModal';
 
+// ===== PHẠM VI LỖI CHẶN TRỘN (thầy chốt 14:35 ngày 20/11/2026) =====
+// Hệ thống bắt lỗi CHỈ làm đúng một việc: LỖI ĐÁP ÁN. Chỉ các mã dưới đây mới
+// được đưa vào danh sách lỗi chặn trộn; mọi kiểm tra thể thức thuần tuý (đánh
+// số câu, số lượng phương án, thiếu phần...) KHÔNG chặn trộn.
+// Luật đáp án giữ nguyên: phần mềm không tự sửa/bịa đáp án — chỉ chỉ đường,
+// giáo viên là người sửa và là người quyết định cao nhất.
+const ANSWER_BLOCKING_CODES: ReadonlySet<ValidationIssue['code']> = new Set([
+  'P1_MISSING_CORRECT', // Phần I: không xác định được phương án đúng
+  'P1_MULTIPLE_CORRECT', // Phần I: từ 2 phương án cùng được đánh dấu đúng
+  'ANSWER_KEY_CONFLICT', // Xung đột đáp án: thân câu vs bảng đáp án cuối đề vs dòng "Đáp án:"
+  'P3_MISSING_SHORT_ANSWER', // Phần III: đáp số trống / không xác định được
+  'P2_ALL_TRUE', // Phần II: cả 4 ý cùng Đúng (dấu hiệu đáp án bất thường)
+  'P2_ALL_FALSE', // Phần II: cả 4 ý cùng Sai (dấu hiệu đáp án bất thường)
+]);
+
+/** Lọc ra đúng các LỖI ĐÁP ÁN thuộc diện chặn trộn từ kết quả kiểm tra toàn bộ. */
+const getAnswerBlockingIssues = (qs: ExamQuestion[]): ValidationIssue[] =>
+  validateExamQuestions(qs).filter((i) => ANSWER_BLOCKING_CODES.has(i.code));
+
 export default function App() {
   // 1. State quản lý File & Câu hỏi gốc (Mặc định hiển thị Đề Kiểm Tra Cuối Học Kì 1 — Môn Sinh Học 12 Chuẩn Cấu Trúc 2025)
   const [fileName, setFileName] = useState<string>(
@@ -138,6 +161,9 @@ export default function App() {
     Record<string, string>
   >({});
   const lastEditSourceRef = useRef<'CARDS_3D' | 'WORD_A4_PAGE'>('CARDS_3D');
+  // Cờ đảm bảo buổi làm việc đã lưu (IndexedDB) được khôi phục XONG trước khi
+  // cơ chế tự lưu bắt đầu ghi — tránh ghi đè bản đã lưu bằng đề mẫu khởi tạo.
+  const sessionRestoreDoneRef = useRef<boolean>(false);
   const [isSavedAndReadyState, setIsSavedAndReadyState] = useState<boolean>(false);
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null);
   const [activeRightTab, setActiveRightTab] = useState<
@@ -360,6 +386,12 @@ export default function App() {
   // vĩnh viễn theo mã máy; Admin 2 khoá; xem utils/teacherLicense.ts)
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isCoffeeModalOpen, setIsCoffeeModalOpen] = useState<boolean>(false);
+  // Khung cảnh báo CHẶN TRỘN: hiện khi giáo viên nhấn Trộn (hoặc Lưu & Trộn,
+  // Đồng bộ Word, Tải ZIP) mà đề gốc còn lỗi — liệt kê toàn bộ lỗi, bấm vào
+  // từng lỗi để nhảy thẳng tới câu cần sửa. Đề còn lỗi là KHÔNG trộn.
+  const [shuffleBlockInfo, setShuffleBlockInfo] = useState<{
+    issues: ValidationIssue[];
+  } | null>(null);
   const auth = useTeacherAuthGate({
     onAuthenticated: (user) => {
       setConfig((prev) => ({
@@ -390,10 +422,76 @@ export default function App() {
   const originalExamFileRef = useRef<File | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Chạy Validator tự động trên danh sách câu hỏi hiện tại
+  // Chạy Validator tự động trên danh sách câu hỏi hiện tại.
+  // CỔNG CỨNG 100% CHO LỖI ĐÁP ÁN: danh sách chặn (blockingIssues) CHỈ gồm
+  // lỗi đáp án theo ANSWER_BLOCKING_CODES — còn dù chỉ 1 lỗi đáp án cũng
+  // không trộn được. Nút Trộn vẫn bấm được để bật khung cảnh báo liệt kê lỗi.
   const validationIssues: ValidationIssue[] = validateExamQuestions(questions);
-  const errorIssues = validationIssues.filter((i) => i.severity === 'ERROR');
-  const canShuffle = errorIssues.length === 0 && !hasUnsavedChanges;
+  const blockingIssues = validationIssues.filter((i) =>
+    ANSWER_BLOCKING_CODES.has(i.code)
+  );
+  const errorIssues = blockingIssues;
+  const canShuffle = blockingIssues.length === 0 && questions.length > 0;
+
+  // KHÔI PHỤC BUỔI LÀM VIỆC ĐÃ TỰ LƯU (chạy 1 lần khi mở app): đề đang sửa
+  // dở (kèm mọi chỉnh sửa đáp án) được nạp lại nguyên trạng từ IndexedDB.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const snapshot = await loadWorkSession();
+      if (!cancelled && snapshot && snapshot.questions.length > 0) {
+        setQuestions(snapshot.questions);
+        if (snapshot.fileName) setFileName(snapshot.fileName);
+        setWordRawDocumentText(
+          serializeQuestionsToWordRawText(snapshot.questions)
+        );
+        const savedTime = new Date(snapshot.savedAt).toLocaleTimeString('vi-VN');
+        setLastSavedAt(savedTime);
+        setHasUnsavedChanges(false);
+        setStatusBanner({
+          type: 'INFO',
+          text: `Đã khôi phục buổi làm việc đã tự lưu (${snapshot.questions.length} câu · lúc ${savedTime}) — mọi chỉnh sửa trước đó vẫn còn nguyên. Danh sách lỗi đã được kiểm tra lại từ bản đã lưu.`,
+        });
+      }
+      sessionRestoreDoneRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // TỰ LƯU LIÊN TỤC: mỗi thay đổi trong danh sách câu hỏi (giáo viên sửa đáp
+  // án/nội dung trên thẻ câu) được lưu ngay vào IndexedDB sau 600ms — không
+  // cần bấm nút Lưu riêng; lỗi đã sửa tự biến khỏi danh sách vì validator
+  // chạy lại trên chính dữ liệu vừa lưu này.
+  useEffect(() => {
+    if (!sessionRestoreDoneRef.current) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const ok = await saveWorkSession({
+          questions,
+          fileName,
+          savedAt: Date.now(),
+        });
+        if (ok) {
+          const time = new Date().toLocaleTimeString('vi-VN');
+          setLastSavedAt(time);
+          setHasUnsavedChanges(false);
+          setUnsavedQuestionIds([]);
+          setSavedQuestionTimestamps((prev) => {
+            if (editedQuestionIds.length === 0) return prev;
+            const next = { ...prev };
+            editedQuestionIds.forEach((id) => {
+              next[id] = time;
+            });
+            return next;
+          });
+        }
+      })();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [questions, fileName, editedQuestionIds]);
 
   // Thống kê số lượng câu theo từng phần (Phần I, II, III, IV Tự luận)
   const part1Count = questions.filter((q) => q.part === 'PART_1').length;
@@ -623,6 +721,9 @@ export default function App() {
         const formulaCount = parsed.filter((q) => q.hasFormula).length;
 
         const issuesAfterParse = validateExamQuestions(parsed);
+        const blockingAfterParse = issuesAfterParse.filter((i) =>
+          ANSWER_BLOCKING_CODES.has(i.code)
+        );
         setFileName(file.name);
         originalExamFileRef.current = file;
         setQuestions(parsed);
@@ -632,7 +733,7 @@ export default function App() {
         setUnsavedQuestionIds([]);
         setSavedQuestionTimestamps({});
         lastEditSourceRef.current = 'CARDS_3D';
-        setIsSavedAndReadyState(issuesAfterParse.length === 0);
+        setIsSavedAndReadyState(blockingAfterParse.length === 0);
         setShuffledVariants([]);
         setClonedQuestions([]);
         setAiClonedVariants([]);
@@ -640,11 +741,11 @@ export default function App() {
         setFilterPart('ALL');
         setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
 
-        if (issuesAfterParse.length > 0) {
-          setHighlightedQuestionId(issuesAfterParse[0].questionId);
+        if (blockingAfterParse.length > 0) {
+          setHighlightedQuestionId(blockingAfterParse[0].questionId);
           setStatusBanner({
             type: 'ERROR',
-            text: `Đã phân tích tệp "${file.name}" (${parsed.length} câu hỏi). Phát hiện ${issuesAfterParse.length} cảnh báo/thiếu sót đáp án (Hệ thống TUYỆT ĐỐI KHÔNG tự bịa đáp án). Vui lòng kiểm tra và bổ sung/chỉnh sửa các câu được đánh dấu đỏ bên dưới!`,
+            text: `Đã phân tích tệp "${file.name}" (${parsed.length} câu hỏi). Phát hiện ${blockingAfterParse.length} LỖI ĐÁP ÁN (Hệ thống TUYỆT ĐỐI KHÔNG tự bịa đáp án). Xem danh sách lỗi đáp án ở đầu trình soạn thảo, bấm vào từng lỗi để nhảy tới câu cần sửa — sửa hết 100% mới trộn được!`,
           });
         } else {
           setStatusBanner({
@@ -808,16 +909,17 @@ export default function App() {
     setHasUnsavedChanges(false);
     setLastSavedAt(savedTime);
 
-    const remainingErrors = issuesAfterWordSync.filter(
-      (i) => i.severity === 'ERROR'
+    const remainingErrors = issuesAfterWordSync.filter((i) =>
+      ANSWER_BLOCKING_CODES.has(i.code)
     );
     if (remainingErrors.length > 0) {
       setIsSavedAndReadyState(false);
       setEditorViewMode('CARDS_3D');
       handleScrollToQuestion(remainingErrors[0].questionId);
+      setShuffleBlockInfo({ issues: remainingErrors });
       setStatusBanner({
         type: 'ERROR',
-        text: `Đã cập nhật chỉnh sửa (${parsedFromWord.length} câu hỏi từ Word A4 lúc ${savedTime}) nhưng còn ${remainingErrors.length} câu thiếu/chưa chuẩn đáp án (Đã cuộn tới Câu ${remainingErrors[0].questionIndex}). Vui lòng bổ sung và bấm [Lưu & Trộn Đề]!`,
+        text: `Đã cập nhật chỉnh sửa (${parsedFromWord.length} câu hỏi từ Word A4 lúc ${savedTime}) nhưng còn ${remainingErrors.length} LỖI ĐÁP ÁN chưa sửa (Đã cuộn tới Câu ${remainingErrors[0].questionIndex}). Sửa hết 100% lỗi đáp án mới trộn được!`,
       });
     } else {
       setIsSavedAndReadyState(true);
@@ -853,7 +955,7 @@ export default function App() {
       if (parsedFromHtml.length > 0) {
         e.preventDefault();
         const serialized = serializeQuestionsToWordRawText(parsedFromHtml);
-        const issuesFromPaste = validateExamQuestions(parsedFromHtml);
+        const issuesFromPaste = getAnswerBlockingIssues(parsedFromHtml);
         setQuestions(parsedFromHtml);
         setWordRawDocumentText(serialized);
         setHasUnsavedChanges(false);
@@ -1155,6 +1257,8 @@ export default function App() {
     setActiveRightTab('LIVE_EDITOR');
     setFilterPart('ALL');
     setHighlightedQuestionId(questionId);
+    // Mở sẵn thẻ câu ở trạng thái SỬA được để giáo viên sửa ngay tại chỗ
+    setActiveFocusedQuestionId(questionId);
 
     setTimeout(() => {
       const el = questionRefs.current[questionId];
@@ -1166,6 +1270,25 @@ export default function App() {
     setTimeout(() => {
       setHighlightedQuestionId((prev) => (prev === questionId ? null : prev));
     }, 3500);
+  };
+
+  // Nhảy thẳng tới câu bị lỗi từ DANH SÁCH LỖI ĐỀ / khung cảnh báo chặn trộn
+  const jumpToIssue = (issue: ValidationIssue) => {
+    setShuffleBlockInfo(null);
+    setEditorViewMode('CARDS_3D');
+    handleScrollToQuestion(issue.questionId);
+  };
+
+  // Hiện khung cảnh báo chặn trộn khi đề gốc còn lỗi (dùng chung cho mọi nút
+  // có ý định trộn đề): liệt kê lỗi + cuộn tới lỗi đầu tiên. TUYỆT ĐỐI không
+  // trộn khi còn lỗi — không còn hộp "vẫn trộn" như trước.
+  const showShuffleBlockedWarning = (issues: ValidationIssue[]) => {
+    if (issues.length === 0) return;
+    setIsSavedAndReadyState(false);
+    setShuffleBlockInfo({ issues });
+    setActiveRightTab('LIVE_EDITOR');
+    setEditorViewMode('CARDS_3D');
+    handleScrollToQuestion(issues[0].questionId);
   };
 
   const markQuestionEdited = (questionId: string) => {
@@ -1229,6 +1352,8 @@ export default function App() {
         return {
           ...q,
           options: updatedOpts,
+          // Giáo viên đã tự tay quyết đáp án → xung đột đáp án coi như đã xử lý
+          answerConflictNote: undefined,
         };
       });
       setWordRawDocumentText(serializeQuestionsToWordRawText(next));
@@ -1259,7 +1384,11 @@ export default function App() {
             isCorrect: nextUnderline || nextRed,
           };
         });
-        return { ...q, options: updatedOpts };
+        return {
+          ...q,
+          options: updatedOpts,
+          answerConflictNote: undefined,
+        };
       });
       setWordRawDocumentText(serializeQuestionsToWordRawText(next));
       return next;
@@ -1314,7 +1443,11 @@ export default function App() {
             isRed: nextTrue,
           };
         });
-        return { ...q, subItems: updatedSubs };
+        return {
+          ...q,
+          subItems: updatedSubs,
+          answerConflictNote: undefined,
+        };
       });
       setWordRawDocumentText(serializeQuestionsToWordRawText(next));
       return next;
@@ -1351,6 +1484,7 @@ export default function App() {
               ...q,
               shortAnswer: val,
               shortAnswerDetectedBy: val.trim() ? ('MANUAL' as const) : ('NONE' as const),
+              answerConflictNote: undefined,
             }
           : q
       );
@@ -1437,11 +1571,13 @@ export default function App() {
     const targetQ = recalculated.find((q) => q.id === questionId);
     const allIssues = validateExamQuestions(recalculated);
     const targetQIssues = allIssues.filter((i) => i.questionId === questionId);
-    const allErrors = allIssues.filter((i) => i.severity === 'ERROR');
+    const allErrors = allIssues.filter((i) =>
+      ANSWER_BLOCKING_CODES.has(i.code)
+    );
     setIsSavedAndReadyState(allErrors.length === 0);
 
     if (moveToNextQuestion) {
-      const nextErrIssue = allIssues.find((i) => i.questionId !== questionId);
+      const nextErrIssue = allErrors.find((i) => i.questionId !== questionId);
       if (nextErrIssue) {
         handleScrollToQuestion(nextErrIssue.questionId);
         setStatusBanner({
@@ -1518,9 +1654,7 @@ export default function App() {
       return next;
     });
 
-    const remainingErrors = validateExamQuestions(recalculated).filter(
-      (i) => i.severity === 'ERROR'
-    );
+    const remainingErrors = getAnswerBlockingIssues(recalculated);
     setIsSavedAndReadyState(remainingErrors.length === 0);
 
     if (remainingErrors.length === 0) {
@@ -1645,9 +1779,7 @@ export default function App() {
       return next;
     });
 
-    const remainingErrors = validateExamQuestions(recalculated).filter(
-      (i) => i.severity === 'ERROR'
-    );
+    const remainingErrors = getAnswerBlockingIssues(recalculated);
     if (remainingErrors.length === 0) {
       setIsSavedAndReadyState(true);
       await executeShuffleWithQuestions(
@@ -1658,12 +1790,10 @@ export default function App() {
       );
     } else {
       setIsSavedAndReadyState(false);
-      setActiveRightTab('LIVE_EDITOR');
-      setEditorViewMode('CARDS_3D');
-      handleScrollToQuestion(remainingErrors[0].questionId);
+      showShuffleBlockedWarning(remainingErrors);
       setStatusBanner({
         type: 'INFO',
-        text: `Đã lưu cố định các câu vừa chỉnh sửa lúc ${savedTime}! Hiện còn ${remainingErrors.length} câu cần hoàn thiện đáp án (Đã chuyển tới Câu ${remainingErrors[0].questionIndex}: ${remainingErrors[0].message}) để tự động trộn đề.`,
+        text: `Đã lưu cố định các câu vừa chỉnh sửa lúc ${savedTime}! Hiện còn ${remainingErrors.length} LỖI ĐÁP ÁN cần giáo viên sửa (Đã chuyển tới Câu ${remainingErrors[0].questionIndex}: ${remainingErrors[0].message}). Sửa hết 100% lỗi đáp án mới trộn được.`,
       });
     }
   };
@@ -1681,12 +1811,10 @@ export default function App() {
     setUnsavedQuestionIds([]);
     setLastSavedAt(savedTime);
 
-    const remainingIssues = validateExamQuestions(normalized);
+    const remainingIssues = getAnswerBlockingIssues(normalized);
     if (remainingIssues.length > 0) {
       setIsSavedAndReadyState(false);
-      setActiveRightTab('LIVE_EDITOR');
-      setEditorViewMode('CARDS_3D');
-      handleScrollToQuestion(remainingIssues[0].questionId);
+      showShuffleBlockedWarning(remainingIssues);
       setStatusBanner({
         type: 'ERROR',
         text: `Hệ thống TUYỆT ĐỐI KHÔNG TỰ BỊA ĐÁP ÁN. Hiện có ${remainingIssues.length} lỗi đáp án cần giáo viên trực tiếp bổ sung/chỉnh sửa (Đã cuộn tới Câu ${remainingIssues[0].questionIndex}: ${remainingIssues[0].message}).`,
@@ -1748,41 +1876,20 @@ export default function App() {
       return next;
     });
 
-    const currentErrors = validateExamQuestions(normalized).filter(
-      (i) => i.severity === 'ERROR'
-    );
-    if (currentErrors.length > 0) {
-      // LUẬT ĐÁP ÁN (thầy chốt 20/11/2026): "giáo viên là cao nhất" — hệ thống
-      // CHỈ CẢNH BÁO, không tự sửa bất cứ đáp án nào và cũng không chặn chết
-      // việc trộn. Giáo viên thấy rõ danh sách vấn đề rồi tự quyết: sửa trước
-      // hoặc vẫn trộn ngay theo đúng 100% dấu hiệu đáp án gốc (câu chưa xác
-      // định được đáp án sẽ để trống trong bảng đáp án/QR/Excel).
-      const previewList = currentErrors
-        .slice(0, 8)
-        .map((i) => `• ${i.message}`)
-        .join('\n');
-      const teacherConfirmed = window.confirm(
-        `⚠️ CẢNH BÁO ĐÁP ÁN — phát hiện ${currentErrors.length} vấn đề cần giáo viên quyết định:\n\n${previewList}${
-          currentErrors.length > 8
-            ? `\n• … và ${currentErrors.length - 8} vấn đề nữa (xem danh sách cảnh báo màu đỏ phía trên).`
-            : ''
-        }\n\nHệ thống KHÔNG tự sửa bất kỳ đáp án nào. Nếu vẫn trộn ngay, đề sẽ giữ nguyên 100% dấu hiệu đáp án gốc; câu chưa xác định được đáp án sẽ để trống trong bảng đáp án.\n\nBấm OK để VẪN TRỘN theo quyết định của giáo viên, hoặc Hủy để quay lại sửa trước.`
-      );
-      if (!teacherConfirmed) {
-        setIsSavedAndReadyState(false);
-        setActiveRightTab('LIVE_EDITOR');
-        setEditorViewMode('CARDS_3D');
-        handleScrollToQuestion(currentErrors[0].questionId);
-        setStatusBanner({
-          type: 'ERROR',
-          text: `Đã lưu cố định các câu vừa sửa! Còn ${currentErrors.length} cảnh báo đáp án cần giáo viên xử lý (Đã cuộn tới Câu ${currentErrors[0].questionIndex}: ${currentErrors[0].message}). Hệ thống không tự sửa đáp án — giáo viên là người quyết định cao nhất.`,
-        });
-        return;
-      }
+    const currentIssues = getAnswerBlockingIssues(normalized);
+    if (currentIssues.length > 0) {
+      // CỔNG CỨNG 100% (thầy chốt 14:28–14:35 ngày 20/11/2026): còn bất kỳ
+      // LỖI ĐÁP ÁN nào là TUYỆT ĐỐI KHÔNG trộn — không còn hộp xác nhận
+      // "vẫn trộn" như trước. Nhấn Trộn khi còn lỗi chỉ bật KHUNG CẢNH BÁO
+      // liệt kê đầy đủ lỗi; giáo viên bấm vào từng lỗi để nhảy tới câu và
+      // tự sửa (hệ thống không tự sửa/bịa đáp án — giáo viên là cao nhất).
+      setIsSavedAndReadyState(false);
+      showShuffleBlockedWarning(currentIssues);
       setStatusBanner({
-        type: 'INFO',
-        text: `Giáo viên đã xác nhận vẫn trộn với ${currentErrors.length} cảnh báo đáp án chưa xử lý. Mọi dấu hiệu đáp án gốc được giữ nguyên 100%; câu chưa xác định đáp án sẽ để trống trong bảng đáp án.`,
+        type: 'ERROR',
+        text: `CHƯA THỂ TRỘN ĐỀ — còn ${currentIssues.length} LỖI ĐÁP ÁN chưa sửa (đã cuộn tới Câu ${currentIssues[0].questionIndex}: ${currentIssues[0].message}). Sửa hết 100% lỗi đáp án trong danh sách mới trộn được!`,
       });
+      return;
     }
 
     setIsSavedAndReadyState(true);
@@ -1977,6 +2084,19 @@ export default function App() {
         baseQuestions,
         config.resetNumberingPerPart
       );
+
+      // CỔNG CỨNG Ở ĐƯỜNG XUẤT GÓI ZIP: hàm này có thể tự tái sinh mã đề từ
+      // câu hiện tại — còn LỖI ĐÁP ÁN là chặn ngay, không cho lọt qua đường
+      // vòng này để trộn/xuất khi đề gốc chưa sạch 100%.
+      const zipBlockingIssues = getAnswerBlockingIssues(normalizedQuestions);
+      if (zipBlockingIssues.length > 0) {
+        showShuffleBlockedWarning(zipBlockingIssues);
+        setStatusBanner({
+          type: 'ERROR',
+          text: `CHƯA THỂ XUẤT BỘ ĐỀ — đề gốc còn ${zipBlockingIssues.length} LỖI ĐÁP ÁN chưa sửa. Sửa hết 100% lỗi đáp án trong danh sách rồi mới trộn/xuất được!`,
+        });
+        return;
+      }
 
       let targetVariants = shuffledVariants;
       if (targetVariants.length === 0 || hasUnsavedChanges) {
@@ -2941,11 +3061,11 @@ export default function App() {
 
           {/* DÒNG 3 TRÊN THANH CÔNG CỤ PHÍA TRÊN MÀN HÌNH: KIỂM TRA ĐỀ HỢP LỆ / BÁO LỖI & THAO TÁC NHANH CHO GIÁO VIÊN */}
           <div className="pt-1 border-t border-sky-200/80 flex flex-wrap items-center justify-between gap-2">
-            {validationIssues.length === 0 ? (
+            {blockingIssues.length === 0 ? (
               <div className="flex-1 min-w-[260px] px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-400 text-emerald-950 text-xs font-black flex flex-wrap items-center justify-between gap-2 shadow-2xs">
                 <div className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Đề hợp lệ 100% (Đáp án chuẩn từ giáo viên · 0 lỗi)</span>
+                  <span>Đề sạch 100% lỗi đáp án (Đáp án chuẩn từ giáo viên · 0 lỗi)</span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   { editedQuestionIds.length > 0 && isSavedAndReadyState && !hasUnsavedChanges && (
@@ -2966,12 +3086,12 @@ export default function App() {
                   <div className="flex items-center gap-1 font-black text-rose-700">
                     <AlertTriangle className="w-4 h-4 text-rose-600 animate-bounce shrink-0" />
                     <span>
-                      Cần giáo viên bổ sung/sửa ({validationIssues.length} lỗi — Không tự bịa đáp án):
+                      Còn {blockingIssues.length} LỖI ĐÁP ÁN — sửa hết mới trộn được (Không tự bịa đáp án):
                     </span>
                   </div>
 
                   <div className="flex items-center gap-1 flex-wrap">
-                    {validationIssues.slice(0, 10).map((iss, idx) => (
+                    {blockingIssues.slice(0, 10).map((iss, idx) => (
                       <button
                         key={`top-toolbar-iss-${iss.questionId}-${idx}`}
                         type="button"
@@ -2986,9 +3106,9 @@ export default function App() {
                         Câu {iss.questionIndex}
                       </button>
                     ))}
-                    {validationIssues.length > 10 && (
+                    {blockingIssues.length > 10 && (
                       <span className="font-bold text-rose-700">
-                        +{validationIssues.length - 10} câu
+                        +{blockingIssues.length - 10} câu
                       </span>
                     )}
                   </div>
@@ -3711,13 +3831,32 @@ export default function App() {
                     type="button"
                     onClick={handleRunShuffle}
                     disabled={isProcessing}
-                    title="Hoán vị câu hỏi & đáp án để sinh bộ mã đề kèm bảng đáp án khảo thí"
-                    className="px-3 py-2.5 rounded-xl font-black text-white btn-auto-scale btn-3d-rose flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer"
+                    title={
+                      blockingIssues.length > 0
+                        ? `Còn ${blockingIssues.length} lỗi đáp án — nhấn để xem danh sách lỗi cần sửa (chưa trộn được)`
+                        : 'Hoán vị câu hỏi & đáp án để sinh bộ mã đề kèm bảng đáp án khảo thí'
+                    }
+                    className={`px-3 py-2.5 rounded-xl font-black text-white btn-auto-scale flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                      blockingIssues.length > 0
+                        ? 'bg-slate-500 ring-2 ring-rose-400'
+                        : 'btn-3d-rose'
+                    }`}
                   >
                     <Shuffle className="w-4 h-4 shrink-0" />
-                    <span>Trộn Đề ({config.numVariants} Mã)</span>
+                    <span>
+                      {blockingIssues.length > 0
+                        ? `🔒 Còn ${blockingIssues.length} lỗi đáp án`
+                        : `Trộn Đề (${config.numVariants} Mã)`}
+                    </span>
                   </button>
                 </div>
+
+                {blockingIssues.length > 0 && (
+                  <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-300 rounded-lg px-2 py-1">
+                    🔒 Còn {blockingIssues.length} lỗi đáp án — nhấn nút Trộn để
+                    xem danh sách lỗi, sửa hết 100% mới trộn được.
+                  </p>
+                )}
 
                 {/* Hàng 2: 3 Nút tiện ích — [Đề Mẫu Sinh 12] & [Đề Mẫu Toán 12] & [Lưu Toàn Bộ Chỉnh Sửa] */}
                 <div className="grid grid-cols-3 gap-1.5 pt-0.5">
@@ -4014,6 +4153,50 @@ export default function App() {
           {/* ================= TAB 1: CHẾ ĐỘ XEM TRƯỚC & CHỈNH SỬA TRỰC TIẾP NỘI DUNG ĐỀ ================= */}
           {activeRightTab === 'LIVE_EDITOR' && (
             <div className="space-y-4">
+              {/* ===== PANEL DANH SÁCH LỖI ĐÁP ÁN: bấm vào từng lỗi để nhảy thẳng tới câu cần sửa; sửa xong tự lưu, lỗi tự biến mất ===== */}
+              {blockingIssues.length > 0 ? (
+                <div className="rounded-2xl border-2 border-rose-500 bg-rose-50 p-4 shadow-sm space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+                    <h3 className="text-sm sm:text-base font-black text-rose-800 uppercase">
+                      🚨 Danh sách lỗi đáp án — còn {blockingIssues.length} lỗi, sửa hết 100% mới trộn được
+                    </h3>
+                  </div>
+                  <p className="text-xs text-rose-900 font-medium">
+                    Bấm vào từng lỗi để nhảy thẳng tới câu cần sửa (câu sẽ được mở sẵn ở trạng thái sửa). Mọi chỉnh sửa đều TỰ LƯU ngay — lỗi nào sửa xong sẽ tự biến mất khỏi danh sách này. Hệ thống không tự sửa đáp án: giáo viên là người quyết định đáp án đúng.
+                  </p>
+                  <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+                    {blockingIssues.map((iss) => (
+                      <button
+                        key={iss.id}
+                        type="button"
+                        onClick={() => jumpToIssue(iss)}
+                        className="w-full text-left px-3 py-2 rounded-xl bg-white border border-rose-300 hover:border-rose-600 hover:bg-rose-100 transition-colors cursor-pointer"
+                        title="Bấm để nhảy tới câu cần sửa"
+                      >
+                        <span className="block text-[13px] font-bold text-rose-950">
+                          {iss.message}
+                        </span>
+                        {iss.suggestion && (
+                          <span className="block text-[11px] text-rose-700 font-medium mt-0.5">
+                            💡 {iss.suggestion}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                questions.length > 0 && (
+                  <div className="rounded-2xl border-2 border-emerald-500 bg-emerald-50 px-4 py-3 flex items-center gap-2 shadow-sm">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <span className="text-sm font-black text-emerald-800">
+                      ✅ Đề đã sạch 100% lỗi đáp án — không còn lỗi nào, sẵn sàng trộn đề!
+                    </span>
+                  </div>
+                )
+              )}
+
               {/* CHẾ ĐỘ SOẠN THẢO TRỰC TIẾP TRÊN TRANG GIẤY WORD A4 */}
               {editorViewMode === 'WORD_A4_PAGE' && (
                 <div className="p-6 sm:p-8 rounded-3xl word-a4-sheet space-y-4">
@@ -4098,7 +4281,7 @@ export default function App() {
                     {filteredQuestions.map((q, idx) => {
                       const prevQ = idx > 0 ? filteredQuestions[idx - 1] : null;
                       const showPartHeader = !prevQ || prevQ.part !== q.part;
-                      const questionIssues = validationIssues.filter(
+                      const questionIssues = blockingIssues.filter(
                         (iss) => iss.questionId === q.id
                       );
                       const isHighlighted = highlightedQuestionId === q.id;
@@ -6937,6 +7120,60 @@ export default function App() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== KHUNG CẢNH BÁO CHẶN TRỘN: còn lỗi đáp án là TUYỆT ĐỐI không trộn (không còn đường "vẫn trộn") ===== */}
+      {shuffleBlockInfo && (
+        <div
+          className="fixed inset-0 z-[120] bg-slate-950/60 flex items-center justify-center p-4"
+          onClick={() => setShuffleBlockInfo(null)}
+        >
+          <div
+            className="bg-white rounded-3xl border-4 border-rose-500 shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 bg-rose-600 text-white flex items-start gap-3">
+              <AlertTriangle className="w-7 h-7 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-base sm:text-lg font-black uppercase">
+                  ⛔ Chưa thể trộn đề — còn {shuffleBlockInfo.issues.length} lỗi đáp án chưa sửa
+                </h3>
+                <p className="text-xs sm:text-[13px] font-medium text-rose-50 mt-1">
+                  Đề phải sạch 100% lỗi đáp án mới trộn được. Hệ thống không tự sửa đáp án — giáo viên bấm vào từng lỗi bên dưới để nhảy thẳng tới câu cần sửa; sửa xong lỗi sẽ tự biến mất và mọi chỉnh sửa đều tự lưu.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-1.5 bg-rose-50/60">
+              {shuffleBlockInfo.issues.map((iss) => (
+                <button
+                  key={`modal-${iss.id}`}
+                  type="button"
+                  onClick={() => jumpToIssue(iss)}
+                  className="w-full text-left px-3 py-2 rounded-xl bg-white border border-rose-300 hover:border-rose-600 hover:bg-rose-100 transition-colors cursor-pointer"
+                  title="Bấm để nhảy tới câu cần sửa"
+                >
+                  <span className="block text-[13px] font-bold text-rose-950">
+                    {iss.message}
+                  </span>
+                  {iss.suggestion && (
+                    <span className="block text-[11px] text-rose-700 font-medium mt-0.5">
+                      💡 {iss.suggestion}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="px-5 py-3 bg-white border-t border-rose-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShuffleBlockInfo(null)}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-black cursor-pointer"
+              >
+                Đã hiểu — để tôi sửa
+              </button>
             </div>
           </div>
         </div>
