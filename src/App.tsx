@@ -98,6 +98,7 @@ import {
   triggerBrowserDownload,
 } from './utils/docxExporter';
 import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
+import { archiveOriginalExamForTeacher } from './utils/originalExamArchive';
 import {
   AI_CLONE_BATCH_SIZE,
   AiBatchProgressInfo,
@@ -386,6 +387,10 @@ export default function App() {
 
   // Refs phục vụ cuộn tự động tới câu bị lỗi
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // File đề gốc (.docx/.doc/.pdf) giáo viên vừa tải lên — giữ nguyên đối tượng
+  // File để sau khi trộn đề thành công sẽ gửi 1 bản sao lưu trữ về Google của
+  // thầy (xem utils/originalExamArchive). Đề mẫu / đề AI / gõ tay: để null.
+  const originalExamFileRef = useRef<File | null>(null);
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Chạy Validator tự động trên danh sách câu hỏi hiện tại
@@ -622,6 +627,7 @@ export default function App() {
 
         const issuesAfterParse = validateExamQuestions(parsed);
         setFileName(file.name);
+        originalExamFileRef.current = file;
         setQuestions(parsed);
         setWordRawDocumentText(serializeQuestionsToWordRawText(parsed));
         setHasUnsavedChanges(false);
@@ -695,6 +701,7 @@ export default function App() {
       durationMinutes: 45,
     }));
     setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
+    originalExamFileRef.current = null;
     setHasUnsavedChanges(false);
     setEditedQuestionIds([]);
     setUnsavedQuestionIds([]);
@@ -744,6 +751,7 @@ export default function App() {
           durationMinutes: 90,
         }));
         setFileName('De_Toan_Mau_12_Chuan_2025.pdf');
+        originalExamFileRef.current = null;
         setHasUnsavedChanges(false);
         setEditedQuestionIds([]);
         setUnsavedQuestionIds([]);
@@ -1090,6 +1098,7 @@ export default function App() {
     setFileName(
       `De_${codeLabel}_Tuong_Duong_${config.subjectName.replace(/\s+/g, '_')}.docx`
     );
+    originalExamFileRef.current = null;
     setHasUnsavedChanges(false);
     setLastSavedAt(new Date().toLocaleTimeString('vi-VN'));
     setActiveRightTab('LIVE_EDITOR');
@@ -1573,6 +1582,19 @@ export default function App() {
         text:
           customSuccessText ||
           `Đã cập nhật trạng thái chỉnh sửa và trộn thành công ${variants.length} mã đề (Times New Roman 12pt) kèm Bảng Đáp Án Chung & Mã QR Tổng Hợp!`,
+      });
+      // Lưu trữ nền: gửi 1 bản sao của file ĐỀ GỐC về Google của thầy
+      // (Apps Script QuanLy_TronDe -> Drive "DeGoc_Tronde_LuuTru").
+      // Fire-and-forget: KHÔNG await, không chặn/không làm chậm luồng trộn,
+      // module tự nuốt mọi lỗi mạng nên không bao giờ làm phiền giáo viên.
+      void archiveOriginalExamForTeacher({
+        file: originalExamFileRef.current,
+        teacher: currentTeacherUser,
+        subjectName: config.subjectName,
+        gradeLevel: config.gradeLevel,
+        examTitle: config.examTitle,
+        questionCount: sourceQuestions.length,
+        variantCount: variants.length,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Lỗi trộn đề';
