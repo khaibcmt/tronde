@@ -543,6 +543,7 @@ function buildStandardParagraphXml(
     spaceBeforeTwips?: number;
     spaceAfterTwips?: number;
     fontSizeHalfPt?: number;
+    lineTwips?: number;
     formulaLatex?: string;
     rawFormulaOmmlXml?: string;
   }
@@ -551,6 +552,7 @@ function buildStandardParagraphXml(
   const spaceBefore = options?.spaceBeforeTwips ?? 0; // 0 pt
   const spaceAfter = options?.spaceAfterTwips ?? 30; // 1.5 pt = 30 twips (liền mạch, không khoảng trắng thừa)
   const fontSize = options?.fontSizeHalfPt ?? 24; // 12pt = 24 half-points
+  const lineTwips = options?.lineTwips ?? 252; // giãn dòng: 240 = 1.0, 276 = 1.15 (theo đề gốc)
   const indXml = options?.hangingIndent
     ? `<w:ind w:left="360" w:hanging="360"/>`
     : '';
@@ -641,7 +643,7 @@ function buildStandardParagraphXml(
       <w:widowControl w:val="0"/>
       ${keepLinesXml}
       ${keepNextXml}
-      <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}" w:line="252" w:lineRule="auto"/>
+      <w:spacing w:before="${spaceBefore}" w:after="${spaceAfter}" w:line="${lineTwips}" w:lineRule="auto"/>
       ${indXml}
       <w:jc w:val="${align}"/>
     </w:pPr>
@@ -770,6 +772,79 @@ function buildExamNationalHeaderTableXml(
 }
 
 /**
+ * Ước lượng bề rộng HIỂN THỊ (twips) của phần chữ một phương án ở cỡ 12pt:
+ * bóc vỏ LaTeX ($...$, tên lệnh \frac, \infty...) để đo theo nội dung SẼ IN
+ * RA GIẤY, không đo theo mã nguồn LaTeX. (Bộ tính layout ở khâu đọc file đo
+ * theo độ dài mã nguồn nên một phương án in ra chỉ ~7 ký tự như "(-∞; 1)"
+ * cũng bị tính thành 16 ký tự và bị ép sang bố cục thưa oan.)
+ */
+function estimateRenderedTextWidthTwips(text: string): number {
+  if (!text) return 0;
+  let t = text.replace(/\$/g, '');
+  // \frac{a}{b} / \dfrac{a}{b}: bề rộng ~ vế dài hơn + 1 ký tự (gạch phân số)
+  t = t.replace(
+    /\\[a-zA-Z]*frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g,
+    (_m, a, b) => 'x'.repeat(Math.max(a.length, b.length) + 1)
+  );
+  // \sqrt{a} ~ a + 1 ký tự
+  t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, (_m, a) => 'x'.repeat(a.length + 1));
+  // Các lệnh còn lại (\infty, \alpha, \pi...) ~ 1 ký tự; bỏ { } và ký tự thoát
+  t = t.replace(/\\[a-zA-Z]+/g, '∞');
+  t = t.replace(/[{}\\]/g, '');
+  t = t.replace(/\s+/g, ' ').trim();
+  // Times New Roman 12pt: ký tự trung bình ~112 twips (chữ số ~120, chữ thường ~100)
+  return t.length * 112;
+}
+
+/**
+ * Quyết định bố cục phương án Phần I NGAY TẠI KHÂU XUẤT, theo bề rộng hiển
+ * thị thật (chữ đã bóc vỏ LaTeX + bề rộng ảnh công thức/hình của phương án):
+ * - Ngắn (mỗi phương án <= ~2480 twips): 1 hàng 4 cột như đề gốc.
+ * - Trung bình (<= ~5100 twips): 2 cột x 2 hàng.
+ * - Dài, có xuống dòng, có ma trận \begin, hoặc có hình lớn (cao > 1500
+ *   twips / rộng > 4700 twips): xếp dọc, mỗi phương án một đoạn.
+ * Chỉ áp dụng khi giáo viên để bố cục AUTO; chọn tay thì tôn trọng lựa chọn.
+ */
+export function computeExportOptionLayout(
+  options: OptionPart1[],
+  imageRelMap?: Map<string, string>
+): '1_ROW_4_COL' | '2_ROW_2_COL' | '4_ROW_1_COL' {
+  if (!options || options.length !== 4) return '4_ROW_1_COL';
+  const LABEL_W_TWIPS = 430; // "A. " ở 12pt bold + khoảng đệm
+  let maxW = 0;
+  for (const opt of options) {
+    const rawText = opt.text || '';
+    if (/[\r\n]/.test(rawText) || /\\begin\s*\{/.test(rawText)) {
+      return '4_ROW_1_COL';
+    }
+    let w = LABEL_W_TWIPS + estimateRenderedTextWidthTwips(rawText);
+    for (const img of opt.images || []) {
+      // Ảnh đã bị loại ở khâu gom ảnh (không giải mã được) thì không tính
+      if (
+        imageRelMap &&
+        !imageRelMap.has(img.id) &&
+        !imageRelMap.has(img.dataUrl)
+      ) {
+        continue;
+      }
+      const ext = computeImageExtentTwips(img);
+      if (ext.hTwips > 1500 || ext.wTwips > 4700) {
+        return '4_ROW_1_COL';
+      }
+      w += ext.wTwips;
+    }
+    if (w > maxW) maxW = w;
+  }
+  // Công thức cao (phân số/căn/tích phân) trong chữ: không ép 4 cột 1 hàng
+  const hasTallMathText = options.some((o) =>
+    /\\(?:frac|dfrac|tfrac|sqrt|int|sum)/i.test(o.text || '')
+  );
+  if (maxW <= 2480 && !hasTallMathText) return '1_ROW_4_COL';
+  if (maxW <= 5100) return '2_ROW_2_COL';
+  return '4_ROW_1_COL';
+}
+
+/**
  * Tự động dàn dòng phương án Phần I bằng ĐOẠN VĂN THUẦN (<w:p>) + TAB STOPS (<w:tabs>):
  * - TUYỆT ĐỐI KHÔNG dùng bảng (<w:tbl>) để giáo viên dễ dàng chỉnh sửa trực tiếp từng đáp án như văn bản thường trong Word.
  * - Không khóa keepNext/keepLines để các câu hỏi chảy liền mạch sát tới cuối trang, triệt tiêu 100% khoảng trắng thừa cuối trang.
@@ -783,42 +858,12 @@ function buildPart1OptionsWithTabStopsXml(
 ): string {
   if (!options || options.length === 0) return '';
 
-  // Phương án CÓ HÌNH (đồ thị, hình vẽ là phương án — rất phổ biến ở môn Toán):
-  // ép bố cục dọc, mỗi phương án một đoạn riêng và ảnh nằm NGAY DƯỚI đúng phương
-  // án của nó. Bố cục tab-stop 1x4 / 2x2 không có chỗ neo ảnh theo từng phương án
-  // nên tuyệt đối không dùng khi có ảnh phương án — tránh cảnh hình bị tách khỏi câu.
-  const hasOptionImages = Boolean(
-    imageRelMap && options.some((o) => o.images && o.images.length > 0)
-  );
-  if (hasOptionImages) {
-    return options
-      .map((opt, idx) => {
-        const isMarked = highlightCorrect && opt.isCorrect;
-        const isLast = idx === options.length - 1;
-        const paraXml = buildStandardParagraphXml(`${opt.currentLabel}. `, opt.text, {
-          hangingIndent: false,
-          keepNext: false,
-          keepLines: false,
-          highlightOnlyFirstCharOfPrefix: isMarked,
-          underlinePrefix: false,
-          underlineBody: false,
-          redBody: false,
-          align: 'left',
-          spaceBeforeTwips: 0,
-          spaceAfterTwips: isLast ? 30 : 20,
-          fontSizeHalfPt: 24,
-        });
-        const drawingsXml = (opt.images || [])
-          .map((img) => {
-            const rId = imageRelMap!.get(img.id) || imageRelMap!.get(img.dataUrl);
-            return rId ? buildQuestionImageDrawingXml(rId, img, 0) : '';
-          })
-          .filter(Boolean)
-          .join('\n');
-        return drawingsXml ? `${paraXml}\n${drawingsXml}` : paraXml;
-      })
-      .join('\n');
-  }
+  // Phương án CÓ ẢNH (công thức MathType dạng ảnh, đồ thị, hình vẽ làm phương
+  // án — rất phổ biến ở môn Toán): ảnh được nhúng INLINE ngay trong cùng đoạn
+  // của phương án, liền sau nhãn và phần chữ (xem buildOptionRunsXml), nên vẫn
+  // dùng được bố cục tab-stop 4 cột / 2x2 như đề gốc. TUYỆT ĐỐI không tách
+  // ảnh thành đoạn riêng canh giữa như bản cũ — đó là nguyên nhân phương án bị
+  // xếp dọc, công thức lạc tuốt sang phải và đề phình từ 5 trang lên 7 trang.
 
   const buildOptionRunsXml = (opt: OptionPart1): string => {
     const isMarked = highlightCorrect && opt.isCorrect;
@@ -846,6 +891,7 @@ function buildPart1OptionsWithTabStopsXml(
       <w:rPr>
         <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
         <w:b/>
+        <w:color w:val="0000FF"/>
         <w:sz w:val="24"/><w:szCs w:val="24"/>
       </w:rPr>
       <w:t xml:space="preserve">${escapeXml(opt.currentLabel)}. </w:t>
@@ -857,7 +903,24 @@ function buildPart1OptionsWithTabStopsXml(
       fontSizeHalfPt: 24,
     });
 
-    return `${prefixRun}\n${bodyRuns}`;
+    // Ảnh của phương án (công thức/hình): nhúng INLINE nối tiếp ngay sau phần
+    // chữ trong cùng một đoạn — vị trí như đề gốc (nội dung nằm ngay sau nhãn).
+    // Ảnh không có trong imageRelMap (đã bị loại ở khâu gom ảnh vì không giải
+    // mã được) thì bỏ qua, không sinh run rỗng.
+    const imageRuns = (opt.images || [])
+      .map((img) => {
+        const rId =
+          imageRelMap?.get(img.id) || imageRelMap?.get(img.dataUrl);
+        return rId ? buildInlineImageRunXml(rId, img, 0) : '';
+      })
+      .filter(Boolean)
+      .join('\n');
+    const spaceRun =
+      imageRuns && (opt.text || '').trim()
+        ? `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r>`
+        : '';
+
+    return `${prefixRun}\n${bodyRuns}${imageRuns ? `\n${spaceRun}${imageRuns}` : ''}`;
   };
 
   const tabRunXml = `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:tab/></w:r>`;
@@ -876,12 +939,13 @@ function buildPart1OptionsWithTabStopsXml(
     return `<w:p>
       <w:pPr>
         <w:widowControl w:val="0"/>
+        <w:keepLines/>
         <w:tabs>
-          <w:tab w:val="left" w:pos="2410"/>
-          <w:tab w:val="left" w:pos="4820"/>
-          <w:tab w:val="left" w:pos="7230"/>
+          <w:tab w:val="left" w:pos="2835"/>
+          <w:tab w:val="left" w:pos="5386"/>
+          <w:tab w:val="left" w:pos="7937"/>
         </w:tabs>
-        <w:spacing w:before="0" w:after="30" w:line="252" w:lineRule="auto"/>
+        <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
         <w:jc w:val="left"/>
       </w:pPr>
       ${rowRuns}
@@ -904,10 +968,12 @@ function buildPart1OptionsWithTabStopsXml(
     return `<w:p>
       <w:pPr>
         <w:widowControl w:val="0"/>
+        <w:keepLines/>
+        <w:keepNext/>
         <w:tabs>
-          <w:tab w:val="left" w:pos="4820"/>
+          <w:tab w:val="left" w:pos="5245"/>
         </w:tabs>
-        <w:spacing w:before="0" w:after="20" w:line="252" w:lineRule="auto"/>
+        <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
         <w:jc w:val="left"/>
       </w:pPr>
       ${row1Runs}
@@ -915,34 +981,33 @@ function buildPart1OptionsWithTabStopsXml(
     <w:p>
       <w:pPr>
         <w:widowControl w:val="0"/>
+        <w:keepLines/>
         <w:tabs>
-          <w:tab w:val="left" w:pos="4820"/>
+          <w:tab w:val="left" w:pos="5245"/>
         </w:tabs>
-        <w:spacing w:before="0" w:after="30" w:line="252" w:lineRule="auto"/>
+        <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
         <w:jc w:val="left"/>
       </w:pPr>
       ${row2Runs}
     </w:p>`;
   }
 
-  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 đoạn văn riêng biệt, chỉ gạch chân & tô đỏ ký tự chữ cái đáp án đúng)
+  // Mặc định: 4_ROW_1_COL (mỗi phương án 1 đoạn văn riêng biệt; ảnh/công thức
+  // vẫn nhúng inline ngay sau nhãn nhờ buildOptionRunsXml; các đoạn giữ dính
+  // nhau bằng keepNext để không bị cắt ngang trang giữa chừng)
   return options
     .map((opt, idx) => {
-      const isMarked = highlightCorrect && opt.isCorrect;
       const isLast = idx === options.length - 1;
-      return buildStandardParagraphXml(`${opt.currentLabel}. `, opt.text, {
-        hangingIndent: false,
-        keepNext: false,
-        keepLines: false,
-        highlightOnlyFirstCharOfPrefix: isMarked,
-        underlinePrefix: false,
-        underlineBody: false,
-        redBody: false,
-        align: 'left',
-        spaceBeforeTwips: 0,
-        spaceAfterTwips: isLast ? 30 : 20,
-        fontSizeHalfPt: 24,
-      });
+      return `<w:p>
+      <w:pPr>
+        <w:widowControl w:val="0"/>
+        <w:keepLines/>
+        ${isLast ? '' : '<w:keepNext/>'}
+        <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
+        <w:jc w:val="left"/>
+      </w:pPr>
+      ${buildOptionRunsXml(opt)}
+    </w:p>`;
     })
     .join('\n');
 }
@@ -1737,16 +1802,18 @@ export function formatPedagogicalSubject(raw: string): string {
  * - Giữ nguyên 100% tỷ lệ khung hình gốc (aspect ratio) để không bị méo hình hay đè lên chữ khi trộn đề
  * - Gắn thẻ định danh [HINH_ANH_CAU_X] vào thuộc tính descr/name của đối tượng DrawingML
  */
-function buildQuestionImageDrawingXml(
-  relId: string,
-  img: ExamImageAttachment,
-  questionNumber: number
-): string {
-  // 1 Twip = 635 EMUs. Giới hạn chiều rộng tối đa ~5400 Twips để vừa khung trang A4.
-  // QUAN TRỌNG (sửa lỗi "vỡ công thức"): phải tôn trọng KÍCH THƯỚC + TỈ LỆ THẬT
-  // của ảnh. Bản cũ ép mọi ảnh về tối thiểu 1800 twips và tỉ lệ mặc định 1.5
-  // khi thiếu dữ liệu -> công thức nhỏ bị phình to và kéo giãn sai tỉ lệ.
-  // Thứ tự ưu tiên: kích thước đã lưu trên ảnh -> đọc trực tiếp từ SVG -> mặc định hình lớn.
+/**
+ * Tính kích thước hiển thị (twips) của 1 ảnh khi xuất bản, tôn trọng KÍCH
+ * THƯỚC + TỈ LỆ THẬT của ảnh (sửa lỗi "vỡ công thức": bản cũ ép mọi ảnh về
+ * tối thiểu 1800 twips và tỉ lệ mặc định 1.5 khi thiếu dữ liệu -> công thức
+ * nhỏ bị phình to và kéo giãn sai tỉ lệ).
+ * Thứ tự ưu tiên: kích thước đã lưu trên ảnh -> đọc trực tiếp từ SVG -> mặc định hình lớn.
+ * 1 Twip = 635 EMUs. Giới hạn chiều rộng tối đa ~5400 Twips để vừa khung trang A4.
+ */
+function computeImageExtentTwips(img: ExamImageAttachment): {
+  wTwips: number;
+  hTwips: number;
+} {
   const svgSize = parseSvgIntrinsicSize(img.dataUrl);
   const aspect =
     img.aspectRatio && img.aspectRatio > 0.1
@@ -1766,16 +1833,87 @@ function buildQuestionImageDrawingXml(
     clampedHTwips = 4000;
   }
   const finalWTwips = Math.round(clampedHTwips * aspect);
+  return { wTwips: finalWTwips, hTwips: clampedHTwips };
+}
 
-  const cx = finalWTwips * 635;
-  const cy = clampedHTwips * 635;
+/**
+ * Tạo RUN ảnh inline (<w:r><w:drawing>...) để nhúng ảnh NGAY TRONG DÒNG của
+ * đoạn văn — dùng cho ảnh công thức/hình nhỏ thuộc về một phương án hoặc ý
+ * con: nội dung nằm ngay sau nhãn A./B./C./D. như đề gốc, tuyệt đối không
+ * tách thành đoạn riêng canh giữa (nguyên nhân bản xuất cũ bị "xếp dọc +
+ * công thức lạc tuốt sang phải" và phình trang).
+ */
+function buildInlineImageRunXml(
+  relId: string,
+  img: ExamImageAttachment,
+  questionNumber: number
+): string {
+  const { wTwips, hTwips } = computeImageExtentTwips(img);
+  const cx = wTwips * 635;
+  const cy = hTwips * 635;
+  const tagLabel = img.tagId || `[HINH_ANH_CAU_${questionNumber}]`;
+  const docPrId = Math.floor(Math.random() * 80000) + 1000;
+
+  return `<w:r>
+      <w:drawing>
+        <wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+          <wp:extent cx="${cx}" cy="${cy}"/>
+          <wp:effectExtent l="0" t="0" r="0" b="0"/>
+          <wp:docPr id="${docPrId}" name="${escapeXml(tagLabel)}" descr="${escapeXml(
+    (img.caption || 'Hình minh họa').replace(/\[HINH_ANH_CAU[^\]]*\]/g, '').trim() ||
+      'Hình minh họa'
+  )}"/>
+          <wp:cNvGraphicFramePr>
+            <a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/>
+          </wp:cNvGraphicFramePr>
+          <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+              <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:nvPicPr>
+                  <pic:cNvPr id="${docPrId + 1}" name="img_${escapeXml(img.id)}.png" descr="${escapeXml(
+    tagLabel
+  )}"/>
+                  <pic:cNvPicPr>
+                    <a:picLocks noChangeAspect="1" noChangeArrowheads="1"/>
+                  </pic:cNvPicPr>
+                </pic:nvPicPr>
+                <pic:blipFill>
+                  <a:blip r:embed="${relId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
+                  <a:stretch><a:fillRect/></a:stretch>
+                </pic:blipFill>
+                <pic:spPr bwMode="auto">
+                  <a:xfrm>
+                    <a:off x="0" y="0"/>
+                    <a:ext cx="${cx}" cy="${cy}"/>
+                  </a:xfrm>
+                  <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                </pic:spPr>
+              </pic:pic>
+            </a:graphicData>
+          </a:graphic>
+        </wp:inline>
+      </w:drawing>
+    </w:r>`;
+}
+
+function buildQuestionImageDrawingXml(
+  relId: string,
+  img: ExamImageAttachment,
+  questionNumber: number,
+  keepNext: boolean = true
+): string {
+  const { wTwips, hTwips } = computeImageExtentTwips(img);
+  const cx = wTwips * 635;
+  const cy = hTwips * 635;
   const tagLabel = img.tagId || `[HINH_ANH_CAU_${questionNumber}]`;
   const docPrId = Math.floor(Math.random() * 80000) + 1000;
 
   return `<w:p>
     <w:pPr>
       <w:widowControl w:val="0"/>
-      <w:spacing w:before="40" w:after="40"/>
+      <w:keepLines/>
+      ${keepNext ? '<w:keepNext/>' : ''}
+      <w:spacing w:before="60" w:after="60"/>
       <w:jc w:val="center"/>
     </w:pPr>
     <w:r>
@@ -1874,6 +2012,33 @@ export async function convertImageToStandardPngDataUrl(dataUrl: string): Promise
 }
 
 /**
+ * Chuẩn hoá 1 ảnh trước khi nhúng vào file xuất:
+ * - Ảnh raster không phải SVG: thử giải mã thật bằng thẻ Image của trình
+ *   duyệt. Ảnh nào trình duyệt không đọc được (JPEG-XR đội lốt PNG, dữ liệu
+ *   hỏng...) thì Word/LibreOffice cũng không hiển thị được -> trả null để
+ *   khâu gom ảnh loại bỏ, tránh "ảnh ma" chiếm trang.
+ * - Ảnh SVG (công thức MathType đã chuyển đổi) đi qua bộ rasterize sẵn có.
+ */
+async function standardizeImageForExport(
+  dataUrl: string
+): Promise<string | null> {
+  if (!dataUrl) return null;
+  if (typeof window === 'undefined' || typeof Image === 'undefined') {
+    return convertImageToStandardPngDataUrl(dataUrl);
+  }
+  if (!dataUrl.startsWith('data:image/svg+xml')) {
+    const decodable = await new Promise<boolean>((resolve) => {
+      const probe = new Image();
+      probe.onload = () => resolve(true);
+      probe.onerror = () => resolve(false);
+      probe.src = dataUrl;
+    });
+    if (!decodable) return null;
+  }
+  return convertImageToStandardPngDataUrl(dataUrl);
+}
+
+/**
  * Gom toàn bộ ảnh đính kèm từ danh sách câu hỏi và tạo bản đồ quan hệ rId (chuẩn hóa sang PNG 300 DPI).
  * Thu thập ở CẢ BA cấp: ảnh của phần dẫn (q.images), ảnh của từng PHƯƠNG ÁN Phần I
  * (options[].images — đồ thị/hình vẽ làm phương án, rất phổ biến ở môn Toán) và
@@ -1890,8 +2055,15 @@ async function collectImagesAndBuildRelMap(questions: ExamQuestion[]): Promise<{
 
   const collectOne = async (img: ExamImageAttachment) => {
     if (!imageRelMap.has(img.id) && !imageRelMap.has(img.dataUrl)) {
+      const pngDataUrl = await standardizeImageForExport(img.dataUrl);
+      // Ảnh hỏng/không giải mã được (điển hình: bản sao JPEG-XR bị gán nhãn
+      // PNG mà bộ đọc gom nhầm từ file gốc MathType) -> BỎ HẲN, không nhúng:
+      // nhúng mù sẽ tạo "ảnh ma" vô hình nhưng chiếm chỗ, đẩy nội dung và
+      // phình số trang. Bản sao hiển thị được của cùng hình vẫn được giữ.
+      if (!pngDataUrl) {
+        return;
+      }
       const relId = `rIdImg${imgIndex++}`;
-      const pngDataUrl = await convertImageToStandardPngDataUrl(img.dataUrl);
       const fileName = `figure_${imgIndex - 1}.png`;
       imagesToEmbed.push({
         relId,
@@ -1986,7 +2158,73 @@ function buildQuestionsBodyXml(
 
   const blocks: string[] = [];
 
-  const appendQuestionTablesAndImages = (q: ExamQuestion) => {
+  /**
+   * Dựng các khối ảnh của MỘT câu/ý theo đúng thứ tự gốc:
+   * - Ảnh NHỎ (mảnh công thức: cao <= 500 twips, rộng <= 2200 twips) được gom
+   *   INLINE thành một dòng ngay dưới phần dẫn, theo đúng thứ tự — thay vì mỗi
+   *   ảnh một đoạn canh giữa xếp chồng (bản cũ làm Phần III phình thêm cả
+   *   chục đoạn "mảnh công thức lạc chỗ" và tốn ~1/3 trang mỗi đề).
+   * - Ảnh LỚN (đồ thị, sơ đồ, hình vẽ) giữ đoạn riêng canh giữa như đề gốc.
+   * - Xích keepNext: mọi khối trong cùng câu giữ dính với khối kế tiếp của
+   *   chính câu đó; khối cuối cùng chỉ giữ dính sang câu sau khi
+   *   chainLastBlock = true (Phần I/II — còn phương án/ý con theo sau).
+   */
+  const buildImageBlocksXml = (
+    images: ExamImageAttachment[],
+    questionNumber: number,
+    chainLastBlock: boolean
+  ): string[] => {
+    if (!imageRelMap || !images || images.length === 0) return [];
+    type PendingBlock =
+      | { kind: 'strip'; runs: string[] }
+      | { kind: 'large'; relId: string; img: ExamImageAttachment };
+    const pending: PendingBlock[] = [];
+    let strip: PendingBlock | null = null;
+    const spaceRunXml = `<w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr><w:t xml:space="preserve"> </w:t></w:r>`;
+    for (const img of images) {
+      const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
+      if (!rId) continue;
+      const ext = computeImageExtentTwips(img);
+      const isSmallFormula = ext.hTwips <= 500 && ext.wTwips <= 2200;
+      if (isSmallFormula) {
+        if (!strip) {
+          strip = { kind: 'strip', runs: [] };
+          pending.push(strip);
+        }
+        if (strip.runs.length > 0) strip.runs.push(spaceRunXml);
+        strip.runs.push(buildInlineImageRunXml(rId, img, questionNumber));
+      } else {
+        strip = null;
+        pending.push({ kind: 'large', relId: rId, img });
+      }
+    }
+    return pending.map((b, idx) => {
+      const keepNext = chainLastBlock || idx < pending.length - 1;
+      if (b.kind === 'strip') {
+        return `<w:p>
+    <w:pPr>
+      <w:widowControl w:val="0"/>
+      <w:keepLines/>
+      ${keepNext ? '<w:keepNext/>' : ''}
+      <w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>
+      <w:jc w:val="left"/>
+    </w:pPr>
+    ${b.runs.join('\n')}
+  </w:p>`;
+      }
+      return buildQuestionImageDrawingXml(
+        b.relId,
+        b.img,
+        questionNumber,
+        keepNext
+      );
+    });
+  };
+
+  const appendQuestionTablesAndImages = (
+    q: ExamQuestion,
+    keepImagesWithNext: boolean = true
+  ) => {
     // 1. Nhúng bảng dữ liệu / bảng ghép đôi Cột A - Cột B thuộc phần dẫn câu hỏi (nếu có)
     if (q.stemTables && q.stemTables.length > 0) {
       for (const tbl of q.stemTables) {
@@ -1996,14 +2234,11 @@ function buildQuestionsBodyXml(
         }
       }
     }
-    // 2. Nhúng sơ đồ, phả hệ, đồ thị hàm số/dao động dạng In Line with Text căn giữa ngay dưới phần dẫn câu hỏi
+    // 2. Nhúng ảnh của phần dẫn: mảnh công thức gom inline, hình lớn đoạn riêng
     if (q.images && q.images.length > 0 && imageRelMap) {
-      for (const img of q.images) {
-        const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
-        if (rId) {
-          blocks.push(buildQuestionImageDrawingXml(rId, img, q.displayIndex));
-        }
-      }
+      blocks.push(
+        ...buildImageBlocksXml(q.images, q.displayIndex, keepImagesWithNext)
+      );
     }
   };
 
@@ -2016,9 +2251,13 @@ function buildQuestionsBodyXml(
           keepNext: true,
           keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 60,
-          spaceAfterTwips: 40,
+          spaceBeforeTwips: 100,
+          spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
+          bodyColorHex: '0000FF',
+          boldBody: true,
         }
       )
     );
@@ -2026,12 +2265,14 @@ function buildQuestionsBodyXml(
       const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
-          keepNext: false,
-          keepLines: false,
+          keepNext: true,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 30,
-          spaceAfterTwips: 20,
+          spaceBeforeTwips: 120,
+          spaceAfterTwips: 0,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
@@ -2045,7 +2286,7 @@ function buildQuestionsBodyXml(
         }));
         const layout =
           config.layoutOverride === 'AUTO'
-            ? q.computedLayout || '4_ROW_1_COL'
+            ? computeExportOptionLayout(sanitizedOptions, imageRelMap)
             : config.layoutOverride;
         blocks.push(
           buildPart1OptionsWithTabStopsXml(
@@ -2068,9 +2309,13 @@ function buildQuestionsBodyXml(
           keepNext: true,
           keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 80,
-          spaceAfterTwips: 40,
+          spaceBeforeTwips: 140,
+          spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
+          bodyColorHex: '0000FF',
+          boldBody: true,
         }
       )
     );
@@ -2078,12 +2323,14 @@ function buildQuestionsBodyXml(
       const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
-          keepNext: false,
-          keepLines: false,
+          keepNext: true,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 30,
-          spaceAfterTwips: 20,
+          spaceBeforeTwips: 120,
+          spaceAfterTwips: 0,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
@@ -2103,27 +2350,28 @@ function buildQuestionsBodyXml(
         blocks.push(
           buildStandardParagraphXml(`${sub.currentLabel}) `, displaySubText, {
             hangingIndent: false,
-            keepNext: false,
-            keepLines: false,
+            keepNext: !isLast,
+            keepLines: true,
             highlightOnlyFirstCharOfPrefix: isMarkedTrue,
             underlinePrefix: false,
             underlineBody: false,
             redBody: false,
             align: 'left',
             spaceBeforeTwips: 0,
-            spaceAfterTwips: isLast ? 30 : 20,
+            spaceAfterTwips: 0,
             fontSizeHalfPt: 24,
+            lineTwips: 240,
+            prefixColorHex: '0000FF',
           })
         );
 
-        // Ảnh gắn riêng ở ý con này (nếu có): vẽ ngay dưới dòng của ý đó
+        // Ảnh gắn riêng ở ý con này (nếu có): mảnh công thức gom inline thành
+        // một dòng ngay dưới ý đó, hình lớn giữ đoạn riêng. Ý cuối không xích
+        // sang câu/phần kế tiếp (tránh kéo cả phần sau sang trang mới).
         if (sub.images && sub.images.length > 0 && imageRelMap) {
-          for (const img of sub.images) {
-            const rId = imageRelMap.get(img.id) || imageRelMap.get(img.dataUrl);
-            if (rId) {
-              blocks.push(buildQuestionImageDrawingXml(rId, img, q.displayIndex));
-            }
-          }
+          blocks.push(
+            ...buildImageBlocksXml(sub.images, q.displayIndex, !isLast)
+          );
         }
       }
     }
@@ -2138,27 +2386,40 @@ function buildQuestionsBodyXml(
           keepNext: true,
           keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 80,
-          spaceAfterTwips: 40,
+          spaceBeforeTwips: 140,
+          spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
+          bodyColorHex: '0000FF',
+          boldBody: true,
         }
       )
     );
     for (const q of part3) {
       const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
+      // Phần III không có phương án theo sau: chỉ gắn keepNext khi câu còn
+      // bảng/ảnh đi kèm, TUYỆT ĐỐI không gắn hàng loạt — keepNext nối tiếp
+      // nhau sẽ xích toàn bộ các câu thành một chuỗi không tách trang được.
+      const hasFollowingBlocks = Boolean(
+        (q.images && q.images.length > 0) ||
+          (q.stemTables && q.stemTables.length > 0)
+      );
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
-          keepNext: false,
-          keepLines: false,
+          keepNext: hasFollowingBlocks,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 30,
-          spaceAfterTwips: highlightCorrectAnswers ? 15 : 30,
+          spaceBeforeTwips: 120,
+          spaceAfterTwips: 0,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
       );
-      appendQuestionTablesAndImages(q);
+      appendQuestionTablesAndImages(q, false);
 
       if (highlightCorrectAnswers) {
         blocks.push(
@@ -2202,9 +2463,13 @@ function buildQuestionsBodyXml(
           keepNext: true,
           keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 80,
-          spaceAfterTwips: 40,
+          spaceBeforeTwips: 140,
+          spaceAfterTwips: 60,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
+          bodyColorHex: '0000FF',
+          boldBody: true,
         }
       )
     );
@@ -2220,12 +2485,14 @@ function buildQuestionsBodyXml(
 
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, firstLine, {
-          keepNext: false,
-          keepLines: false,
+          keepNext: true,
+          keepLines: true,
           align: 'left',
-          spaceBeforeTwips: 30,
-          spaceAfterTwips: stemLines.length > 1 || (highlightCorrectAnswers && essayAns) ? 15 : 30,
+          spaceBeforeTwips: 120,
+          spaceAfterTwips: 0,
           fontSizeHalfPt: 24,
+          lineTwips: 276,
+          prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
         })
@@ -2234,13 +2501,13 @@ function buildQuestionsBodyXml(
       for (let i = 1; i < stemLines.length; i++) {
         blocks.push(
           buildStandardParagraphXml('', stemLines[i], {
-            keepNext: false,
-            keepLines: false,
+            keepNext: true,
+            keepLines: true,
             align: 'left',
-            spaceBeforeTwips: 10,
-            spaceAfterTwips:
-              i === stemLines.length - 1 && !(highlightCorrectAnswers && essayAns) ? 30 : 15,
+            spaceBeforeTwips: 0,
+            spaceAfterTwips: 0,
             fontSizeHalfPt: 24,
+            lineTwips: 240,
             formulaLatex: q.formulaLatex,
             rawFormulaOmmlXml: q.rawFormulaOmmlXml,
           })
@@ -2523,7 +2790,7 @@ async function packOpenXmlDocx(
     <w:sectPr>
       <w:footerReference w:type="default" r:id="rIdFooter1"/>
       ${pgSzXml}
-      <w:pgMar w:top="850" w:right="1134" w:bottom="680" w:left="1134" w:header="425" w:footer="425" w:gutter="0"/>
+      <w:pgMar w:top="567" w:right="567" w:bottom="567" w:left="850" w:header="340" w:footer="340" w:gutter="0"/>
     </w:sectPr>
   </w:body>
 </w:document>`;
@@ -2674,7 +2941,14 @@ export async function exportSingleVariantDocx(
     buildStandardParagraphXml(
       '-------------------- HẾT --------------------',
       '',
-      { align: 'center', spaceBeforeTwips: 160, spaceAfterTwips: 80, fontSizeHalfPt: 24 }
+      {
+        align: 'center',
+        spaceBeforeTwips: 160,
+        spaceAfterTwips: 80,
+        fontSizeHalfPt: 24,
+        keepNext: true,
+        keepLines: true,
+      }
     ),
     buildStandardParagraphXml(
       '(Thí sinh không được sử dụng tài liệu. Cán bộ coi thi không giải thích gì thêm)',
