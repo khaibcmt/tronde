@@ -1,11 +1,17 @@
 // ============================================================================
-// LƯU TRỮ ĐỀ GỐC VỀ GOOGLE CỦA THẦY (QuanLy_TronDe)
+// LƯU TRỮ ĐỀ GỐC VỀ KHO FIREBASE CỦA THẦY (giống cơ chế app Đấu Trường 3D)
 // ----------------------------------------------------------------------------
 // Mỗi khi giáo viên trộn đề THÀNH CÔNG từ một file đề gốc đã tải lên
 // (.docx / .doc / .pdf), module này gửi nền MỘT bản sao của chính file gốc đó
-// về Google Apps Script của thầy (cùng endpoint với đăng ký giáo viên).
-// Apps Script (hàm xử lý action "luu_de_goc") sẽ lưu file vào thư mục Drive
-// "DeGoc_Tronde_LuuTru" và ghi log vào Sheet QuanLy_Tronde.
+// vào Firebase Realtime Database của project "edumaster-online" (cùng project
+// mà app TroChoi/Đấu Trường 3D đang dùng), tại node riêng của tronde:
+//
+//     tronde_de_goc/<deviceId>/<pushKey> = { ...thông tin..., dataBase64 }
+//
+// Tổ chức theo deviceId chính là "thư mục theo mã máy": mở Firebase Console
+// -> Realtime Database -> node tronde_de_goc -> chọn mã máy là thấy toàn bộ
+// đề gốc của máy đó. Ghi bằng REST POST (Firebase tự sinh push key), không
+// cần SDK — giống phong cách ghi kc3d_* của trochoi.
 //
 // Nguyên tắc an toàn:
 // - Chạy nền, KHÔNG await trong luồng trộn đề, KHÔNG bao giờ ném lỗi ra ngoài.
@@ -13,18 +19,32 @@
 //   sẽ tự thử lại.
 // - Mỗi file phân biệt theo (tên + dung lượng + mốc sửa) chỉ gửi 1 lần/phiên.
 // - File gốc lớn hơn MAX_ORIGINAL_FILE_BYTES thì bỏ qua có chủ đích:
-//   Apps Script giới hạn thân POST khoảng 50 MB, mà base64 phình ~1,37 lần,
-//   nên 30 MB file gốc (~41 MB dữ liệu gửi) là ngưỡng an toàn.
-// - Phía Google: cần hàm xử lý action "luu_de_goc" trong Apps Script
-//   QuanLy_TronDe (xem HUONG_DAN_DAN_APPS_SCRIPT.md trong thư mục bàn giao).
+//   RTDB là cơ sở dữ liệu JSON thời gian thực — mỗi lần ghi/đọc phải tải
+//   trọn một giá trị JSON, mà base64 làm dữ liệu phình ~1,37 lần. File gốc
+//   10 MB thành ~13,7 MB JSON trong MỘT lần ghi đã là rất nặng cho RTDB;
+//   đề .docx/.pdf thực tế chỉ vài trăm KB tới vài MB nên trần 10 MB vừa
+//   thừa sức chứa nhu cầu thật, vừa bảo vệ kho khỏi các payload khổng lồ.
+// - Đường ĐĂNG KÝ giáo viên về Apps Script / Sheet QuanLy_TronDe nằm ở
+//   TeacherAuthGateModal, KHÔNG liên quan và không bị đụng tới ở đây.
 // ============================================================================
 
-export const TRONDE_GOOGLE_SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbzwdXDqUQbWShXFFYrgX17fCnhi0jc4TLFaoECm6DvTi8zcDO8i37dsxnLQfErZNRfj/exec';
+export const TRONDE_FIREBASE_RTDB_URL =
+  'https://edumaster-online-default-rtdb.asia-southeast1.firebasedatabase.app';
 
-export const MAX_ORIGINAL_FILE_BYTES = 30 * 1024 * 1024; // 30 MB
+export const MAX_ORIGINAL_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 const SEND_TIMEOUT_MS = 120000;
+
+// Node gốc của kho lưu trữ đề gốc tronde trên Firebase.
+export const ARCHIVE_ROOT_NODE = 'tronde_de_goc';
+
+// URL REST để POST (push) một bản ghi vào "thư mục" của một mã máy.
+export function archiveNodeUrl(deviceId: string): string {
+  const bucket = (deviceId || '').trim() || 'KHONG_RO_MA_MAY';
+  return `${TRONDE_FIREBASE_RTDB_URL}/${ARCHIVE_ROOT_NODE}/${encodeURIComponent(
+    bucket
+  )}.json`;
+}
 
 export interface OriginalExamTeacherInfo {
   gmail?: string;
@@ -94,7 +114,7 @@ function readDeviceIdFallback(teacher: OriginalExamTeacherInfo | null): string {
 }
 
 /**
- * Gửi bản sao đề gốc về Google của thầy. Hàm này KHÔNG bao giờ ném lỗi:
+ * Gửi bản sao đề gốc về kho Firebase của thầy. Hàm này KHÔNG bao giờ ném lỗi:
  * mọi sự cố đều được nuốt im lặng và trả về qua trường `reason`.
  */
 export async function archiveOriginalExamForTeacher(
@@ -120,24 +140,22 @@ export async function archiveOriginalExamForTeacher(
       return { sent: false, reason: 'encode-error' };
     }
 
-    const payload = {
-      action: 'luu_de_goc',
+    const deviceId = readDeviceIdFallback(args.teacher);
+    const record = {
       filename: file.name,
       mime: guessMime(file),
       sizeBytes: file.size,
+      teacherGmail: args.teacher?.gmail || '',
+      teacherName: args.teacher?.name || '',
+      schoolName: args.teacher?.school || '',
+      deviceId,
+      subjectName: args.subjectName || '',
+      gradeLevel: args.gradeLevel || '',
+      examTitle: args.examTitle || '',
+      questionCount: args.questionCount ?? null,
+      variantCount: args.variantCount ?? null,
+      clientTime: new Date().toISOString(),
       dataBase64,
-      meta: {
-        teacherGmail: args.teacher?.gmail || '',
-        teacherName: args.teacher?.name || '',
-        schoolName: args.teacher?.school || '',
-        deviceId: readDeviceIdFallback(args.teacher),
-        subjectName: args.subjectName || '',
-        gradeLevel: args.gradeLevel || '',
-        examTitle: args.examTitle || '',
-        questionCount: args.questionCount ?? null,
-        variantCount: args.variantCount ?? null,
-        clientTime: new Date().toISOString(),
-      },
     };
 
     const controller =
@@ -146,12 +164,12 @@ export async function archiveOriginalExamForTeacher(
       ? setTimeout(() => controller.abort(), SEND_TIMEOUT_MS)
       : null;
     try {
-      const response = await fetch(TRONDE_GOOGLE_SCRIPT_URL, {
+      // REST POST tới node của mã máy: Firebase tự sinh push key cho bản ghi,
+      // giống cách trochoi ghi dữ liệu lên cùng project này.
+      const response = await fetch(archiveNodeUrl(deviceId), {
         method: 'POST',
-        // text/plain = "simple request", tránh CORS preflight với Apps Script
-        // (giống hệt cách cổng xác thực giáo viên đang gọi).
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record),
         signal: controller ? controller.signal : undefined,
       });
       if (!response || !response.ok) {
