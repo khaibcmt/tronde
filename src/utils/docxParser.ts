@@ -5,6 +5,7 @@ import {
   ExamQuestion,
   ExamStemTable,
   ExamTableCell,
+  InlineImagePlacement,
   OptionPart1,
   PartType,
   SubItemPart2,
@@ -161,6 +162,22 @@ export function validateExamQuestions(
         : q.part === 'PART_3'
         ? 'Phần III'
         : 'Phần IV (Tự luận)';
+
+    // Xung đột giữa dấu hiệu đáp án trong thân câu và bảng đáp án/lời giải:
+    // hệ thống đã giữ nguyên dấu hiệu trong thân câu (không tự sửa bất cứ đáp
+    // án nào) — cảnh báo này để giáo viên tự quyết định đáp án đúng.
+    if (q.answerConflictNote) {
+      issues.push({
+        id: `issue-${q.id}-answer-conflict`,
+        questionId: q.id,
+        part: q.part,
+        questionIndex: q.displayIndex,
+        severity: 'WARNING',
+        code: 'ANSWER_KEY_CONFLICT',
+        message: `${partLabel} - Câu ${q.displayIndex}: ${q.answerConflictNote}`,
+        suggestion: 'Đối chiếu với đề gốc và sửa đáp án ngay trong thẻ câu hỏi này nếu cần.',
+      });
+    }
 
     // Bắt lỗi MẤT CÔNG THỨC: vị trí công thức bị rơi khi đọc file được đánh dấu
     // [MẤT CÔNG THỨC] thay vì tự bịa nội dung thay thế — giáo viên phải bổ sung từ đề gốc.
@@ -3221,6 +3238,7 @@ export function enforceStrictFourOptionsPart1(
           currentLabel: seg.label,
           text: safeText,
           images: prevOpt?.images,
+          inlineImages: prevOpt?.inlineImages,
           isUnderline,
           isRed,
           isCorrect,
@@ -3233,6 +3251,7 @@ export function enforceStrictFourOptionsPart1(
         isCorrect: boolean;
         isUnderline: boolean;
         isRed: boolean;
+        inlineImages?: InlineImagePlacement[];
       }[] = [];
       for (const opt of existingOpts) {
         const subParts = opt.text
@@ -3247,6 +3266,7 @@ export function enforceStrictFourOptionsPart1(
               isCorrect: idx === 0 ? opt.isCorrect : false,
               isUnderline: idx === 0 ? opt.isUnderline : false,
               isRed: idx === 0 ? opt.isRed : false,
+              inlineImages: idx === 0 ? opt.inlineImages : undefined,
             });
           });
         } else {
@@ -3255,6 +3275,7 @@ export function enforceStrictFourOptionsPart1(
             isCorrect: opt.isCorrect,
             isUnderline: opt.isUnderline,
             isRed: opt.isRed,
+            inlineImages: opt.inlineImages,
           });
         }
       }
@@ -3274,6 +3295,7 @@ export function enforceStrictFourOptionsPart1(
           currentLabel: lbl,
           text: safeText,
           images: prevOpt?.images,
+          inlineImages: item?.inlineImages || prevOpt?.inlineImages,
           isUnderline,
           isRed,
           isCorrect,
@@ -3384,6 +3406,12 @@ export function enforceStrictFourSubItemsPart2(
         isUnderline,
         isRed,
         isTrue,
+        // Ý được coi là có dấu hiệu tường minh khi: có dấu (Đ)/(S)/* trong
+        // chính văn bản ý, hoặc trạng thái Đúng của nó vốn đến từ một dấu hiệu
+        // (gạch chân/tô đỏ/dấu sao) — giá trị isTrue=true không thể tự sinh ra
+        // nếu không có dấu hiệu nào trong đề gốc.
+        isTrueExplicit:
+          explicitTrue !== null ? true : Boolean(s.isTrueExplicit) || isTrue,
       };
     });
   } else {
@@ -3488,9 +3516,12 @@ export function enforceStrictFourSubItemsPart2(
           currentLabel: seg.label,
           text: safeText,
           images: prevSub?.images,
+          inlineImages: prevSub?.inlineImages,
           isUnderline,
           isRed,
           isTrue,
+          isTrueExplicit:
+            explicitTrue !== null ? true : Boolean(prevSub?.isTrueExplicit) || isTrue,
         };
       });
     } else {
@@ -3499,6 +3530,8 @@ export function enforceStrictFourSubItemsPart2(
         isTrue: boolean;
         isUnderline: boolean;
         isRed: boolean;
+        isTrueExplicit: boolean;
+        inlineImages?: InlineImagePlacement[];
       }[] = [];
 
       for (const sub of existingSubs) {
@@ -3508,12 +3541,14 @@ export function enforceStrictFourSubItemsPart2(
           .filter(Boolean);
 
         if (subParts.length > 1) {
-          subParts.forEach((sp) => {
+          subParts.forEach((sp, spIdx) => {
             expandedPool.push({
               text: sp,
               isTrue: sub.isTrue,
               isUnderline: sub.isUnderline,
               isRed: sub.isRed,
+              isTrueExplicit: Boolean(sub.isTrueExplicit) || sub.isTrue,
+              inlineImages: spIdx === 0 ? sub.inlineImages : undefined,
             });
           });
         } else {
@@ -3522,6 +3557,8 @@ export function enforceStrictFourSubItemsPart2(
             isTrue: sub.isTrue,
             isUnderline: sub.isUnderline,
             isRed: sub.isRed,
+            isTrueExplicit: Boolean(sub.isTrueExplicit) || sub.isTrue,
+            inlineImages: sub.inlineImages,
           });
         }
       }
@@ -3536,9 +3573,11 @@ export function enforceStrictFourSubItemsPart2(
           currentLabel: lbl,
           text: safeText,
           images: existingSubs[idx]?.images,
+          inlineImages: item?.inlineImages || existingSubs[idx]?.inlineImages,
           isUnderline: item ? Boolean(item.isUnderline) : false,
           isRed: item ? Boolean(item.isRed) : false,
           isTrue: item ? Boolean(item.isTrue) : false,
+          isTrueExplicit: item ? Boolean(item.isTrueExplicit) : false,
         };
       });
     }
@@ -4305,6 +4344,40 @@ function distributeRunImagesByMarker(
 }
 
 /**
+ * Ghi lại VỊ TRÍ INLINE của từng ảnh trong một đoạn, dựa trên thứ tự run gốc:
+ * với mỗi ảnh, lưu ~30 ký tự chữ ngay trước và ngay sau vị trí của ảnh trong
+ * văn bản đã nối của đoạn. Các ký tự đánh dấu định dạng nội bộ (*, #) bị loại
+ * khỏi neo vì chúng không tồn tại trong văn bản câu hỏi sau khi tách.
+ * Ảnh không nằm trong run nào (chỉ có ở mức đoạn) thì không có neo — vị trí
+ * inline của chúng không khôi phục được và sẽ xuất theo cách cũ.
+ */
+function computeImageAnchorsFromRuns(
+  runs: ParsedRun[]
+): Map<string, { before: string; after: string }> {
+  const map = new Map<string, { before: string; after: string }>();
+  if (!runs || runs.length === 0) return map;
+  const joined = runs.map((r) => r.text).join('');
+  let cursor = 0;
+  for (const run of runs) {
+    const runEnd = cursor + run.text.length;
+    if (run.images) {
+      for (const img of run.images) {
+        if (!map.has(img.id)) {
+          const clean = (s: string) =>
+            normalizeVietnameseExamText(s).replace(/[*#]/g, '').trim();
+          map.set(img.id, {
+            before: clean(joined.slice(Math.max(0, runEnd - 30), runEnd)),
+            after: clean(joined.slice(runEnd, runEnd + 30)),
+          });
+        }
+      }
+    }
+    cursor = runEnd;
+  }
+  return map;
+}
+
+/**
  * Phân tích danh sách ParsedParagraph thành danh sách ExamQuestion chuẩn 3-4 phần
  * (Dùng chung cho cả bộ đọc .docx, .pdf và Trình soạn thảo văn bản Word trực tiếp)
  */
@@ -4332,6 +4405,55 @@ export function buildQuestionsFromParsedParagraphs(
   // câu hỏi thật thì nó thành phần mở đầu của thân câu đó; gặp tiêu đề phần
   // hoặc mốc HẾT thì bị bỏ. (Chuẩn bộ cắt đề trochoi, 20/11/2026.)
   let deferredContextParas: ParsedParagraph[] = [];
+
+  // BẢN ĐỒ NEO VỊ TRÍ INLINE CỦA ẢNH (toàn bộ đề): imageId -> {before, after}
+  // tính từ runs gốc của mọi đoạn. Dùng để gắn InlineImagePlacement vào thân
+  // câu / phương án / ý con khi phân bổ ảnh, để khi xuất bản ảnh nhỏ nằm lại
+  // đúng giữa câu như đề gốc thay vì bị gom xuống một dòng riêng.
+  const imageAnchorMap = new Map<string, { before: string; after: string }>();
+  // Cầu nối qua dataUrl: tầng trích đoạn tạo HAI object ảnh khác id cho cùng
+  // một hình vật lý (một cho mức run, một cho mức đoạn) — tra theo id không
+  // trúng thì tra tiếp theo dataUrl (duy nhất theo file media trong gói docx).
+  const imageAnchorByDataUrl = new Map<string, { before: string; after: string }>();
+  for (const p of paragraphs) {
+    const m = computeImageAnchorsFromRuns(p.runs || []);
+    for (const run of p.runs || []) {
+      for (const im of run.images || []) {
+        if (im.dataUrl && !imageAnchorByDataUrl.has(im.dataUrl)) {
+          const a = m.get(im.id);
+          if (a) imageAnchorByDataUrl.set(im.dataUrl, a);
+        }
+      }
+    }
+    m.forEach((v, k) => {
+      if (!imageAnchorMap.has(k)) imageAnchorMap.set(k, v);
+    });
+  }
+  const placementsFor = (
+    images?: ExamImageAttachment[]
+  ): InlineImagePlacement[] | undefined => {
+    const out: InlineImagePlacement[] = [];
+    for (const im of images || []) {
+      const a =
+        imageAnchorMap.get(im.id) ||
+        (im.dataUrl ? imageAnchorByDataUrl.get(im.dataUrl) : undefined);
+      if (a && (a.before || a.after)) {
+        out.push({ imageId: im.id, before: a.before, after: a.after });
+      }
+    }
+    return out.length > 0 ? out : undefined;
+  };
+  const mergeStemPlacements = (images?: ExamImageAttachment[]) => {
+    if (!currentQuestion) return;
+    const pls = placementsFor(images);
+    if (!pls) return;
+    const existing = currentQuestion.stemInlineImages || [];
+    const seen = new Set(existing.map((x) => x.imageId));
+    const added = pls.filter((x) => !seen.has(x.imageId));
+    if (added.length > 0) {
+      currentQuestion.stemInlineImages = [...existing, ...added];
+    }
+  };
 
   const parseTrailingAnswerTextLine = (lineStr: string) => {
     const cleanLine = normalizeVietnameseExamText(lineStr).trim();
@@ -4466,6 +4588,7 @@ export function buildQuestionsFromParsedParagraphs(
       hasFormula: para.hasFormula || /[√∫∑πΔαβλθ±×÷≤≥≠∈∉→∞]/.test(stemContent),
       hasImage: initialImages.length > 0,
       images: initialImages.length > 0 ? initialImages : undefined,
+      stemInlineImages: placementsFor(initialImages),
       rawFormulaOmmlXml: para.rawFormulaXml,
       formulaLatex: para.formulaLatex,
       options: currentPart === 'PART_1' ? [] : undefined,
@@ -4645,6 +4768,7 @@ export function buildQuestionsFromParsedParagraphs(
         if (para.images && para.images.length > 0) {
           currentQuestion.hasImage = true;
           currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+          mergeStemPlacements(para.images);
         }
       } else if (!currentQuestion && para.images && para.images.length > 0) {
         pendingStemParagraphs.push(para);
@@ -4707,6 +4831,7 @@ export function buildQuestionsFromParsedParagraphs(
         if (currentQuestion && !inQuestionSolutionBlock) {
           currentQuestion.hasImage = true;
           currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+          mergeStemPlacements(para.images);
         } else if (!currentQuestion) {
           pendingStemParagraphs.push({ ...para, fullText: '', runs: [] });
         }
@@ -4799,12 +4924,25 @@ export function buildQuestionsFromParsedParagraphs(
         currentQuestion.shortAnswerDetectedBy = 'KEYWORD';
       } else if (currentQuestion.part === 'PART_1' && /^[A-D]$/i.test(expBody) && currentQuestion.options) {
         const target = expBody.toUpperCase() as 'A' | 'B' | 'C' | 'D';
-        currentQuestion.options = currentQuestion.options.map((o) => ({
-          ...o,
-          isCorrect: o.originalLabel === target,
-          isUnderline: o.originalLabel === target,
-          isRed: o.originalLabel === target,
-        }));
+        // LUẬT ĐÁP ÁN (thầy chốt 20/11/2026): dòng "Đáp án: X" trong phần lời
+        // giải CHỈ được áp khi trong thân câu CHƯA có phương án nào được đánh
+        // dấu đúng. Nếu thân câu đã có dấu hiệu riêng mà khác với lời giải thì
+        // GIỮ NGUYÊN dấu hiệu trong thân câu và ghi nhận xung đột để cảnh báo
+        // giáo viên — TUYỆT ĐỐI không ghi đè đáp án đã có.
+        const markedOpts = currentQuestion.options.filter((o) => o.isCorrect);
+        if (markedOpts.length === 0) {
+          currentQuestion.options = currentQuestion.options.map((o) => ({
+            ...o,
+            isCorrect: o.originalLabel === target,
+            isUnderline: o.originalLabel === target,
+            isRed: o.originalLabel === target,
+          }));
+        } else if (!markedOpts.some((o) => o.originalLabel === target)) {
+          currentQuestion.answerConflictNote =
+            `Phần lời giải ghi đáp án là ${target} nhưng trong thân câu phương án ` +
+            `${markedOpts.map((o) => o.originalLabel).join(', ')} đang được đánh dấu đúng. ` +
+            `Hệ thống giữ nguyên dấu hiệu trong thân câu; giáo viên vui lòng kiểm tra lại đáp án của câu này.`;
+        }
       }
       inQuestionSolutionBlock = true;
       if (expBody) {
@@ -4860,6 +4998,7 @@ export function buildQuestionsFromParsedParagraphs(
       if (currentQuestion) {
         currentQuestion.hasImage = true;
         currentQuestion.images = [...(currentQuestion.images || []), ...para.images];
+        mergeStemPlacements(para.images);
         if (text && !currentHasCompleteOptions) {
           currentQuestion.stemText += (currentQuestion.stemText ? ' ' : '') + text;
         }
@@ -5036,6 +5175,7 @@ export function buildQuestionsFromParsedParagraphs(
       if (keptParaImages.length > 0) {
         currentQuestion.hasImage = true;
         currentQuestion.images = [...(currentQuestion.images || []), ...keptParaImages];
+        mergeStemPlacements(keptParaImages);
       }
     }
 
@@ -5066,6 +5206,7 @@ export function buildQuestionsFromParsedParagraphs(
             currentLabel: label,
             text: item.text,
             images: paraItemImages.get(label),
+            inlineImages: placementsFor(paraItemImages.get(label)),
             isUnderline: hl.isUnderline || item.isStarred,
             isRed: hl.isRed || item.isStarred,
             isCorrect,
@@ -5096,9 +5237,11 @@ export function buildQuestionsFromParsedParagraphs(
             currentLabel: label,
             text: item.text,
             images: paraItemImages.get(label),
+            inlineImages: placementsFor(paraItemImages.get(label)),
             isUnderline: hl.isUnderline || item.isStarred,
             isRed: hl.isRed || item.isStarred,
             isTrue,
+            isTrueExplicit: isTrue,
           });
         }
       } else {
@@ -5129,9 +5272,11 @@ export function buildQuestionsFromParsedParagraphs(
             currentLabel: label,
             text: item.text,
             images: paraItemImages.get(label),
+            inlineImages: placementsFor(paraItemImages.get(label)),
             isUnderline: hl.isUnderline || item.isStarred,
             isRed: hl.isRed || item.isStarred,
             isTrue,
+            isTrueExplicit: isTrue,
           });
         }
       } else {
@@ -5194,25 +5339,39 @@ export function buildQuestionsFromParsedParagraphs(
   pushCurrentQuestion();
 
   // Nếu tệp có BẢNG ĐÁP ÁN ở cuối đề (1.A 2.B 3.C...), áp dụng đáp án chuẩn của giáo viên cho các câu Phần I
+  // LUẬT ĐÁP ÁN (thầy chốt 20/11/2026): bảng đáp án cuối đề CHỈ lấp chỗ trống
+  // (câu chưa có bất kỳ dấu hiệu đáp án nào). Nếu thân câu đã có dấu hiệu riêng
+  // mà KHÁC với bảng đáp án thì GIỮ NGUYÊN dấu hiệu trong thân câu và ghi nhận
+  // xung đột để cảnh báo — không bao giờ ghi đè.
   if (trailingAnswerKeyPart1.size > 0) {
     let p1Idx = 0;
     for (const q of questions) {
       if (q.part === 'PART_1' && q.options && q.options.length === 4) {
         p1Idx++;
         const mappedAns = trailingAnswerKeyPart1.get(p1Idx) || trailingAnswerKeyPart1.get(q.originalIndex);
-        if (mappedAns && !q.options.some((o) => o.isCorrect)) {
+        if (!mappedAns) continue;
+        const markedLabels = q.options.filter((o) => o.isCorrect).map((o) => o.originalLabel);
+        if (markedLabels.length === 0) {
           q.options = q.options.map((o) => ({
             ...o,
             isCorrect: o.originalLabel === mappedAns,
             isUnderline: o.originalLabel === mappedAns,
             isRed: o.originalLabel === mappedAns,
           }));
+        } else if (!markedLabels.includes(mappedAns)) {
+          q.answerConflictNote =
+            `Bảng đáp án cuối đề ghi đáp án là ${mappedAns} nhưng trong thân câu phương án ` +
+            `${markedLabels.join(', ')} đang được đánh dấu đúng. Hệ thống giữ nguyên dấu hiệu ` +
+            `trong thân câu; giáo viên vui lòng kiểm tra lại đáp án của câu này.`;
         }
       }
     }
   }
 
   // Nếu tệp có BẢNG ĐÁP ÁN PHẦN II (Đúng/Sai) ở cuối đề, áp dụng đáp án chuẩn của giáo viên cho các câu Phần II
+  // LUẬT ĐÁP ÁN: chỉ áp khi câu CHƯA có ý nào mang dấu hiệu tường minh trong
+  // thân câu. Đã có dấu hiệu mà bảng đáp án nói khác -> giữ nguyên thân câu +
+  // ghi nhận xung đột để cảnh báo (trước đây khối này GHI ĐÈ vô điều kiện).
   if (trailingAnswerKeyPart2.size > 0) {
     let p2Idx = 0;
     for (const q of questions) {
@@ -5220,27 +5379,50 @@ export function buildQuestionsFromParsedParagraphs(
         p2Idx++;
         const mappedBools = trailingAnswerKeyPart2.get(p2Idx) || trailingAnswerKeyPart2.get(q.originalIndex);
         if (mappedBools && mappedBools.length === 4) {
-          q.subItems = q.subItems.map((s, idx) => ({
-            ...s,
-            isTrue: mappedBools[idx],
-            isUnderline: mappedBools[idx],
-            isRed: mappedBools[idx],
-          }));
+          const hasInlineSignal = q.subItems.some(
+            (s) => s.isTrue || s.isUnderline || s.isRed || s.isTrueExplicit
+          );
+          if (!hasInlineSignal) {
+            q.subItems = q.subItems.map((s, idx) => ({
+              ...s,
+              isTrue: mappedBools[idx],
+              isUnderline: mappedBools[idx],
+              isRed: mappedBools[idx],
+              isTrueExplicit: true,
+            }));
+          } else {
+            const differs = q.subItems.some((s, idx) => Boolean(s.isTrue) !== Boolean(mappedBools[idx]));
+            if (differs) {
+              q.answerConflictNote =
+                `Bảng đáp án cuối đề ghi thứ tự Đúng/Sai khác với dấu hiệu Đúng/Sai đã đánh dấu ` +
+                `trong thân câu. Hệ thống giữ nguyên dấu hiệu trong thân câu; giáo viên vui lòng ` +
+                `kiểm tra lại đáp án của câu này.`;
+            }
+          }
         }
       }
     }
   }
 
   // Nếu tệp có BẢNG ĐÁP ÁN PHẦN III (Trả lời ngắn) ở cuối đề, áp dụng đáp số chuẩn của giáo viên cho các câu Phần III
+  // LUẬT ĐÁP ÁN: chỉ lấp khi đáp số trong thân câu đang trống; đã có đáp số mà
+  // bảng cuối đề ghi khác -> giữ nguyên + ghi nhận xung đột để cảnh báo.
   if (trailingAnswerKeyPart3.size > 0) {
     let p3Idx = 0;
     for (const q of questions) {
       if (q.part === 'PART_3') {
         p3Idx++;
         const mappedShortAns = trailingAnswerKeyPart3.get(p3Idx) || trailingAnswerKeyPart3.get(q.originalIndex);
-        if (mappedShortAns && !q.shortAnswer?.trim()) {
-          q.shortAnswer = mappedShortAns.trim();
-          q.shortAnswerDetectedBy = 'KEYWORD';
+        if (mappedShortAns) {
+          if (!q.shortAnswer?.trim()) {
+            q.shortAnswer = mappedShortAns.trim();
+            q.shortAnswerDetectedBy = 'KEYWORD';
+          } else if (q.shortAnswer.trim() !== mappedShortAns.trim()) {
+            q.answerConflictNote =
+              `Bảng đáp án cuối đề ghi đáp số là "${mappedShortAns.trim()}" nhưng trong thân câu ` +
+              `đáp số đang là "${q.shortAnswer.trim()}". Hệ thống giữ nguyên đáp số trong thân câu; ` +
+              `giáo viên vui lòng kiểm tra lại đáp án của câu này.`;
+          }
         }
       }
     }
@@ -5650,6 +5832,8 @@ export function mergeRichMetadataFromExistingQuestions(
         ...po,
         images:
           po.images && po.images.length > 0 ? po.images : mo.images,
+        inlineImages:
+          po.images && po.images.length > 0 ? po.inlineImages : mo.inlineImages,
         richHtml: po.richHtml || mo.richHtml,
       };
     });
@@ -5663,6 +5847,8 @@ export function mergeRichMetadataFromExistingQuestions(
         ...ps,
         images:
           ps.images && ps.images.length > 0 ? ps.images : ms.images,
+        inlineImages:
+          ps.images && ps.images.length > 0 ? ps.inlineImages : ms.inlineImages,
         richHtml: ps.richHtml || ms.richHtml,
       };
     });
@@ -5677,6 +5863,11 @@ export function mergeRichMetadataFromExistingQuestions(
       ),
       images:
         pq.images && pq.images.length > 0 ? pq.images : matched.images,
+      stemInlineImages:
+        pq.images && pq.images.length > 0
+          ? pq.stemInlineImages
+          : matched.stemInlineImages,
+      answerConflictNote: pq.answerConflictNote || matched.answerConflictNote,
       stemTables:
         pq.stemTables && pq.stemTables.length > 0
           ? pq.stemTables
@@ -5816,23 +6007,34 @@ export async function parseDocxExamFile(
                 );
                 const suffix = q.images && q.images.length > 1 ? `_${idx + 1}` : '';
                 const tagId = `[HINH_ANH_CAU_${q.displayIndex}${suffix}]`;
-                // ENGINE 1.1c: Khóa chặt tỉ lệ khung hình gốc (Original Aspect Ratio = processed.aspectRatio)
-                // Nếu ảnh bị người dùng kéo dãn méo mó trong Word, tự động reset chiều cao theo đúng tỉ lệ gốc!
-                // NGOẠI LỆ: nếu khâu xử lý ảnh trả về đúng khung mặc định 4200x2600
-                // (ảnh raster lỗi tải/không canvas) mà ảnh gốc ĐÃ có kích thước
-                // thật đọc từ file (wp:extent / v:shape) thì giữ kích thước gốc,
-                // tuyệt đối không ghi đè bằng khung mặc định sai tỉ lệ.
+                // KHUÔN CỠ ẢNH CHUNG MỌI MÔN (thầy chốt 20/11/2026): khâu xử lý
+                // ảnh KHÔNG được phóng ảnh raster (đồ thị/sơ đồ/bảng dạng ảnh)
+                // TO HƠN kích thước hiển thị gốc trong file nguồn (wp:extent) —
+                // đường cũ tính bề rộng từ số pixel làm đồ thị bung to hơn hẳn
+                // đề gốc. Extent gốc đóng vai trò TRẦN: bản đã cắt viền trắng
+                // nhỏ hơn thì giữ bản gọn đó (không kéo giãn lại cho tốn trang).
+                // Riêng ảnh SVG (công thức MathType) giữ nguyên đường cũ (kích
+                // thước nội tại của SVG), chỉ khi khâu xử lý trả khung mặc định
+                // lỗi mới giữ kích thước gốc như trước.
                 const processedIsFallbackDefault =
                   processed.widthTwips === 4200 && processed.heightTwips === 2600;
-                const keepOriginalSize =
-                  processedIsFallbackDefault &&
+                const hasSourceExtent =
                   Boolean(img.widthTwips && img.widthTwips > 0) &&
                   Boolean(img.aspectRatio && img.aspectRatio > 0.05);
+                const isSvgImage = (img.dataUrl || '').startsWith(
+                  'data:image/svg+xml'
+                );
+                const keepOriginalSize =
+                  hasSourceExtent && (processedIsFallbackDefault || !isSvgImage);
                 const finalWidthTwips = keepOriginalSize
-                  ? (img.widthTwips as number)
+                  ? processedIsFallbackDefault
+                    ? (img.widthTwips as number)
+                    : Math.min(img.widthTwips as number, processed.widthTwips)
                   : processed.widthTwips;
                 const finalAspect = keepOriginalSize
-                  ? (img.aspectRatio as number)
+                  ? processedIsFallbackDefault
+                    ? (img.aspectRatio as number)
+                    : processed.aspectRatio
                   : processed.aspectRatio;
                 const finalHeightTwips = Math.max(
                   160,

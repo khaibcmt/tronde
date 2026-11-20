@@ -3,6 +3,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import {
   ExamImageAttachment,
   ExamQuestion,
+  InlineImagePlacement,
   OptionPart1,
   PhieuQMSelectionCode,
   ShuffleConfig,
@@ -546,6 +547,10 @@ function buildStandardParagraphXml(
     lineTwips?: number;
     formulaLatex?: string;
     rawFormulaOmmlXml?: string;
+    // Run ảnh inline đã dựng sẵn kèm vị trí ký tự trong bodyText (khôi phục
+    // vị trí giữa câu từ đề gốc). Có điểm chèn hợp lệ thì thân đoạn được cắt
+    // quanh các điểm đó thay vì đẩy mọi ảnh xuống khối riêng dưới thân.
+    inlineImageRuns?: Array<{ position: number; xml: string }>;
   }
 ): string {
   const align = options?.align || 'left';
@@ -616,26 +621,34 @@ function buildStandardParagraphXml(
   // Hỗ trợ xuống dòng mềm (\n) bên trong thân câu hỏi (ví dụ câu hỏi có nhiều dòng dữ kiện hoặc bảng ghép đôi Cột A - Cột B)
   let bodyRunXml = '';
   if (bodyText) {
-    const lines = bodyText.split(/\r?\n/);
-    bodyRunXml = lines
-      .map((line, idx) => {
-        const lineXml = buildRichScientificRunsAndMathXml(
-          line,
-          {
-            bold: options?.boldBody,
-            italic: options?.italicBody,
-            underline: options?.underlineBody,
-            colorHex: resolvedBodyColorHex,
-            fontSizeHalfPt: fontSize,
-          },
-          options?.rawFormulaOmmlXml && options?.formulaLatex
-            ? { latex: options.formulaLatex, ommlXml: options.rawFormulaOmmlXml }
-            : undefined
-        );
-        if (idx === 0) return lineXml;
-        return `<w:r><w:br/></w:r>\n${lineXml}`;
-      })
-      .join('\n');
+    const renderTextSegment = (segment: string): string =>
+      segment
+        .split(/\r?\n/)
+        .map((line, idx) => {
+          const lineXml = buildRichScientificRunsAndMathXml(
+            line,
+            {
+              bold: options?.boldBody,
+              italic: options?.italicBody,
+              underline: options?.underlineBody,
+              colorHex: resolvedBodyColorHex,
+              fontSizeHalfPt: fontSize,
+            },
+            options?.rawFormulaOmmlXml && options?.formulaLatex
+              ? { latex: options.formulaLatex, ommlXml: options.rawFormulaOmmlXml }
+              : undefined
+          );
+          if (idx === 0) return lineXml;
+          return `<w:r><w:br/></w:r>\n${lineXml}`;
+        })
+        .join('\n');
+    // Khi câu có công thức OMML cấp câu (formulaLatex) thì giữ đường cũ; các
+    // câu còn lại: xen ảnh nhỏ vào ĐÚNG vị trí giữa câu đã khôi phục.
+    const interleaved =
+      options?.inlineImageRuns && options.inlineImageRuns.length > 0 && !options?.formulaLatex
+        ? interleaveInlineImageRuns(bodyText, options.inlineImageRuns, renderTextSegment)
+        : null;
+    bodyRunXml = interleaved !== null ? interleaved : renderTextSegment(bodyText);
   }
 
   return `<w:p>
@@ -897,17 +910,38 @@ function buildPart1OptionsWithTabStopsXml(
       <w:t xml:space="preserve">${escapeXml(opt.currentLabel)}. </w:t>
     </w:r>`;
 
-    const bodyRuns = buildRichScientificRunsAndMathXml(opt.text, {
-      underline: false,
-      colorHex: undefined,
-      fontSizeHalfPt: 24,
-    });
+    const renderOptText = (segment: string): string =>
+      buildRichScientificRunsAndMathXml(segment, {
+        underline: false,
+        colorHex: undefined,
+        fontSizeHalfPt: 24,
+      });
 
-    // Ảnh của phương án (công thức/hình): nhúng INLINE nối tiếp ngay sau phần
-    // chữ trong cùng một đoạn — vị trí như đề gốc (nội dung nằm ngay sau nhãn).
+    // Ảnh của phương án có VỊ TRÍ INLINE khôi phục được từ đề gốc (placement
+    // theo id ảnh): xen vào ĐÚNG vị trí giữa nội dung phương án như đề gốc.
+    const placedPoints: Array<{ position: number; xml: string }> = [];
+    const placedIds = new Set<string>();
+    for (const r of resolveInlineImagePositions(opt.text, opt.inlineImages, opt.images)) {
+      const rId = imageRelMap?.get(r.img.id) || imageRelMap?.get(r.img.dataUrl);
+      if (!rId) continue;
+      placedPoints.push({
+        position: r.position,
+        xml: buildInlineImageRunXml(rId, r.img, 0),
+      });
+      placedIds.add(r.img.id);
+    }
+    const interleavedBody =
+      placedPoints.length > 0
+        ? interleaveInlineImageRuns(opt.text, placedPoints, renderOptText)
+        : null;
+    const bodyRuns = interleavedBody !== null ? interleavedBody : renderOptText(opt.text);
+
+    // Ảnh của phương án KHÔNG khôi phục được vị trí (không có placement):
+    // nhúng INLINE nối tiếp ngay sau phần chữ trong cùng một đoạn như trước.
     // Ảnh không có trong imageRelMap (đã bị loại ở khâu gom ảnh vì không giải
     // mã được) thì bỏ qua, không sinh run rỗng.
     const imageRuns = (opt.images || [])
+      .filter((img) => !placedIds.has(img.id))
       .map((img) => {
         const rId =
           imageRelMap?.get(img.id) || imageRelMap?.get(img.dataUrl);
@@ -1824,9 +1858,14 @@ function computeImageExtentTwips(img: ExamImageAttachment): {
       ? img.widthTwips / img.heightTwips
       : 1.5;
 
+  // KHUÔN CỠ ẢNH CHUNG MỌI MÔN (thầy chốt 20/11/2026): ưu tiên tuyệt đối
+  // kích thước HIỂN THỊ GỐC (img.widthTwips đọc từ extent của file nguồn —
+  // đồ thị trong đề gốc chỉ ~1/4–1/3 bề ngang vùng chữ). Trần an toàn trang
+  // 5400 twips. Khi KHÔNG có bất kỳ kích thước gốc nào mới dùng mặc định vừa
+  // phải 3000 twips (~53mm) thay cho 4500 cũ vốn làm hình phình to.
   const knownWTwips =
     img.widthTwips && img.widthTwips > 0 ? img.widthTwips : svgSize.widthTwips;
-  const rawWTwips = knownWTwips && knownWTwips > 0 ? knownWTwips : 4500;
+  const rawWTwips = knownWTwips && knownWTwips > 0 ? knownWTwips : 3000;
   const clampedWTwips = Math.min(5400, Math.max(60, rawWTwips));
   let clampedHTwips = Math.round(clampedWTwips / aspect);
   if (clampedHTwips > 4000) {
@@ -1834,6 +1873,100 @@ function computeImageExtentTwips(img: ExamImageAttachment): {
   }
   const finalWTwips = Math.round(clampedHTwips * aspect);
   return { wTwips: finalWTwips, hTwips: clampedHTwips };
+}
+
+/**
+ * Tìm vị trí chèn của một ảnh trong văn bản chủ sở hữu theo cặp neo
+ * {before, after} ghi ở tầng đọc file: ưu tiên khớp đoạn chữ ngay trước ảnh
+ * (thử lần lượt toàn đoạn, rồi hậu tố 24/16/10 ký tự cuối vì văn bản có thể
+ * đã qua khâu chuẩn hóa ký hiệu); không có `before` thì dùng điểm bắt đầu
+ * của `after`. Không tìm thấy -> -1 (ảnh xuất theo cách cũ, không đoán bừa).
+ */
+function findInlineAnchorPosition(
+  text: string,
+  before: string,
+  after: string,
+  fromIdx: number
+): number {
+  const b = (before || '').trim();
+  const a = (after || '').trim();
+  if (b) {
+    const candidates = [b, b.slice(-24), b.slice(-16), b.slice(-10)].filter(
+      (c, i, arr) => c.length >= 4 && arr.indexOf(c) === i
+    );
+    for (const cand of candidates) {
+      const idx = text.indexOf(cand, fromIdx);
+      if (idx >= 0) return idx + cand.length;
+    }
+    return -1;
+  }
+  if (a) {
+    const probe = a.slice(0, Math.min(16, a.length));
+    if (probe.length >= 4) {
+      const idx = text.indexOf(probe, fromIdx);
+      if (idx >= 0) return idx;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Giải quyết danh sách InlineImagePlacement thành vị trí ký tự cụ thể trong
+ * `text`, giữ đúng thứ tự gốc của ảnh. Ảnh không có placement hoặc không neo
+ * được vào văn bản thì không có trong kết quả (người gọi tự xuất chúng theo
+ * cách cũ ở khối ảnh dưới thân).
+ */
+function resolveInlineImagePositions(
+  text: string,
+  placements: InlineImagePlacement[] | undefined,
+  images: ExamImageAttachment[] | undefined
+): Array<{ img: ExamImageAttachment; position: number }> {
+  if (!placements || placements.length === 0 || !images || images.length === 0) {
+    return [];
+  }
+  const byId = new Map(images.map((im) => [im.id, im]));
+  const resolved: Array<{ img: ExamImageAttachment; position: number }> = [];
+  let cursor = 0;
+  for (const pl of placements) {
+    const img = byId.get(pl.imageId);
+    if (!img) continue;
+    const pos = findInlineAnchorPosition(text, pl.before, pl.after, cursor);
+    if (pos >= 0) {
+      resolved.push({ img, position: pos });
+      cursor = pos;
+    }
+  }
+  return resolved.sort((x, y) => x.position - y.position);
+}
+
+/**
+ * Xen run ảnh inline vào văn bản tại các vị trí đã giải quyết: văn bản được
+ * cắt thành các đoạn quanh vị trí ảnh, mỗi đoạn chữ đi qua `renderText` của
+ * người gọi (giữ nguyên định dạng/công thức của đoạn đó). Trả null khi không
+ * có điểm chèn hợp lệ nào.
+ */
+function interleaveInlineImageRuns(
+  text: string,
+  points: Array<{ position: number; xml: string }>,
+  renderText: (segment: string) => string
+): string | null {
+  const valid = points
+    .filter((p) => p.position >= 0 && p.position <= text.length)
+    .sort((a, b) => a.position - b.position);
+  if (valid.length === 0) return null;
+  const parts: string[] = [];
+  let last = 0;
+  for (const p of valid) {
+    if (p.position > last) {
+      parts.push(renderText(text.slice(last, p.position)));
+    }
+    parts.push(p.xml);
+    last = Math.max(last, p.position);
+  }
+  if (last < text.length) {
+    parts.push(renderText(text.slice(last)));
+  }
+  return parts.join('\n');
 }
 
 /**
@@ -2221,9 +2354,43 @@ function buildQuestionsBodyXml(
     });
   };
 
+  /**
+   * Dựng run ảnh INLINE cho một chủ sở hữu (thân câu / ý con) từ placements
+   * đã ghi ở tầng đọc file: chỉ ảnh NHỎ (mảnh công thức, cùng ngưỡng phân
+   * loại với buildImageBlocksXml) mới được xen vào giữa câu; ảnh lớn (đồ
+   * thị/sơ đồ) vẫn đi đường khối riêng canh giữa. Trả kèm tập id ảnh đã
+   * inline để khối ảnh dưới thân loại chúng ra (tránh in trùng 2 lần).
+   */
+  const buildInlineRunsForOwner = (
+    ownerText: string,
+    placements: InlineImagePlacement[] | undefined,
+    images: ExamImageAttachment[] | undefined,
+    questionNumber: number
+  ): { runs: Array<{ position: number; xml: string }>; inlinedIds: Set<string> } => {
+    const inlinedIds = new Set<string>();
+    if (!imageRelMap || !images || images.length === 0) {
+      return { runs: [], inlinedIds };
+    }
+    const runs: Array<{ position: number; xml: string }> = [];
+    for (const r of resolveInlineImagePositions(ownerText, placements, images)) {
+      const ext = computeImageExtentTwips(r.img);
+      const isSmallFormula = ext.hTwips <= 500 && ext.wTwips <= 2200;
+      if (!isSmallFormula) continue;
+      const rId = imageRelMap.get(r.img.id) || imageRelMap.get(r.img.dataUrl);
+      if (!rId) continue;
+      runs.push({
+        position: r.position,
+        xml: buildInlineImageRunXml(rId, r.img, questionNumber),
+      });
+      inlinedIds.add(r.img.id);
+    }
+    return { runs, inlinedIds };
+  };
+
   const appendQuestionTablesAndImages = (
     q: ExamQuestion,
-    keepImagesWithNext: boolean = true
+    keepImagesWithNext: boolean = true,
+    excludeImageIds?: Set<string>
   ) => {
     // 1. Nhúng bảng dữ liệu / bảng ghép đôi Cột A - Cột B thuộc phần dẫn câu hỏi (nếu có)
     if (q.stemTables && q.stemTables.length > 0) {
@@ -2235,10 +2402,16 @@ function buildQuestionsBodyXml(
       }
     }
     // 2. Nhúng ảnh của phần dẫn: mảnh công thức gom inline, hình lớn đoạn riêng
+    // (ảnh nhỏ đã được xen vào giữa thân câu thì loại khỏi khối này)
     if (q.images && q.images.length > 0 && imageRelMap) {
-      blocks.push(
-        ...buildImageBlocksXml(q.images, q.displayIndex, keepImagesWithNext)
-      );
+      const restImages = excludeImageIds
+        ? q.images.filter((im) => !excludeImageIds.has(im.id))
+        : q.images;
+      if (restImages.length > 0) {
+        blocks.push(
+          ...buildImageBlocksXml(restImages, q.displayIndex, keepImagesWithNext)
+        );
+      }
     }
   };
 
@@ -2263,6 +2436,12 @@ function buildQuestionsBodyXml(
     );
     for (const q of part1) {
       const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
+      const stemInline = buildInlineRunsForOwner(
+        cleanStem,
+        q.stemInlineImages,
+        q.images,
+        q.displayIndex
+      );
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
           keepNext: true,
@@ -2275,9 +2454,10 @@ function buildQuestionsBodyXml(
           prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
+          inlineImageRuns: stemInline.runs,
         })
       );
-      appendQuestionTablesAndImages(q);
+      appendQuestionTablesAndImages(q, true, stemInline.inlinedIds);
 
       if (q.options && q.options.length > 0) {
         const sanitizedOptions = q.options.map((opt) => ({
@@ -2321,6 +2501,12 @@ function buildQuestionsBodyXml(
     );
     for (const q of part2) {
       const cleanStem = stripAnswerAndSolutionFromExamText(q.stemText);
+      const stemInline = buildInlineRunsForOwner(
+        cleanStem,
+        q.stemInlineImages,
+        q.images,
+        q.displayIndex
+      );
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
           keepNext: true,
@@ -2333,9 +2519,10 @@ function buildQuestionsBodyXml(
           prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
+          inlineImageRuns: stemInline.runs,
         })
       );
-      appendQuestionTablesAndImages(q);
+      appendQuestionTablesAndImages(q, true, stemInline.inlinedIds);
 
       const subs = q.subItems || [];
       for (let sIdx = 0; sIdx < subs.length; sIdx++) {
@@ -2347,6 +2534,12 @@ function buildQuestionsBodyXml(
           ? `${cleanSubText} [${sub.isTrue ? 'Đúng' : 'Sai'}]`
           : cleanSubText;
 
+        const subInline = buildInlineRunsForOwner(
+          cleanSubText,
+          sub.inlineImages,
+          sub.images,
+          q.displayIndex
+        );
         blocks.push(
           buildStandardParagraphXml(`${sub.currentLabel}) `, displaySubText, {
             hangingIndent: false,
@@ -2362,16 +2555,23 @@ function buildQuestionsBodyXml(
             fontSizeHalfPt: 24,
             lineTwips: 240,
             prefixColorHex: '0000FF',
+            inlineImageRuns: subInline.runs,
           })
         );
 
-        // Ảnh gắn riêng ở ý con này (nếu có): mảnh công thức gom inline thành
-        // một dòng ngay dưới ý đó, hình lớn giữ đoạn riêng. Ý cuối không xích
-        // sang câu/phần kế tiếp (tránh kéo cả phần sau sang trang mới).
+        // Ảnh còn lại của ý con này (chưa xen được vào giữa ý): mảnh công
+        // thức gom inline thành một dòng ngay dưới ý đó, hình lớn giữ đoạn
+        // riêng. Ý cuối không xích sang câu/phần kế tiếp (tránh kéo cả phần
+        // sau sang trang mới).
         if (sub.images && sub.images.length > 0 && imageRelMap) {
-          blocks.push(
-            ...buildImageBlocksXml(sub.images, q.displayIndex, !isLast)
+          const restSubImages = sub.images.filter(
+            (im) => !subInline.inlinedIds.has(im.id)
           );
+          if (restSubImages.length > 0) {
+            blocks.push(
+              ...buildImageBlocksXml(restSubImages, q.displayIndex, !isLast)
+            );
+          }
         }
       }
     }
@@ -2405,6 +2605,12 @@ function buildQuestionsBodyXml(
         (q.images && q.images.length > 0) ||
           (q.stemTables && q.stemTables.length > 0)
       );
+      const stemInline = buildInlineRunsForOwner(
+        cleanStem,
+        q.stemInlineImages,
+        q.images,
+        q.displayIndex
+      );
       blocks.push(
         buildStandardParagraphXml(`Câu ${q.displayIndex}. `, cleanStem, {
           keepNext: hasFollowingBlocks,
@@ -2417,15 +2623,19 @@ function buildQuestionsBodyXml(
           prefixColorHex: '0000FF',
           formulaLatex: q.formulaLatex,
           rawFormulaOmmlXml: q.rawFormulaOmmlXml,
+          inlineImageRuns: stemInline.runs,
         })
       );
-      appendQuestionTablesAndImages(q, false);
+      appendQuestionTablesAndImages(q, false, stemInline.inlinedIds);
 
       if (highlightCorrectAnswers) {
         blocks.push(
           buildStandardParagraphXml(
             `Đáp án đúng: `,
-            (q.shortAnswer || '0').trim(),
+            // LUẬT ĐÁP ÁN (20/11/2026): đáp số trống thì ghi rõ CHƯA XÁC ĐỊNH,
+            // tuyệt đối không tự điền '0' như đáp án thật.
+            (q.shortAnswer || '').trim() ||
+              '— Chưa xác định (đề gốc không ghi đáp án) —',
             {
               prefixColorHex: 'FF0000',
               underlinePrefix: true,

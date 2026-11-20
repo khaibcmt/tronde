@@ -169,9 +169,13 @@ export function buildTnMaker2025OfficialQrPayload(
   for (const v of variants) {
     const codeKey = String(v.examCode).trim().replace(/['" ]/g, '');
 
+    // LUẬT ĐÁP ÁN: câu chưa xác định đáp án (answer = '') trong chuỗi liền
+    // Phần I được giữ vị trí bằng ký tự '?' — KHÔNG phải đáp án: app chấm sẽ
+    // báo lỗi/thiếu đáp án thay vì âm thầm chấm theo một chữ cái bịa, và các
+    // đáp án phía sau không bị lệch vị trí như khi nối chuỗi bỏ qua ô trống.
     const p1Seq = [...v.answerKey.part1]
       .sort((a, b) => a.questionNumber - b.questionNumber)
-      .map((item) => item.answer)
+      .map((item) => item.answer || '?')
       .join('');
 
     const p2Groups = [...v.answerKey.part2]
@@ -255,9 +259,11 @@ export function buildUntOfficialQrPayload(
     const code = String(v.examCode).trim();
     parts.push(code);
 
+    // LUẬT ĐÁP ÁN: giữ vị trí câu chưa xác định bằng '?' như chuẩn TNMaker ở
+    // trên — không nối bỏ ô trống (lệch vị trí cả dãy) và không bịa chữ cái.
     const p1Seq = [...v.answerKey.part1]
       .sort((a, b) => a.questionNumber - b.questionNumber)
-      .map((item) => item.answer)
+      .map((item) => item.answer || '?')
       .join('');
     if (p1Seq) parts.push(p1Seq);
 
@@ -597,11 +603,20 @@ export async function generateShuffledVariants(
     });
 
     // 6. Tổng hợp bảng đáp án chung cho mã đề này
+    // LUẬT ĐÁP ÁN (thầy chốt 20/11/2026): đáp án chỉ ghi khi câu có ĐÚNG MỘT
+    // phương án được đánh dấu đúng trong đề gốc. Câu có 0 hoặc >=2 phương án
+    // đánh dấu đúng -> để TRỐNG ('') kèm cảnh báo ở khâu kiểm tra/audit —
+    // TUYỆT ĐỐI không tự gán 'A' như trước đây.
     const answerKeyP1 = processedP1.map((q) => {
-      const correctOpt = (q.options || []).find((o) => o.isCorrect);
+      const correctOpts = (q.options || []).filter((o) => o.isCorrect);
       return {
         questionNumber: q.displayIndex,
-        answer: (correctOpt ? correctOpt.currentLabel : 'A') as 'A' | 'B' | 'C' | 'D',
+        answer: (correctOpts.length === 1 ? correctOpts[0].currentLabel : '') as
+          | 'A'
+          | 'B'
+          | 'C'
+          | 'D'
+          | '',
       };
     });
 
@@ -620,7 +635,8 @@ export async function generateShuffledVariants(
 
     const answerKeyP3 = processedP3.map((q) => ({
       questionNumber: q.displayIndex,
-      answer: (q.shortAnswer || '0').trim(),
+      // LUẬT ĐÁP ÁN: đáp số trống giữ nguyên TRỐNG, không tự điền '0'.
+      answer: (q.shortAnswer || '').trim(),
     }));
 
     const answerKeyP4 = processedP4.map((q) => {
@@ -1015,16 +1031,17 @@ export async function exportGradingExcelXlsx(
 
       for (let i = 1; i <= maxP1; i++) {
         const item = v.answerKey.part1.find((x) => x.questionNumber === i);
-        row.push(item ? item.answer : 'A');
+        // LUẬT ĐÁP ÁN: thiếu đáp án -> ô TRỐNG, không tự điền 'A'/'ĐSĐS'/'0'.
+        row.push(item ? item.answer : '');
       }
       for (let i = 1; i <= maxP2; i++) {
         const item = v.answerKey.part2.find((x) => x.questionNumber === i);
-        const ans = item ? item.answers : ['Đ', 'S', 'Đ', 'S'];
-        ans.forEach((a) => row.push(a === 'Đ' ? 'D' : 'S'));
+        const ans = item ? item.answers : ['', '', '', ''];
+        ans.forEach((a) => row.push(a === 'Đ' ? 'D' : a === 'S' ? 'S' : ''));
       }
       for (let i = 1; i <= maxP3; i++) {
         const item = v.answerKey.part3.find((x) => x.questionNumber === i);
-        const cleaned = String(item ? item.answer : '0').trim().replace(',', '.');
+        const cleaned = String(item ? item.answer : '').trim().replace(',', '.');
         const num = Number(cleaned);
         row.push(!isNaN(num) && cleaned !== '' ? num : cleaned);
       }
@@ -1050,7 +1067,7 @@ export async function exportGradingExcelXlsx(
         String(qCounter++),
         ...variants.map((v) => {
           const item = v.answerKey.part1.find((x) => x.questionNumber === i);
-          return item ? item.answer : 'A';
+          return item ? item.answer : '';
         }),
       ]);
     }
@@ -1059,7 +1076,7 @@ export async function exportGradingExcelXlsx(
         String(qCounter++),
         ...variants.map((v) => {
           const item = v.answerKey.part2.find((x) => x.questionNumber === i);
-          return item ? item.dsString : 'ĐSĐS';
+          return item ? item.dsString : '';
         }),
       ]);
     }
@@ -1068,7 +1085,7 @@ export async function exportGradingExcelXlsx(
         String(qCounter++),
         ...variants.map((v) => {
           const item = v.answerKey.part3.find((x) => x.questionNumber === i);
-          return item ? String(item.answer).trim().replace('.', ',') : '0';
+          return item ? String(item.answer).trim().replace('.', ',') : '';
         }),
       ]);
     }
@@ -1093,7 +1110,7 @@ export async function exportGradingExcelXlsx(
       String(qCounter++),
       ...variants.map((v) => {
         const item = v.answerKey.part1.find((x) => x.questionNumber === i);
-        return item ? item.answer : 'A';
+        return item ? item.answer : '';
       }),
     ]);
   }
@@ -1102,7 +1119,7 @@ export async function exportGradingExcelXlsx(
       String(qCounter++),
       ...variants.map((v) => {
         const item = v.answerKey.part2.find((x) => x.questionNumber === i);
-        return item ? item.dsString : 'ĐSĐS';
+        return item ? item.dsString : '';
       }),
     ]);
   }
@@ -1111,7 +1128,7 @@ export async function exportGradingExcelXlsx(
       String(qCounter++),
       ...variants.map((v) => {
         const item = v.answerKey.part3.find((x) => x.questionNumber === i);
-        return item ? String(item.answer).trim().replace('.', ',') : '0';
+        return item ? String(item.answer).trim().replace('.', ',') : '';
       }),
     ]);
   }
@@ -1135,7 +1152,7 @@ export async function exportGradingExcelXlsx(
         qCounter++,
         ...variants.map((v) => {
           const item = v.answerKey.part1.find((x) => x.questionNumber === i);
-          return item ? item.answer : 'A';
+          return item ? item.answer : '';
         }),
       ]);
     }
@@ -1144,7 +1161,7 @@ export async function exportGradingExcelXlsx(
         qCounter++,
         ...variants.map((v) => {
           const item = v.answerKey.part2.find((x) => x.questionNumber === i);
-          return item ? item.dsString : 'ĐSĐS';
+          return item ? item.dsString : '';
         }),
       ]);
     }
@@ -1153,7 +1170,7 @@ export async function exportGradingExcelXlsx(
         qCounter++,
         ...variants.map((v) => {
           const item = v.answerKey.part3.find((x) => x.questionNumber === i);
-          const cleaned = String(item ? item.answer : '0').trim().replace(',', '.');
+          const cleaned = String(item ? item.answer : '').trim().replace(',', '.');
           const num = Number(cleaned);
           return !isNaN(num) && cleaned !== '' ? num : cleaned;
         }),

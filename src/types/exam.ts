@@ -45,6 +45,21 @@ export interface ExamStemTable {
   rows: ExamTableCell[][];
 }
 
+/**
+ * Vị trí INLINE của một ảnh nhỏ (mảnh công thức/hình) bên trong văn bản của
+ * chủ sở hữu (thân câu / phương án / ý con), ghi lại ở tầng đọc file từ thứ tự
+ * run gốc trong .docx: `before` là đoạn chữ ngay trước ảnh, `after` là đoạn
+ * chữ ngay sau ảnh (mỗi đoạn tối đa ~30 ký tự, đã chuẩn hóa như văn bản chủ).
+ * Khi xuất bản, ảnh được chèn lại đúng vị trí giữa câu thay vì bị gom thành
+ * một dòng riêng dưới thân câu. Ảnh không có placement (không khôi phục được
+ * vị trí) vẫn xuất theo cách cũ (khối ảnh dưới thân) — không đoán vị trí.
+ */
+export interface InlineImagePlacement {
+  imageId: string;
+  before: string;
+  after: string;
+}
+
 export interface OptionPart1 {
   id: string;
   originalLabel: 'A' | 'B' | 'C' | 'D';
@@ -52,6 +67,7 @@ export interface OptionPart1 {
   text: string;
   richHtml?: string;
   images?: ExamImageAttachment[];
+  inlineImages?: InlineImagePlacement[];
   isUnderline: boolean;
   isRed: boolean;
   isCorrect: boolean;
@@ -64,9 +80,11 @@ export interface SubItemPart2 {
   text: string;
   richHtml?: string;
   images?: ExamImageAttachment[];
+  inlineImages?: InlineImagePlacement[];
   isUnderline: boolean;
   isRed: boolean;
   isTrue: boolean; // Đúng (true) hoặc Sai (false)
+  isTrueExplicit?: boolean; // Trạng thái Đ/S có dấu hiệu tường minh trong đề gốc (gạch chân/tô đỏ/dấu */(Đ)/(S)/bảng đáp án) hay không
 }
 
 export interface ExamQuestion {
@@ -79,6 +97,8 @@ export interface ExamQuestion {
   hasFormula?: boolean;
   hasImage?: boolean;
   images?: ExamImageAttachment[]; // Danh sách hình ảnh, sơ đồ, đồ thị đính kèm ([HINH_ANH_CAU_X])
+  stemInlineImages?: InlineImagePlacement[]; // Vị trí inline của ảnh nhỏ nằm giữa thân câu (khôi phục từ run gốc)
+  answerConflictNote?: string; // Ghi chú khi dấu hiệu đáp án trong thân câu và bảng đáp án/lời giải cuối đề KHÁC nhau: giữ nguyên dấu hiệu trong thân câu, chỉ cảnh báo giáo viên
   stemTables?: ExamStemTable[];   // Bảng dữ liệu hoặc bảng ghép đôi Cột A - Cột B thuộc phần dẫn câu hỏi
   rawFormulaOmmlXml?: string;     // Khối XML công thức toán gốc OMML (nếu có)
   formulaLatex?: string;          // Biểu diễn LaTeX công thức (nếu có)
@@ -121,7 +141,8 @@ export interface ValidationIssue {
     | 'P3_EXCEEDS_MAX_LENGTH'
     | 'P3_INVALID_FORMAT'
     | 'FORMULA_CONTENT_LOST'
-    | 'IMAGE_REFERENCED_BUT_MISSING';
+    | 'IMAGE_REFERENCED_BUT_MISSING'
+    | 'ANSWER_KEY_CONFLICT';
   message: string;
   suggestion: string;
 }
@@ -197,7 +218,9 @@ export interface ShuffledVariant {
   qrDataUrl: string;
   tripleQr?: TripleGradingQrSet;
   answerKey: {
-    part1: { questionNumber: number; answer: 'A' | 'B' | 'C' | 'D' }[];
+    // answer = '' khi câu CHƯA xác định được đáp án duy nhất từ đề gốc (0 hoặc
+    // >=2 phương án đánh dấu đúng): TUYỆT ĐỐI không tự gán 'A' thay thế.
+    part1: { questionNumber: number; answer: 'A' | 'B' | 'C' | 'D' | '' }[];
     part2: { questionNumber: number; answers: ('Đ' | 'S')[]; tfString: string; dsString: string }[];
     part3: { questionNumber: number; answer: string }[];
     part4: {

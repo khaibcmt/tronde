@@ -1836,6 +1836,17 @@ export function buildRichScientificRunsAndMathXml(
  * - Giữ nguyên viền bảng đơn chuẩn in ấn
  * - Hỗ trợ ô gộp ngang (w:gridSpan) và ô gộp dọc (w:vMerge)
  */
+/**
+ * Ước lượng độ dài HIỂN THỊ của nội dung một ô bảng: gỡ vỏ LaTeX $...$ và rút
+ * gọn lệnh \command thành ~2 ký tự để bề rộng cột bám lượng chữ thật sẽ in ra.
+ */
+function estimateTableCellTextLength(text: string): number {
+  return (text || '')
+    .replace(/\$+/g, '')
+    .replace(/\\[a-zA-Z]+/g, 'xx')
+    .replace(/[{}]/g, '').length;
+}
+
 export function buildStructuredStemTableXml(table: ExamStemTable): string {
   if (!table || !table.rows || table.rows.length === 0) return '';
 
@@ -1845,21 +1856,61 @@ export function buildStructuredStemTableXml(table: ExamStemTable): string {
       r.reduce((acc, cell) => acc + (cell.colSpan && cell.colSpan > 1 ? cell.colSpan : 1), 0)
     )
   );
-  const colWidthPct = Math.floor(5000 / maxCols);
+
+  // KHUÔN BẢNG CHUNG MỌI MÔN (thầy chốt 20/11/2026): bề rộng từng cột tính
+  // theo LƯỢNG NỘI DUNG THẬT của cột đó (ô dài nhất, ô gộp cột chia đều cho
+  // các cột thành phần, ô nối dọc bỏ qua vì ô mở đầu đã mang nội dung) —
+  // không chia đều máy móc làm cột trống bè ra. Tổng bề rộng bảng KHÔNG vượt
+  // vùng chữ của khuôn xuất (A4: 11906 - lề trái 850 - lề phải 567 = 10489
+  // twips): bảng rộng hơn thì CO CẢ BẢNG theo đúng tỉ lệ tương đối giữa các
+  // cột; bảng hẹp thì giữ nguyên bề rộng tự nhiên (không kéo giãn vô cớ) và
+  // canh giữa trang như đề chuẩn.
+  const TEXT_WIDTH_TWIPS = 10489;
+  const colContentLen = new Array<number>(maxCols).fill(0);
+  for (const row of table.rows) {
+    let colCursor = 0;
+    for (const cell of row) {
+      const span = cell.colSpan && cell.colSpan > 1 ? cell.colSpan : 1;
+      if (!cell.vMergeContinue) {
+        const perColLen = estimateTableCellTextLength(cell.text || '') / span;
+        for (let k = 0; k < span && colCursor + k < maxCols; k++) {
+          colContentLen[colCursor + k] = Math.max(colContentLen[colCursor + k], perColLen);
+        }
+      }
+      colCursor += span;
+    }
+  }
+  let colWidths = colContentLen.map((len) =>
+    Math.round(Math.min(4200, Math.max(640, len * 118 + 240)))
+  );
+  let totalTableWidth = colWidths.reduce((a, b) => a + b, 0);
+  if (totalTableWidth > TEXT_WIDTH_TWIPS) {
+    const scale = TEXT_WIDTH_TWIPS / totalTableWidth;
+    colWidths = colWidths.map((w) => Math.max(420, Math.round(w * scale)));
+    totalTableWidth = colWidths.reduce((a, b) => a + b, 0);
+  }
+  const tblGridXml = `<w:tblGrid>${colWidths
+    .map((w) => `<w:gridCol w:w="${w}"/>`)
+    .join('')}</w:tblGrid>`;
 
   const rowsXml = table.rows
     .map((row, rowIdx) => {
+      let colCursor = 0;
       const cellsXml = row
         .map((cell) => {
           const span = cell.colSpan && cell.colSpan > 1 ? cell.colSpan : 1;
-          const cellWidthPct = colWidthPct * span;
+          let cellWidthDxa = 0;
+          for (let k = 0; k < span && colCursor + k < maxCols; k++) {
+            cellWidthDxa += colWidths[colCursor + k];
+          }
+          colCursor += span;
           const align = cell.align || (rowIdx === 0 || cell.isHeader ? 'center' : 'left');
           const isBold = Boolean(cell.isHeader || cell.isBold || rowIdx === 0);
           const shdFill = rowIdx === 0 || cell.isHeader ? 'F1F5F9' : 'FFFFFF';
 
           return `<w:tc>
             <w:tcPr>
-              <w:tcW w:w="${cellWidthPct}" w:type="pct"/>
+              <w:tcW w:w="${cellWidthDxa}" w:type="dxa"/>
               ${span > 1 ? `<w:gridSpan w:val="${span}"/>` : ''}
               ${
                 cell.vMergeContinue
@@ -1901,7 +1952,8 @@ export function buildStructuredStemTableXml(table: ExamStemTable): string {
 
   return `<w:tbl>
     <w:tblPr>
-      <w:tblW w:w="5000" w:type="pct"/>
+      <w:tblW w:w="${totalTableWidth}" w:type="dxa"/>
+      <w:tblLayout w:type="fixed"/>
       <w:jc w:val="center"/>
       <w:tblBorders>
         <w:top w:val="single" w:sz="6" w:space="0" w:color="475569"/>
@@ -1918,6 +1970,7 @@ export function buildStructuredStemTableXml(table: ExamStemTable): string {
         <w:right w:w="100" w:type="dxa"/>
       </w:tblCellMar>
     </w:tblPr>
+    ${tblGridXml}
     ${rowsXml}
   </w:tbl>`;
 }
@@ -2490,7 +2543,9 @@ export async function enhanceAndCropExamImage(
   const rasterSize = rawDataUrl ? parseRasterIntrinsicSize(rawDataUrl) : null;
   const fallbackResult = (() => {
     if (!rasterSize) return defaultResult;
-    const w = Math.min(5200, Math.max(360, Math.round(rasterSize.widthPx * 11)));
+    // KHUÔN CỠ ẢNH CHUNG (20/11/2026): trần bề rộng 3600 twips (~1/3 vùng chữ)
+    // khi phải suy ra kích thước từ pixel; không ép sàn phóng to ảnh nhỏ.
+    const w = Math.min(3600, Math.max(160, Math.round(rasterSize.widthPx * 11)));
     return {
       dataUrl: rawDataUrl,
       widthTwips: w,
@@ -2626,15 +2681,17 @@ export async function enhanceAndCropExamImage(
         outCtx.drawImage(tempCanvas, cropX, cropY, cropW, cropH, 0, 0, outW, outH);
 
         // Tính kích thước chuẩn Twips (1 inch = 1440 Twips):
-        // - Với icon nhỏ / công thức nhúng: giữ kích thước thực tế theo pixel (không ép phóng to 2200 Twips)
-        // - Với sơ đồ / đồ thị lớn: giới hạn tối đa 5200 Twips (~100% khung câu hỏi chuẩn) và khóa chặt aspectRatio gốc
-        const maxWidthTwips = 5200;
+        // KHUÔN CỠ ẢNH CHUNG MỌI MÔN (thầy chốt 20/11/2026): kích thước suy ra
+        // từ pixel CHỈ dùng khi file nguồn không ghi kích thước hiển thị gốc;
+        // trần bề rộng 3600 twips (~1/3 vùng chữ, đủ đọc rõ trục/số trên đồ
+        // thị), TUYỆT ĐỐI không đặt sàn phóng ảnh nhỏ lên quá kích thước thật.
+        const maxWidthTwips = 3600;
         const maxHeightTwips = 3800;
         let widthTwips: number;
         if (isSmallIconOrInlineFormula) {
-          widthTwips = Math.min(maxWidthTwips, Math.max(360, Math.round(cropW * 11)));
+          widthTwips = Math.min(maxWidthTwips, Math.max(60, Math.round(cropW * 11)));
         } else {
-          widthTwips = Math.min(maxWidthTwips, Math.max(2000, Math.round(cropW * 9)));
+          widthTwips = Math.min(maxWidthTwips, Math.round(cropW * 9));
         }
         let heightTwips = Math.round(widthTwips / aspectRatio);
 
@@ -2691,8 +2748,8 @@ export function assignDeterministicImageTagsToQuestions(
           ? img.widthTwips
           : svgSize?.widthTwips ||
             (rasterSize
-              ? Math.min(5200, Math.max(360, Math.round(rasterSize.widthPx * 11)))
-              : 4500);
+              ? Math.min(3600, Math.max(160, Math.round(rasterSize.widthPx * 11)))
+              : 3000);
       const preservedAspect =
         img.aspectRatio && img.aspectRatio > 0.05
           ? img.aspectRatio

@@ -1752,15 +1752,37 @@ export default function App() {
       (i) => i.severity === 'ERROR'
     );
     if (currentErrors.length > 0) {
-      setIsSavedAndReadyState(false);
-      setActiveRightTab('LIVE_EDITOR');
-      setEditorViewMode('CARDS_3D');
-      handleScrollToQuestion(currentErrors[0].questionId);
+      // LUẬT ĐÁP ÁN (thầy chốt 20/11/2026): "giáo viên là cao nhất" — hệ thống
+      // CHỈ CẢNH BÁO, không tự sửa bất cứ đáp án nào và cũng không chặn chết
+      // việc trộn. Giáo viên thấy rõ danh sách vấn đề rồi tự quyết: sửa trước
+      // hoặc vẫn trộn ngay theo đúng 100% dấu hiệu đáp án gốc (câu chưa xác
+      // định được đáp án sẽ để trống trong bảng đáp án/QR/Excel).
+      const previewList = currentErrors
+        .slice(0, 8)
+        .map((i) => `• ${i.message}`)
+        .join('\n');
+      const teacherConfirmed = window.confirm(
+        `⚠️ CẢNH BÁO ĐÁP ÁN — phát hiện ${currentErrors.length} vấn đề cần giáo viên quyết định:\n\n${previewList}${
+          currentErrors.length > 8
+            ? `\n• … và ${currentErrors.length - 8} vấn đề nữa (xem danh sách cảnh báo màu đỏ phía trên).`
+            : ''
+        }\n\nHệ thống KHÔNG tự sửa bất kỳ đáp án nào. Nếu vẫn trộn ngay, đề sẽ giữ nguyên 100% dấu hiệu đáp án gốc; câu chưa xác định được đáp án sẽ để trống trong bảng đáp án.\n\nBấm OK để VẪN TRỘN theo quyết định của giáo viên, hoặc Hủy để quay lại sửa trước.`
+      );
+      if (!teacherConfirmed) {
+        setIsSavedAndReadyState(false);
+        setActiveRightTab('LIVE_EDITOR');
+        setEditorViewMode('CARDS_3D');
+        handleScrollToQuestion(currentErrors[0].questionId);
+        setStatusBanner({
+          type: 'ERROR',
+          text: `Đã lưu cố định các câu vừa sửa! Còn ${currentErrors.length} cảnh báo đáp án cần giáo viên xử lý (Đã cuộn tới Câu ${currentErrors[0].questionIndex}: ${currentErrors[0].message}). Hệ thống không tự sửa đáp án — giáo viên là người quyết định cao nhất.`,
+        });
+        return;
+      }
       setStatusBanner({
-        type: 'ERROR',
-        text: `Đã lưu cố định các câu vừa sửa! Vui lòng hoàn thiện thêm ${currentErrors.length} lỗi đáp án trước khi trộn đề (Đã cuộn tới Câu ${currentErrors[0].questionIndex}: ${currentErrors[0].message}).`,
+        type: 'INFO',
+        text: `Giáo viên đã xác nhận vẫn trộn với ${currentErrors.length} cảnh báo đáp án chưa xử lý. Mọi dấu hiệu đáp án gốc được giữ nguyên 100%; câu chưa xác định đáp án sẽ để trống trong bảng đáp án.`,
       });
-      return;
     }
 
     setIsSavedAndReadyState(true);
