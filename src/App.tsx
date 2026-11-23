@@ -100,6 +100,7 @@ import {
 import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
 import { archiveOriginalExamForTeacher } from './utils/originalExamArchive';
 import {
+  clearWorkSession,
   loadWorkSession,
   saveWorkSession,
 } from './utils/workSessionStore';
@@ -164,6 +165,9 @@ export default function App() {
   // Cờ đảm bảo buổi làm việc đã lưu (IndexedDB) được khôi phục XONG trước khi
   // cơ chế tự lưu bắt đầu ghi — tránh ghi đè bản đã lưu bằng đề mẫu khởi tạo.
   const sessionRestoreDoneRef = useRef<boolean>(false);
+  // Cờ chặn tự lưu 1 lần sau khi tải xong & xóa sạch: ngăn effect tự lưu ghi
+  // lại đề mẫu mặc định thành "buổi làm việc" ngay sau lệnh xóa phiên.
+  const postDownloadPurgeRef = useRef<boolean>(false);
   const [isSavedAndReadyState, setIsSavedAndReadyState] = useState<boolean>(false);
   const [highlightedQuestionId, setHighlightedQuestionId] = useState<string | null>(null);
   const [activeRightTab, setActiveRightTab] = useState<
@@ -469,6 +473,15 @@ export default function App() {
     if (!sessionRestoreDoneRef.current) return;
     const timer = setTimeout(() => {
       void (async () => {
+        if (postDownloadPurgeRef.current) {
+          postDownloadPurgeRef.current = false;
+          await clearWorkSession();
+          return;
+        }
+        if (questions.length === 0) {
+          await clearWorkSession();
+          return;
+        }
         const ok = await saveWorkSession({
           questions,
           fileName,
@@ -539,7 +552,48 @@ export default function App() {
     }
   };
 
-  // Hàm thực thi xóa dấu vết tức thì ngay khi giáo viên tải đề về máy
+  // Đưa toàn bộ không gian làm việc về đúng trạng thái mặc định như vừa mở
+  // app: đề mẫu khởi tạo, chưa có mã đề trộn, tab Trình biên tập, không còn
+  // bất kỳ nội dung nào của đề vừa xử lý. Cấu hình trộn + tài khoản + key
+  // của giáo viên được GIỮ NGUYÊN (đó không phải nội dung đề).
+  const resetWorkspaceToDefault = () => {
+    setQuestions(
+      recalculateQuestionNumbering(SAMPLE_2025_EXAM_WITH_ERRORS, true)
+    );
+    setFileName('De_Kiem_Tra_Cuoi_Hoc_Ki_1_Sinh_Hoc_12_Chuan_2025.docx');
+    setWordRawDocumentText(
+      serializeQuestionsToWordRawText(SAMPLE_2025_EXAM_WITH_ERRORS)
+    );
+    setShuffledVariants([]);
+    setSelectedVariantCode('');
+    setMasterMultiQr(null);
+    setActiveQrViewCode('ALL');
+    setFilterPart('ALL');
+    setAnswerSheetViewMode('MA_TRAN_DOI_CHIEU');
+    setActiveRightTab('LIVE_EDITOR');
+    setEditorViewMode('CARDS_3D');
+    lastEditSourceRef.current = 'CARDS_3D';
+    setHasUnsavedChanges(false);
+    setEditedQuestionIds([]);
+    setUnsavedQuestionIds([]);
+    setSavedQuestionTimestamps({});
+    setIsSavedAndReadyState(false);
+    setHighlightedQuestionId(null);
+    setActiveFocusedQuestionId(null);
+    setShuffleBlockInfo(null);
+    setAiClonedVariants([]);
+    setClonedQuestions([]);
+    setSelectedAiVariantIdx(0);
+    setAiBatchProgress(null);
+    setManualBatchCursor(0);
+    setCloneIteration(1);
+    setLastSavedAt('Vừa khởi tạo');
+    window.scrollTo({ top: 0 });
+  };
+
+  // Hàm thực thi xóa dấu vết tức thì ngay khi giáo viên tải đề về máy:
+  // xóa phiên làm việc đã tự lưu (IndexedDB) + xóa toàn bộ nội dung đề khỏi
+  // giao diện và đưa app trở về trang mặc định.
   const executePostDownloadZeroTracePurge = async (downloadedItemLabel: string) => {
     if (!zeroRetentionMode) {
       setStatusBanner({
@@ -550,9 +604,12 @@ export default function App() {
     }
     const purgedAt = await triggerZeroTracePurgeOnDownload();
     setLastPurgedTime(purgedAt);
+    postDownloadPurgeRef.current = true;
+    await clearWorkSession();
+    resetWorkspaceToDefault();
     setStatusBanner({
       type: 'SUCCESS',
-      text: `Đã tải xuống [${downloadedItemLabel}] & Tự động xóa sạch 100% dấu vết phiên trên máy chủ (Zero-Trace Verified lúc ${purgedAt})!`,
+      text: `Đã tải xuống [${downloadedItemLabel}] & đã XÓA SẠCH toàn bộ nội dung đề khỏi app — app đã trở về trang mặc định (Zero-Trace lúc ${purgedAt})!`,
     });
   };
 
@@ -2018,10 +2075,7 @@ export default function App() {
         blob,
         buildStandardExportFileName(config, 'docx', 'Đề gốc')
       );
-      setStatusBanner({
-        type: 'SUCCESS',
-        text: 'Đã xuất file Word (.docx) chuẩn Microsoft Office Equation <m:oMath> (LaTeX → MathML → OMML mml2omml · Font Cambria Math · Chuẩn UTF-8 không lỗi ô vuông)!',
-      });
+      await executePostDownloadZeroTracePurge('Đề Gốc Chuẩn Equation OMML (.docx)');
     } finally {
       setIsProcessing(false);
     }
