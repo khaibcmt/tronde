@@ -59,7 +59,16 @@ export async function saveWorkSession(snapshot: WorkSessionSnapshot): Promise<bo
   }
 }
 
-/** Đọc buổi làm việc đã lưu (null nếu chưa có hoặc đọc lỗi). */
+/**
+ * Mốc dọn phiên cũ một lần (23/11/2026): các buổi làm việc được TỰ LƯU BỞI
+ * BẢN CŨ — trước khi luật "tải về xong là xóa sạch nội dung đề + về trang
+ * mặc định" có hiệu lực — bị hủy ngay khi mở app, không khôi phục nữa.
+ * Phiên lưu sau mốc này (bản mới) vẫn khôi phục bình thường để chống mất
+ * việc khi trình duyệt tắt giữa chừng lúc đang sửa đề.
+ */
+export const ZERO_TRACE_SESSION_EPOCH = 1795412670000; // 23/11/2026 12:44:30 (Asia/Bangkok)
+
+/** Đọc buổi làm việc đã lưu (null nếu chưa có, đọc lỗi, hoặc là phiên cũ trước luật xóa sạch). */
 export async function loadWorkSession(): Promise<WorkSessionSnapshot | null> {
   try {
     const db = await openDb();
@@ -71,9 +80,16 @@ export async function loadWorkSession(): Promise<WorkSessionSnapshot | null> {
       req.onsuccess = () => {
         db.close();
         const val = req.result as WorkSessionSnapshot | undefined;
-        if (val && Array.isArray(val.questions) && val.questions.length > 0) {
+        if (
+          val &&
+          Array.isArray(val.questions) &&
+          val.questions.length > 0 &&
+          typeof val.savedAt === 'number' &&
+          val.savedAt >= ZERO_TRACE_SESSION_EPOCH
+        ) {
           resolve(val);
         } else {
+          if (val) void clearWorkSession();
           resolve(null);
         }
       };
