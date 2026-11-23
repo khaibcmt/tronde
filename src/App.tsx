@@ -591,10 +591,16 @@ export default function App() {
     window.scrollTo({ top: 0 });
   };
 
-  // Hàm thực thi xóa dấu vết tức thì ngay khi giáo viên tải đề về máy:
-  // xóa phiên làm việc đã tự lưu (IndexedDB) + xóa toàn bộ nội dung đề khỏi
-  // giao diện và đưa app trở về trang mặc định.
-  const executePostDownloadZeroTracePurge = async (downloadedItemLabel: string) => {
+  // Hàm thực thi xóa dấu vết ngay khi giáo viên tải file về máy.
+  // LUẬT CỦA THẦY (chốt 23/11/2026): riêng nút TẢI VỀ .ZIP — cứ tải xong
+  // hoàn thiện là XÓA SẠCH đề vừa trộn (kèm phiên làm việc đã tự lưu) và
+  // đưa app trở về ĐỀ MẶC ĐỊNH BAN ĐẦU. Các nút tải lẻ khác (từng mã đề,
+  // bảng đáp án, ma trận, QR...) chỉ báo tải thành công, KHÔNG xóa — để
+  // giáo viên còn tải tiếp các file còn lại của cùng một đề.
+  const executePostDownloadZeroTracePurge = async (
+    downloadedItemLabel: string,
+    wipeWorkspace = false
+  ) => {
     if (!zeroRetentionMode) {
       setStatusBanner({
         type: 'SUCCESS',
@@ -604,12 +610,19 @@ export default function App() {
     }
     const purgedAt = await triggerZeroTracePurgeOnDownload();
     setLastPurgedTime(purgedAt);
-    postDownloadPurgeRef.current = true;
-    await clearWorkSession();
-    resetWorkspaceToDefault();
+    if (wipeWorkspace) {
+      postDownloadPurgeRef.current = true;
+      await clearWorkSession();
+      resetWorkspaceToDefault();
+      setStatusBanner({
+        type: 'SUCCESS',
+        text: `Đã tải xuống [${downloadedItemLabel}] & đã XÓA SẠCH đề vừa trộn khỏi app — app đã trở về ĐỀ MẶC ĐỊNH BAN ĐẦU (Zero-Trace lúc ${purgedAt})!`,
+      });
+      return;
+    }
     setStatusBanner({
       type: 'SUCCESS',
-      text: `Đã tải xuống [${downloadedItemLabel}] & đã XÓA SẠCH toàn bộ nội dung đề khỏi app — app đã trở về trang mặc định (Zero-Trace lúc ${purgedAt})!`,
+      text: `Đã tải xuống thành công: ${downloadedItemLabel} (Zero-Trace lúc ${purgedAt}).`,
     });
   };
 
@@ -2205,7 +2218,8 @@ export default function App() {
         buildStandardExportFileName(config, 'zip')
       );
       await executePostDownloadZeroTracePurge(
-        `Trọn Bộ ${targetVariants.length} Đề Thi (1. Thư mục đề & 2. Thư mục đáp án) — ${buildStandardExportFileName(config, 'zip')}`
+        `Trọn Bộ ${targetVariants.length} Đề Thi (1. Thư mục đề & 2. Thư mục đáp án) — ${buildStandardExportFileName(config, 'zip')}`,
+        true
       );
     } finally {
       setIsProcessing(false);
