@@ -101,7 +101,6 @@ import { buildCV7991MatrixAndSpecification } from './utils/matrixSpecCv7991';
 import { archiveOriginalExamForTeacher } from './utils/originalExamArchive';
 import {
   clearWorkSession,
-  loadWorkSession,
   saveWorkSession,
 } from './utils/workSessionStore';
 import {
@@ -437,27 +436,17 @@ export default function App() {
   const errorIssues = blockingIssues;
   const canShuffle = blockingIssues.length === 0 && questions.length > 0;
 
-  // KHÔI PHỤC BUỔI LÀM VIỆC ĐÃ TỰ LƯU (chạy 1 lần khi mở app): đề đang sửa
-  // dở (kèm mọi chỉnh sửa đáp án) được nạp lại nguyên trạng từ IndexedDB.
+  // MỞ APP LÀ VỀ ĐỀ MẶC ĐỊNH BAN ĐẦU (luật thầy chốt 23/11/2026, chạy 1 lần
+  // khi mở app): KHÔNG khôi phục buổi làm việc cũ nữa — mở trình duyệt lên
+  // là đề mặc định đã có sẵn. Phiên tự lưu còn sót trong IndexedDB (nếu có)
+  // bị hủy ngay khi mở app để đề cũ không bao giờ sống lại.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const snapshot = await loadWorkSession();
-      if (!cancelled && snapshot && snapshot.questions.length > 0) {
-        setQuestions(snapshot.questions);
-        if (snapshot.fileName) setFileName(snapshot.fileName);
-        setWordRawDocumentText(
-          serializeQuestionsToWordRawText(snapshot.questions)
-        );
-        const savedTime = new Date(snapshot.savedAt).toLocaleTimeString('vi-VN');
-        setLastSavedAt(savedTime);
-        setHasUnsavedChanges(false);
-        setStatusBanner({
-          type: 'INFO',
-          text: `Đã khôi phục buổi làm việc đã tự lưu (${snapshot.questions.length} câu · lúc ${savedTime}) — mọi chỉnh sửa trước đó vẫn còn nguyên. Danh sách lỗi đã được kiểm tra lại từ bản đã lưu.`,
-        });
+      await clearWorkSession();
+      if (!cancelled) {
+        sessionRestoreDoneRef.current = true;
       }
-      sessionRestoreDoneRef.current = true;
     })();
     return () => {
       cancelled = true;
